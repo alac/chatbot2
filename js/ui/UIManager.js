@@ -1,4 +1,5 @@
-import { settings, StoryState } from '../state/AppSettings.js'; // Adjust path if you split state
+import { settings } from '../state/AppSettings.js';
+import { StoryState } from '../state/StoryState.js';
 import { ParallelGenerationBatch } from '../api/OpenAIClient.js';
 import { StorageManager } from '../storage/StorageManager.js';
 
