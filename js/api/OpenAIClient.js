@@ -1,28 +1,26 @@
-import { settings } from '../state/AppSettings.js';
+import { settings } from '../state.js';
 
 export class OpenAIClient {
-    
-    // Fetches models from the compatible endpoint
     static async fetchModels() {
         const url = `${settings.apiUrl.replace(/\/$/, '')}/models`;
-        
         const response = await fetch(url, {
             method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${settings.apiKey}`
-            }
+            headers: { 'Authorization': `Bearer ${settings.apiKey}` }
         });
-
-        if (!response.ok) throw new Error(`Failed to fetch models: ${response.statusText}`);
+        if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
         const data = await response.json();
-        return data.data || data; // Handle OpenAI standard {"data": [...]} or raw arrays
+        return data.data || data;
     }
 }
 
 export class GenerationJob {
     constructor() {
         this.abortController = new AbortController();
-        this.accumulatedText = "";
+        this.content = "";
+        this.reasoning = "";
+        this.startTime = Date.now();
+        this.duration = 0;
+        this.rawPayload = null;
     }
 
     cancel() {
@@ -30,13 +28,9 @@ export class GenerationJob {
     }
 
     async *streamGeneration(messages) {
-        // Construct endpoint based on Chat vs Completion toggle
         const baseUrl = settings.apiUrl.replace(/\/$/, '');
-        const endpoint = settings.useChatCompletions 
-            ? `${baseUrl}/chat/completions` 
-            : `${baseUrl}/completions`;
+        const endpoint = settings.useChatCompletions ? `${baseUrl}/chat/completions` : `${baseUrl}/completions`;
 
-        // Map expansive samplers. (OpenAI ignores unknowns, OpenRouter/Kobold accepts them)
         const payload = {
             model: settings.model,
             temperature: parseFloat(settings.temperature),
@@ -54,9 +48,10 @@ export class GenerationJob {
         if (settings.useChatCompletions) {
             payload.messages = messages;
         } else {
-            // Flatten messages into a raw prompt if using standard /completions
             payload.prompt = messages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') + '\nAssistant: ';
         }
+
+        this.rawPayload = payload;
 
         const response = await fetch(endpoint, {
             method: 'POST',
@@ -76,6 +71,7 @@ export class GenerationJob {
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
+        let isThinking = settings.forceThink;
 
         try {
             while (true) {
@@ -84,27 +80,59 @@ export class GenerationJob {
                 
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
-                buffer = lines.pop(); // Keep incomplete line
+                buffer = lines.pop(); 
 
                 for (const line of lines) {
                     if (line.trim() === "" || line.trim() === "data: [DONE]") continue;
                     if (line.startsWith("data: ")) {
                         try {
                             const data = JSON.parse(line.slice(6));
-                            // Handle both /chat/completions (delta.content) and /completions (text) shapes
-                            const token = data.choices[0]?.delta?.content || data.choices[0]?.text || "";
-                            if (token) {
-                                this.accumulatedText += token;
-                                yield token;
+                            const delta = data.choices[0]?.delta || {};
+                            const textChunk = delta.content || data.choices[0]?.text || "";
+                            const reasonChunk = delta.reasoning_content || "";
+
+                            // 1. Direct Reasoning from API (vLLM / O1)
+                            if (reasonChunk) {
+                                this.reasoning += reasonChunk;
+                                yield { type: 'reasoning', text: reasonChunk };
+                            }
+
+                            // 2. Parse inline <think> tags (Ollama / DeepSeek-R1 raw)
+                            if (textChunk) {
+                                let chunkStr = textChunk;
+                                
+                                // State machine for inline tags
+                                if (chunkStr.includes('<think>')) {
+                                    isThinking = true;
+                                    chunkStr = chunkStr.replace('<think>', '');
+                                }
+                                if (chunkStr.includes('</think>')) {
+                                    isThinking = false;
+                                    const parts = chunkStr.split('</think>');
+                                    if (parts[0]) {
+                                        this.reasoning += parts[0];
+                                        yield { type: 'reasoning', text: parts[0] };
+                                    }
+                                    chunkStr = parts[1] || "";
+                                }
+
+                                if (isThinking) {
+                                    this.reasoning += chunkStr;
+                                    yield { type: 'reasoning', text: chunkStr };
+                                } else if (chunkStr !== "") {
+                                    this.content += chunkStr;
+                                    yield { type: 'content', text: chunkStr };
+                                }
                             }
                         } catch (e) {
-                            console.warn("Parse error on chunk:", line);
+                            // Ignore parse errors on partial chunks
                         }
                     }
                 }
             }
         } finally {
             reader.releaseLock();
+            this.duration = ((Date.now() - this.startTime) / 1000).toFixed(1);
         }
     }
 }

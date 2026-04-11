@@ -1,35 +1,63 @@
-import { StoryState } from '../state/StoryState.js';
+import { settings, StoryState } from '../state.js';
 import { GenerationJob } from '../api/OpenAIClient.js';
+import { StorageManager } from '../storage/StorageManager.js';
 
 export class UIManager {
     constructor() {
         this.state = new StoryState();
+        this.storage = new StorageManager();
         this.currentJob = null;
+        this.activeSlot = 1;
         
         this.container = document.getElementById('output-container');
         this.input = document.getElementById('user-input');
-        this.btnSend = document.getElementById('btn-send');
-        this.btnAbort = document.getElementById('btn-abort');
-        this.modeSelector = document.getElementById('mode-selector');
-
+        
         this.bindEvents();
+        this.initApp();
+    }
+
+    async initApp() {
+        await this.storage.init();
+        
+        // Auto-load last session
+        const lastSlot = localStorage.getItem('last_active_slot') || 1;
+        this.activeSlot = parseInt(lastSlot);
+        await this.loadStateFromSlot(this.activeSlot);
+        
+        // Scroll listener for Jump to Bottom FAB
+        const fab = document.getElementById('btn-jump-bottom');
+        this.container.addEventListener('scroll', () => {
+            const isScrolledUp = (this.container.scrollHeight - this.container.scrollTop - this.container.clientHeight) > 200;
+            if (isScrolledUp) fab.classList.remove('hidden');
+            else fab.classList.add('hidden');
+        });
+        fab.addEventListener('click', () => this.scrollToBottom());
     }
 
     bindEvents() {
-        this.btnSend.addEventListener('click', () => this.handleSend());
-        this.btnAbort.addEventListener('click', () => this.handleAbort());
-        
+        document.getElementById('btn-send').addEventListener('click', () => this.handleSend());
+        document.getElementById('btn-abort').addEventListener('click', () => this.handleAbort());
         this.input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.handleSend();
-            }
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.handleSend(); }
+        });
+        document.getElementById('mode-selector').addEventListener('change', (e) => {
+            this.state.mode = e.target.value;
+            this.renderAll();
+            this.autoSave();
         });
 
-        this.modeSelector.addEventListener('change', (e) => {
-            this.state.mode = e.target.value;
-            this.container.className = `${this.state.mode}-mode`;
+        // Edit Modal
+        document.getElementById('btn-edit-cancel').addEventListener('click', () => document.getElementById('edit-modal').classList.add('hidden'));
+        document.getElementById('btn-edit-save').addEventListener('click', () => {
+            const idx = parseInt(document.getElementById('btn-edit-save').dataset.idx);
+            this.state.editTurn(idx, document.getElementById('edit-message-content').value);
+            document.getElementById('edit-modal').classList.add('hidden');
+            this.renderAll();
+            this.autoSave();
         });
+
+        // Prompt Modal
+        document.getElementById('btn-close-prompt').addEventListener('click', () => document.getElementById('prompt-modal').classList.add('hidden'));
     }
 
     async handleSend() {
@@ -38,45 +66,63 @@ export class UIManager {
 
         if (text) {
             this.state.addTurn('user', text);
-            this.appendTurnToDOM('user', text);
             this.input.value = '';
+            this.renderAll();
         }
 
-        this.btnSend.classList.add('hidden');
-        this.btnAbort.classList.remove('hidden');
+        document.getElementById('btn-send').classList.add('hidden');
+        document.getElementById('btn-abort').classList.remove('hidden');
 
         const messages = this.state.buildPromptPayload();
         this.currentJob = new GenerationJob();
         
+        // Append placeholder for assistant
+        const newIdx = this.state.history.length;
         this.state.addTurn('assistant', '');
+        const domElements = this.appendTurnToDOM('assistant', '', '', {}, newIdx);
         
-        const bubbleEl = this.appendTurnToDOM('assistant', '');
-        const textNode = document.createTextNode('');
-        const cursor = document.createElement('span');
-        cursor.className = 'streaming-indicator';
-        
-        bubbleEl.appendChild(textNode);
-        bubbleEl.appendChild(cursor);
-        this.scrollToBottom();
+        let streamingContent = "";
+        let streamingReasoning = "";
 
         try {
-            for await (const token of this.currentJob.streamGeneration(messages)) {
-                textNode.textContent += token;
+            for await (const chunk of this.currentJob.streamGeneration(messages)) {
+                if (chunk.type === 'reasoning') {
+                    streamingReasoning += chunk.text;
+                    domElements.reasoningNode.textContent = streamingReasoning;
+                    domElements.reasoningDiv.classList.remove('hidden');
+                } else {
+                    streamingContent += chunk.text;
+                    domElements.contentNode.textContent = streamingContent;
+                }
                 this.scrollToBottom();
             }
         } catch (error) {
             if (error.name !== "AbortError") {
                 console.error(error);
-                textNode.textContent += `\n[Error: ${error.message}]`;
+                domElements.contentNode.textContent += `\n[Error: ${error.message}]`;
             }
         } finally {
-            cursor.remove();
-            this.state.history[this.state.history.length - 1].content = this.currentJob.accumulatedText;
+            domElements.cursor.remove();
             
+            // Hide reasoning by default when finished
+            if (streamingReasoning) domElements.reasoningDiv.classList.add('hidden');
+            
+            // Update state
+            this.state.history[newIdx].content = this.currentJob.content;
+            this.state.history[newIdx].reasoning = this.currentJob.reasoning;
+            this.state.history[newIdx].meta = {
+                model: settings.model,
+                duration: this.currentJob.duration
+            };
+            this.state.lastRawPayload = this.currentJob.rawPayload;
+
             this.currentJob = null;
-            this.btnAbort.classList.add('hidden');
-            this.btnSend.classList.remove('hidden');
+            document.getElementById('btn-abort').classList.add('hidden');
+            document.getElementById('btn-send').classList.remove('hidden');
             this.input.focus();
+            
+            this.renderAll(); // Re-render to attach final action bar
+            this.autoSave();
         }
     }
 
@@ -84,15 +130,142 @@ export class UIManager {
         if (this.currentJob) this.currentJob.cancel();
     }
 
-    appendTurnToDOM(role, text) {
-        const div = document.createElement('div');
-        div.className = `turn ${role}`;
-        div.textContent = text; // textContent properly respects white-space: pre-wrap
-        this.container.appendChild(div);
-        return div;
+    renderAll() {
+        this.container.innerHTML = '';
+        this.container.className = `${this.state.mode}-mode`;
+        this.state.history.forEach((turn, idx) => {
+            this.appendTurnToDOM(turn.role, turn.content, turn.reasoning, turn.meta, idx);
+        });
+        this.scrollToBottom();
+    }
+
+    appendTurnToDOM(role, content, reasoning, meta, index) {
+        const wrapper = document.createElement('div');
+        wrapper.className = `turn ${role}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = 'turn-bubble';
+
+        // Reasoning Block
+        const reasoningDiv = document.createElement('div');
+        reasoningDiv.className = 'thinking-block hidden';
+        const reasoningNode = document.createTextNode(reasoning || '');
+        reasoningDiv.appendChild(reasoningNode);
+        bubble.appendChild(reasoningDiv);
+
+        // Content Block
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'turn-content';
+        const contentNode = document.createTextNode(content || '');
+        contentDiv.appendChild(contentNode);
+        
+        // Streaming Cursor (only added if this is a live generation)
+        const cursor = document.createElement('span');
+        if (this.currentJob && index === this.state.history.length - 1) {
+            cursor.className = 'streaming-indicator';
+            contentDiv.appendChild(cursor);
+        }
+
+        bubble.appendChild(contentDiv);
+        wrapper.appendChild(bubble);
+
+        // Action Bar (Not shown during streaming)
+        if (!this.currentJob || index < this.state.history.length - 1) {
+            const actionBar = document.createElement('div');
+            actionBar.className = 'action-bar';
+            
+            // Metadata (Left)
+            const metaSpan = document.createElement('span');
+            if (meta && meta.model) {
+                const shortModel = meta.model.split('/').pop();
+                metaSpan.textContent = `${shortModel} • ${meta.duration}s`;
+            }
+            actionBar.appendChild(metaSpan);
+
+            // Icons (Right)
+            const iconsDiv = document.createElement('div');
+            iconsDiv.className = 'action-icons';
+
+            if (reasoning) {
+                const btnThink = document.createElement('span');
+                btnThink.textContent = '🧠';
+                btnThink.title = "Toggle Thinking";
+                btnThink.addEventListener('click', () => {
+                    reasoningDiv.classList.toggle('hidden');
+                    btnThink.classList.toggle('active');
+                });
+                iconsDiv.appendChild(btnThink);
+            }
+
+            const btnCopy = document.createElement('span');
+            btnCopy.textContent = '📋';
+            btnCopy.title = "Copy";
+            btnCopy.addEventListener('click', () => navigator.clipboard.writeText(content));
+            iconsDiv.appendChild(btnCopy);
+
+            const btnEdit = document.createElement('span');
+            btnEdit.textContent = '✏️';
+            btnEdit.title = "Edit";
+            btnEdit.addEventListener('click', () => {
+                document.getElementById('edit-message-content').value = this.state.history[index].content;
+                document.getElementById('btn-edit-save').dataset.idx = index;
+                document.getElementById('edit-modal').classList.remove('hidden');
+            });
+            iconsDiv.appendChild(btnEdit);
+
+            // View Prompt (Only for latest assistant message)
+            if (role === 'assistant' && index === this.state.history.length - 1 && this.state.lastRawPayload) {
+                const btnPrompt = document.createElement('span');
+                btnPrompt.textContent = '🔍';
+                btnPrompt.title = "View Prompt Payload";
+                btnPrompt.addEventListener('click', () => {
+                    document.getElementById('prompt-payload-content').textContent = JSON.stringify(this.state.lastRawPayload, null, 2);
+                    document.getElementById('prompt-modal').classList.remove('hidden');
+                });
+                iconsDiv.appendChild(btnPrompt);
+            }
+
+            const btnDelete = document.createElement('span');
+            btnDelete.textContent = '🗑️';
+            btnDelete.title = "Delete";
+            btnDelete.addEventListener('click', () => {
+                if (confirm("Delete this message?")) {
+                    this.state.deleteTurn(index);
+                    this.renderAll();
+                    this.autoSave();
+                }
+            });
+            iconsDiv.appendChild(btnDelete);
+
+            actionBar.appendChild(iconsDiv);
+            wrapper.appendChild(actionBar);
+        }
+
+        this.container.appendChild(wrapper);
+
+        return { contentNode, reasoningNode, reasoningDiv, cursor };
     }
 
     scrollToBottom() {
         this.container.scrollTop = this.container.scrollHeight;
+        document.getElementById('btn-jump-bottom').classList.add('hidden');
+    }
+
+    async autoSave() {
+        // Use a generic name if none exists (in a full app, prompt for name)
+        await this.storage.saveSlot(this.activeSlot, `Slot ${this.activeSlot}`, `Auto-saved`, this.state.exportData());
+        localStorage.setItem('last_active_slot', this.activeSlot);
+        if (window.settingsUI) window.settingsUI.refreshSlotList();
+    }
+
+    async loadStateFromSlot(id) {
+        const slot = await this.storage.loadSlot(id);
+        if (slot && slot.data) {
+            this.state.loadFromData(slot.data);
+            document.getElementById('mode-selector').value = this.state.mode;
+        } else {
+            this.state.clear(); // Empty slot
+        }
+        this.renderAll();
     }
 }
