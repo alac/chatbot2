@@ -3,12 +3,14 @@ import { settings } from './AppSettings.js';
 export class StoryState {
     constructor() {
         this.history = []; 
+        this.redoStack = []; // Stores popped messages
         this.mode = 'chat';
         this.lastRawPayload = null; 
     }
 
     clear() {
         this.history = [];
+        this.redoStack = [];
         this.lastRawPayload = null;
     }
 
@@ -19,6 +21,7 @@ export class StoryState {
             activeDraftIndex: 0, 
             drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0 }]
         });
+        this.redoStack = []; // Clear redo on new action
         this.trimOldDrafts();
     }
 
@@ -33,7 +36,25 @@ export class StoryState {
             activeDraftIndex: 0,
             drafts: drafts
         });
+        this.redoStack = []; // Clear redo on new action
         this.trimOldDrafts();
+    }
+
+    // --- UNDO / REDO ---
+    undo() {
+        if (this.history.length > 0) {
+            this.redoStack.push(this.history.pop());
+            return true;
+        }
+        return false;
+    }
+
+    redo() {
+        if (this.redoStack.length > 0) {
+            this.history.push(this.redoStack.pop());
+            return true;
+        }
+        return false;
     }
 
     updateBatchDraft(msgIndex, draftIndex, data) {
@@ -68,11 +89,11 @@ export class StoryState {
         if (index >= 0 && index < this.history.length) {
             const msg = this.history[index];
             msg.drafts[msg.activeDraftIndex].content = newContent;
-            msg.isBatch = false; // Editing a message collapses its batch structure visually
+            msg.isBatch = false; 
+            this.redoStack = []; // Clear redo on manual edit
         }
     }
 
-    // Discard losing drafts older than N messages to save space
     trimOldDrafts(keepCount = 4) {
         if (this.history.length <= keepCount) return;
         const cutoffIdx = this.history.length - keepCount;
@@ -101,10 +122,12 @@ export class StoryState {
 
         const anote = settings.anoteContent.trim();
         if (anote !== "") {
+            const formattedAnote = settings.anoteTemplate.replace('<|>', anote);
             const depth = parseInt(settings.anoteDepth, 10);
+
             if (settings.anoteUnit === "message") {
                 const insertIndex = Math.max(0, messages.length - depth);
-                messages.splice(insertIndex, 0, { role: "system", content: `[Author's Note: ${anote}]` });
+                messages.splice(insertIndex, 0, { role: "system", content: formattedAnote });
             } 
             else if (settings.anoteUnit === "sentence") {
                 for (let i = messages.length - 1; i >= 0; i--) {
@@ -115,7 +138,7 @@ export class StoryState {
                         if (sentences.length === 1) sentences = [text]; 
                         
                         const targetIdx = Math.max(0, sentences.length - depth);
-                        sentences.splice(targetIdx, 0, `\n[Author's Note: ${anote}]\n`);
+                        sentences.splice(targetIdx, 0, `\n${formattedAnote}\n`);
                         messages[i].content = sentences.join(' ').trim();
                         break;
                     }
@@ -132,10 +155,11 @@ export class StoryState {
 
     loadFromData(data) {
         this.history = data.history || [];
+        this.redoStack = data.redoStack || [];
         this.mode = data.mode || 'chat';
     }
 
     exportData() {
-        return { history: this.history, mode: this.mode };
+        return { history: this.history, redoStack: this.redoStack, mode: this.mode };
     }
 }

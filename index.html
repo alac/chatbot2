@@ -18,17 +18,29 @@
         </div>
     </header>
 
-    <main id="output-container" class="chat-mode">
-        <!-- Messages injected here -->
-    </main>
+    <main id="output-container" class="chat-mode"></main>
 
     <button id="btn-jump-bottom" class="fab hidden">⬇️</button>
 
     <footer id="input-area">
-        <textarea id="user-input" placeholder="Type your message... (Shift+Enter for newline)"></textarea>
-        <div class="input-controls">
-            <button id="btn-send" class="primary">Send</button>
-            <button id="btn-abort" class="danger hidden">Stop</button>
+        <!-- Quick Menu (Toggled via More button) -->
+        <div id="quick-menu" class="hidden">
+            <button id="btn-undo" title="Undo">↩️</button>
+            <button id="btn-redo" title="Redo">↪️</button>
+            <button id="btn-open-quick-replies">💬 Quick Replies</button>
+            <button id="btn-open-apply-edits">✨ Apply Edits</button>
+        </div>
+        
+        <div class="input-row">
+            <textarea id="user-input" placeholder="Type your message... (Shift+Enter for newline)"></textarea>
+            <div class="input-controls">
+                <div class="top-btns">
+                    <button id="btn-send" class="primary">Send</button>
+                    <button id="btn-abort" class="danger hidden">Stop</button>
+                    <button id="btn-retry" title="Retry Last">🔄</button>
+                </div>
+                <button id="btn-more-menu">☰ More</button>
+            </div>
         </div>
     </footer>
 
@@ -63,10 +75,11 @@
                     </div>
                     <hr>
                     <div class="setting-row">
-                        <select id="select-model" class="model-dropdown" style="flex:1;">
+                        <span class="label-text">Model</span>
+                        <select id="select-model" class="model-dropdown" style="flex:1; margin-left: 10px;">
                             <option value="" disabled selected>Select a model...</option>
                         </select>
-                        <button id="btn-fetch-models" class="secondary">Fetch Models</button>
+                        <button id="btn-fetch-models" class="secondary" style="margin-left: 5px;">Fetch</button>
                     </div>
                     <div class="setting-row">
                         <input type="text" id="set-model" placeholder="Model ID..." style="flex:1;">
@@ -92,9 +105,7 @@
                         </select>
                     </div>
                     <hr>
-                    <div id="parallel-rows-container">
-                        <!-- Rows injected via JS -->
-                    </div>
+                    <div id="parallel-rows-container"></div>
                 </div>
 
                 <!-- 3. Format Tab -->
@@ -106,7 +117,11 @@
                     <hr>
                     <h3>Author's Note</h3>
                     <div class="setting-row column">
-                        <textarea id="set-anote-content" rows="2" placeholder="[Author's note: ...]"></textarea>
+                        <span class="label-text">A/N Template</span>
+                        <input type="text" id="set-anote-template" placeholder="[Author's note: <|>]">
+                    </div>
+                    <div class="setting-row column">
+                        <textarea id="set-anote-content" rows="2" placeholder="e.g. Write descriptively."></textarea>
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Injection:</span>
@@ -114,8 +129,8 @@
                             <option value="message">Message</option>
                             <option value="sentence">Sentence</option>
                         </select>
-                        <span class="label-text"> at Depth:</span>
-                        <input type="number" id="set-anote-depth" min="0" max="10" value="0" style="width: 60px;">
+                        <span class="label-text"> Depth:</span>
+                        <input type="number" id="set-anote-depth" min="0" max="10" value="0" style="width: 50px;">
                     </div>
                 </div>
 
@@ -148,20 +163,56 @@
                         <div class="action-grid">
                             <button id="btn-slot-save" class="primary">💾 Save</button>
                             <button id="btn-slot-load" class="primary">📂 Load</button>
-                            <button id="btn-slot-edit-name">✏️ Edit Name</button>
-                            <button id="btn-slot-edit-desc">📝 Edit Desc</button>
+                            <button id="btn-slot-edit-name">✏️ Name</button>
+                            <button id="btn-slot-edit-desc">📝 Desc</button>
                             <button id="btn-slot-delete" class="danger">🗑️ Delete</button>
                         </div>
                         <hr>
                         <div class="action-grid">
-                            <button id="btn-export-json">📥 Export JSON</button>
-                            <button id="btn-export-txt">📄 Export TXT</button>
-                            <button id="btn-import-json">📤 Import JSON</button>
+                            <button id="btn-export-json">📥 JSON</button>
+                            <button id="btn-export-txt">📄 TXT</button>
+                            <button id="btn-import-json">📤 Import</button>
                             <input type="file" id="file-import-json" accept=".json" class="hidden">
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
 
+    <!-- Quick Replies Modal -->
+    <div id="quick-replies-modal" class="modal hidden">
+        <div class="modal-content" style="max-height: 80vh;">
+            <div class="modal-header">
+                <h2>Quick Replies</h2>
+                <div>
+                    <button id="btn-edit-qr-toggle" class="secondary">Edit</button>
+                    <button id="btn-close-qr" class="close-btn">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column;">
+                <div id="qr-button-container" style="display:flex; flex-direction:column; gap: 8px; overflow-y:auto;"></div>
+                <div id="qr-edit-container" class="hidden" style="flex:1; display:flex; flex-direction:column; gap: 8px; height: 100%;">
+                    <p style="font-size: 0.85em; color: var(--text-muted);">Format: <code>::Button Name\nMessage Content\n\n::Next Button...</code></p>
+                    <textarea id="qr-edit-textarea" style="flex:1; min-height: 200px; font-family: monospace;"></textarea>
+                    <button id="btn-save-qr" class="primary">Save Quick Replies</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Apply Edits Modal -->
+    <div id="apply-edits-modal" class="modal hidden">
+        <div class="modal-content" style="max-height: 90vh; width: 800px;">
+            <div class="modal-header">
+                <h2>Apply Edits</h2>
+                <select id="ae-filter-draft" style="max-width: 150px; margin-left: 10px;">
+                    <option value="All">All Drafts</option>
+                </select>
+                <button id="btn-close-ae" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" id="ae-list-container" style="display:flex; flex-direction:column; gap: 16px;">
+                <!-- Edits injected here -->
             </div>
         </div>
     </div>
@@ -172,10 +223,10 @@
             <div class="modal-header">
                 <h2>Edit Message</h2>
             </div>
-            <div class="modal-body" style="display:flex; flex-direction:column; flex:1;">
-                <textarea id="edit-message-content" style="flex:1; resize:none;"></textarea>
+            <div class="modal-body" style="display:flex; flex-direction:column;">
+                <textarea id="edit-message-content" style="flex:1;"></textarea>
             </div>
-            <div class="modal-header">
+            <div class="modal-footer" style="padding:10px; display:flex; gap:10px;">
                 <button id="btn-edit-cancel">Cancel</button>
                 <button id="btn-edit-save" class="primary">Save</button>
             </div>
@@ -190,7 +241,7 @@
                 <button id="btn-close-prompt" class="close-btn">&times;</button>
             </div>
             <div class="modal-body">
-                <pre id="prompt-payload-content" style="white-space: pre-wrap; word-break: break-all; font-size: 12px; color: var(--text-muted);"></pre>
+                <pre id="prompt-payload-content"></pre>
             </div>
         </div>
     </div>

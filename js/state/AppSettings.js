@@ -18,10 +18,16 @@ export class AppSettings {
 
         this.systemPrompt = "You are a helpful AI assistant.";
         this.forceThink = false;
+        
+        // A/N
+        this.anoteTemplate = "[Author's note: <|>]";
         this.anoteContent = "";
         this.anoteUnit = "message"; 
         this.anoteDepth = 0;
         
+        // Quick Replies
+        this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
+
         this.contextLength = 4096;
         this.maxTokens = 512;
         this.temperature = 1.0;
@@ -42,6 +48,8 @@ export class AppSettings {
             Object.assign(this, JSON.parse(saved));
             if (!Array.isArray(this.favoriteModels)) this.favoriteModels = [];
             if (!Array.isArray(this.parallelOverrides)) this.parallelOverrides = [{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''}];
+            if (!this.anoteTemplate) this.anoteTemplate = "[Author's note: <|>]";
+            if (!this.quickReplies) this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
         }
     }
 

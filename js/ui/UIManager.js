@@ -2,6 +2,7 @@ import { settings } from '../state/AppSettings.js';
 import { StoryState } from '../state/StoryState.js';
 import { ParallelGenerationBatch } from '../api/OpenAIClient.js';
 import { StorageManager } from '../storage/StorageManager.js';
+import { diffWords } from '../utils/diff.js';
 
 export class UIManager {
     constructor() {
@@ -15,7 +16,6 @@ export class UIManager {
         this.container = document.getElementById('output-container');
         this.input = document.getElementById('user-input');
         
-        // Track manual scrolling to pause auto-scroll
         this.isUserScrolledUp = false;
 
         this.bindEvents();
@@ -42,16 +42,60 @@ export class UIManager {
 
     bindEvents() {
         document.getElementById('btn-send').addEventListener('click', () => this.handleSend());
+        document.getElementById('btn-retry').addEventListener('click', () => this.handleRetry());
         document.getElementById('btn-abort').addEventListener('click', () => this.handleAbort());
+        
         this.input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.handleSend(); }
         });
+        
         document.getElementById('mode-selector').addEventListener('change', (e) => {
             this.state.mode = e.target.value;
             this.renderAll();
             this.autoSave();
         });
 
+        // Quick Menu Toggle
+        document.getElementById('btn-more-menu').addEventListener('click', () => {
+            document.getElementById('quick-menu').classList.toggle('hidden');
+        });
+
+        // Undo / Redo
+        document.getElementById('btn-undo').addEventListener('click', () => {
+            if (this.state.undo()) { this.renderAll(); this.autoSave(); }
+        });
+        document.getElementById('btn-redo').addEventListener('click', () => {
+            if (this.state.redo()) { this.renderAll(); this.autoSave(); }
+        });
+
+        // Quick Replies
+        document.getElementById('btn-open-quick-replies').addEventListener('click', () => this.openQuickReplies());
+        document.getElementById('btn-close-qr').addEventListener('click', () => document.getElementById('quick-replies-modal').classList.add('hidden'));
+        document.getElementById('btn-edit-qr-toggle').addEventListener('click', () => {
+            const isEditing = !document.getElementById('qr-edit-container').classList.contains('hidden');
+            if (isEditing) {
+                document.getElementById('qr-edit-container').classList.add('hidden');
+                document.getElementById('qr-button-container').classList.remove('hidden');
+            } else {
+                document.getElementById('qr-edit-textarea').value = settings.quickReplies;
+                document.getElementById('qr-edit-container').classList.remove('hidden');
+                document.getElementById('qr-button-container').classList.add('hidden');
+            }
+        });
+        document.getElementById('btn-save-qr').addEventListener('click', () => {
+            settings.quickReplies = document.getElementById('qr-edit-textarea').value;
+            settings.save();
+            document.getElementById('qr-edit-container').classList.add('hidden');
+            document.getElementById('qr-button-container').classList.remove('hidden');
+            this.openQuickReplies(); 
+        });
+
+        // Apply Edits
+        document.getElementById('btn-open-apply-edits').addEventListener('click', () => this.openApplyEdits());
+        document.getElementById('btn-close-ae').addEventListener('click', () => document.getElementById('apply-edits-modal').classList.add('hidden'));
+        document.getElementById('ae-filter-draft').addEventListener('change', () => this.renderApplyEditsList());
+
+        // Modals
         document.getElementById('btn-edit-cancel').addEventListener('click', () => document.getElementById('edit-modal').classList.add('hidden'));
         document.getElementById('btn-edit-save').addEventListener('click', () => {
             const idx = parseInt(document.getElementById('btn-edit-save').dataset.idx);
@@ -60,25 +104,37 @@ export class UIManager {
             this.renderAll();
             this.autoSave();
         });
-
         document.getElementById('btn-close-prompt').addEventListener('click', () => document.getElementById('prompt-modal').classList.add('hidden'));
     }
 
-    async handleSend() {
-        const text = this.input.value.trim();
-        if (!text && this.state.history.length === 0) return;
+    handleRetry() {
+        if (this.state.history.length === 0) return;
+        const last = this.state.history[this.state.history.length - 1];
+        if (last.role === 'assistant') {
+            this.state.undo(); // Moves assistant msg to redo stack
+            this.renderAll();
+            this.handleSend(true); // pass true so it doesn't try to add input box content
+        }
+    }
 
-        if (text) {
-            this.state.addTurn('user', text);
-            this.input.value = '';
-            this.renderAll(); // Renders the user message
+    async handleSend(isRetry = false) {
+        const text = this.input.value.trim();
+        
+        if (!isRetry) {
+            if (!text && this.state.history.length === 0) return;
+            if (text) {
+                this.state.addTurn('user', text);
+                this.input.value = '';
+                this.renderAll(); 
+            }
         }
 
-        // Before starting a new turn, remove the draft switcher from the PREVIOUS message to lock it in
+        // Lock in previous switcher
         const oldSwitcher = document.getElementById(`switcher-${this.state.history.length - 1}`);
         if (oldSwitcher) oldSwitcher.remove();
 
         document.getElementById('btn-send').classList.add('hidden');
+        document.getElementById('btn-retry').classList.add('hidden');
         document.getElementById('btn-abort').classList.remove('hidden');
         this.isUserScrolledUp = false;
 
@@ -88,11 +144,8 @@ export class UIManager {
         
         const newIdx = this.state.history.length;
         this.state.addBatchTurn(count);
-        
-        // Render the empty shell
         this.appendTurnToDOM('assistant', newIdx);
         
-        // Start high-performance timer
         this.batchStartTime = Date.now();
         this.batchTimer = setInterval(() => {
             const timerEl = document.getElementById(`batch-timer-${newIdx}`);
@@ -102,8 +155,6 @@ export class UIManager {
         try {
             await this.activeBatch.startAll((draftIdx, data) => {
                 this.state.updateBatchDraft(newIdx, draftIdx, data);
-                
-                // If the updated draft is the actively viewed one, update DOM text directly by ID
                 if (this.state.history[newIdx].activeDraftIndex === draftIdx) {
                     const contentNode = document.getElementById(`content-${newIdx}`);
                     const reasonNode = document.getElementById(`reasoning-${newIdx}`);
@@ -118,7 +169,6 @@ export class UIManager {
                     if (!this.isUserScrolledUp) this.scrollToBottom();
                 }
 
-                // Update Switcher Icons
                 const iconEl = document.getElementById(`draft-icon-${newIdx}-${draftIdx}`);
                 if (iconEl) {
                     iconEl.textContent = data.status === 'done' ? '✔️' : (data.status === 'error' ? '❌' : '🕒');
@@ -133,9 +183,9 @@ export class UIManager {
             
             document.getElementById('btn-abort').classList.add('hidden');
             document.getElementById('btn-send').classList.remove('hidden');
+            document.getElementById('btn-retry').classList.remove('hidden');
             this.input.focus();
             
-            // Re-render only the finalized message to insert the Action Bar
             const oldWrapper = document.getElementById(`turn-wrapper-${newIdx}`);
             if (oldWrapper) oldWrapper.remove();
             this.appendTurnToDOM('assistant', newIdx);
@@ -174,7 +224,7 @@ export class UIManager {
         const bubble = document.createElement('div');
         bubble.className = 'turn-bubble';
 
-        // --- ACTION BAR (Top of bubble) ---
+        // --- ACTION BAR (Moved to top of bubble) ---
         if (!isStreaming) {
             const actionBar = document.createElement('div');
             actionBar.className = 'action-bar';
@@ -206,11 +256,13 @@ export class UIManager {
 
             const btnCopy = document.createElement('span');
             btnCopy.textContent = '📋';
+            btnCopy.title = "Copy";
             btnCopy.addEventListener('click', () => navigator.clipboard.writeText(this.state.getContent(index)));
             iconsDiv.appendChild(btnCopy);
 
             const btnEdit = document.createElement('span');
             btnEdit.textContent = '✏️';
+            btnEdit.title = "Edit";
             btnEdit.addEventListener('click', () => {
                 document.getElementById('edit-message-content').value = this.state.getContent(index);
                 document.getElementById('btn-edit-save').dataset.idx = index;
@@ -222,6 +274,7 @@ export class UIManager {
             if (role === 'assistant' && isLatestMessage && this.state.lastRawPayload) {
                 const btnPrompt = document.createElement('span');
                 btnPrompt.textContent = '🔍';
+                btnPrompt.title = "View Prompt Payload";
                 btnPrompt.addEventListener('click', () => {
                     document.getElementById('prompt-payload-content').textContent = JSON.stringify(this.state.lastRawPayload, null, 2);
                     document.getElementById('prompt-modal').classList.remove('hidden');
@@ -231,6 +284,7 @@ export class UIManager {
 
             const btnDelete = document.createElement('span');
             btnDelete.textContent = '🗑️';
+            btnDelete.title = "Delete";
             btnDelete.addEventListener('click', () => {
                 if (confirm("Delete this message?")) {
                     this.state.deleteTurn(index);
@@ -252,7 +306,6 @@ export class UIManager {
         
         const reasoningNode = document.createTextNode(reasoning || '');
         reasoningDiv.appendChild(reasoningNode);
-        // Save reference for direct DOM updates
         const spanReason = document.createElement('span');
         spanReason.id = `reasoning-${index}`;
         spanReason.appendChild(reasoningNode);
@@ -280,8 +333,7 @@ export class UIManager {
         bubble.appendChild(contentDiv);
         wrapper.appendChild(bubble);
 
-        // --- BATCH SWITCHER ---
-        // Only render on the very last message if it's a batch with multiple drafts
+        // --- BATCH SWITCHER (Appended below bubble if isBatch) ---
         if (msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
             const switcher = document.createElement('div');
             switcher.className = 'draft-switcher';
@@ -296,10 +348,18 @@ export class UIManager {
             
             const select = document.createElement('select');
             select.id = `draft-select-${index}`;
+            // Pre-populate with current model names for accurate UI during stream
             msg.drafts.forEach((d, i) => {
                 const opt = document.createElement('option');
                 opt.value = i;
-                opt.textContent = `V${i+1} | ${d.model ? d.model.split('/').pop() : 'Unknown'}`;
+                
+                // Read the model from the job array if streaming, otherwise from draft
+                let modelStr = d.model;
+                if (isStreaming && this.activeBatch && this.activeBatch.jobs[i]) {
+                    modelStr = this.activeBatch.jobs[i].model;
+                }
+                
+                opt.textContent = `V${i+1} | ${modelStr ? modelStr.split('/').pop() : 'Unknown'}`;
                 if (i === msg.activeDraftIndex) opt.selected = true;
                 select.appendChild(opt);
             });
@@ -336,9 +396,10 @@ export class UIManager {
         }
 
         this.container.appendChild(wrapper);
+
+        return { contentNode: spanContent, reasoningNode: spanReason, reasoningDiv };
     }
 
-    // Direct DOM update switching (Prevents jumping and recreating DOM)
     switchDraft(msgIndex, dir) {
         const msg = this.state.history[msgIndex];
         const len = msg.drafts.length;
@@ -349,7 +410,6 @@ export class UIManager {
     switchDraftExplicit(msgIndex, draftIdx) {
         this.state.setActiveDraft(msgIndex, draftIdx);
         
-        // 1. Update text nodes
         const contentNode = document.getElementById(`content-${msgIndex}`);
         const reasonNode = document.getElementById(`reasoning-${msgIndex}`);
         const reasonDiv = document.getElementById(`reasoning-block-${msgIndex}`);
@@ -365,11 +425,9 @@ export class UIManager {
             else reasonDiv.classList.add('hidden');
         }
 
-        // 2. Update Switcher Select
         const select = document.getElementById(`draft-select-${msgIndex}`);
         if (select) select.value = draftIdx;
 
-        // 3. Update active icon underline
         const msg = this.state.history[msgIndex];
         msg.drafts.forEach((_, i) => {
             const icon = document.getElementById(`draft-icon-${msgIndex}-${i}`);
@@ -379,11 +437,166 @@ export class UIManager {
             }
         });
 
-        // 4. Update Timer display if finished
         const timer = document.getElementById(`batch-timer-${msgIndex}`);
         if (timer && !this.activeBatch) {
             timer.textContent = `(${msg.drafts[draftIdx].duration}s)`;
         }
+    }
+
+    // --- QUICK REPLIES ---
+    openQuickReplies() {
+        const container = document.getElementById('qr-button-container');
+        container.innerHTML = '';
+        
+        const raw = settings.quickReplies || "";
+        const parts = raw.split('::').filter(p => p.trim() !== '');
+        
+        parts.forEach(p => {
+            const lines = p.trim().split('\n');
+            const title = lines.shift().trim();
+            const content = lines.join('\n').trim();
+            
+            const btn = document.createElement('button');
+            btn.className = 'primary';
+            btn.textContent = title;
+            btn.title = content;
+            btn.addEventListener('click', () => {
+                this.input.value = content;
+                document.getElementById('quick-replies-modal').classList.add('hidden');
+                this.input.focus();
+            });
+            container.appendChild(btn);
+        });
+
+        document.getElementById('quick-replies-modal').classList.remove('hidden');
+    }
+
+    // --- APPLY EDITS ---
+    openApplyEdits() {
+        if (this.state.history.length === 0) return alert("No messages available.");
+        const lastMsg = this.state.history[this.state.history.length - 1];
+        if (lastMsg.role !== 'assistant') return alert("Last message must be from the assistant to find edits.");
+
+        const selectFilter = document.getElementById('ae-filter-draft');
+        selectFilter.innerHTML = '<option value="All">All Drafts</option>';
+
+        this.extractedEdits = [];
+
+        // Check if it's a batch with multiple drafts, otherwise just scan the one draft
+        const draftsToScan = lastMsg.isBatch ? lastMsg.drafts : [lastMsg.drafts[lastMsg.activeDraftIndex]];
+
+        draftsToScan.forEach((draft, idx) => {
+            if (!draft.content) return;
+            const shortModel = draft.model ? draft.model.split('/').pop() : 'Unknown';
+            const draftLabel = `V${idx+1} | ${shortModel}`;
+            
+            if (lastMsg.isBatch) {
+                const opt = document.createElement('option');
+                opt.value = draftLabel;
+                opt.textContent = draftLabel;
+                selectFilter.appendChild(opt);
+            }
+
+            const regex = /<edit>\s*<old>([\s\S]*?)<\/old>\s*<new>([\s\S]*?)<\/new>\s*<reasoning>([\s\S]*?)<\/reasoning>\s*<\/edit>/gi;
+            let match;
+            while ((match = regex.exec(draft.content)) !== null) {
+                this.extractedEdits.push({
+                    oldText: match[1].trim(),
+                    newText: match[2].trim(),
+                    reasoning: match[3].trim(),
+                    sourceDraft: draftLabel,
+                    score: 99999999 // Default high score (not found)
+                });
+            }
+        });
+
+        if (this.extractedEdits.length === 0) return alert("No <edit> tags found in the latest message.");
+
+        // Validation & Scoring (Scan last 10 messages)
+        const scanHistory = this.state.history.slice(-11, -1); // Exclude the latest message itself
+        const startIndexOffset = Math.max(0, this.state.history.length - 11);
+
+        this.extractedEdits.forEach(edit => {
+            edit.status = 'invalid';
+            edit.targetMessageIdx = -1;
+
+            // Search backwards so more recent matches get processed
+            for (let i = scanHistory.length - 1; i >= 0; i--) {
+                const msg = scanHistory[i];
+                const content = this.state.getContent(startIndexOffset + i);
+                
+                // Check if already applied
+                if (content.includes(edit.newText)) {
+                    edit.status = 'applied';
+                    edit.score = i * 100000 + content.indexOf(edit.newText); // Sort older to top
+                    break;
+                }
+                
+                // Check if applicable
+                if (content.includes(edit.oldText)) {
+                    edit.status = 'apply';
+                    edit.targetMessageIdx = startIndexOffset + i;
+                    edit.score = i * 100000 + content.indexOf(edit.oldText);
+                    break;
+                }
+            }
+        });
+
+        // Sort by score ascending
+        this.extractedEdits.sort((a, b) => a.score - b.score);
+        this.renderApplyEditsList();
+        document.getElementById('apply-edits-modal').classList.remove('hidden');
+    }
+
+    renderApplyEditsList() {
+        const container = document.getElementById('ae-list-container');
+        container.innerHTML = '';
+        const filter = document.getElementById('ae-filter-draft').value;
+
+        this.extractedEdits.forEach(edit => {
+            if (filter !== 'All' && edit.sourceDraft !== filter) return;
+
+            const card = document.createElement('div');
+            card.className = 'ae-card';
+            const diffs = diffWords(edit.oldText, edit.newText);
+
+            let actionHtml = '';
+            if (edit.status === 'applied') {
+                actionHtml = `<span class="ae-status applied">Already Applied</span>`;
+            } else if (edit.status === 'invalid') {
+                actionHtml = `<span class="ae-status invalid">Text Not Found</span>`;
+            } else {
+                actionHtml = `<button class="primary apply-btn">Apply Edit</button>`;
+            }
+
+            card.innerHTML = `
+                <div class="ae-reasoning">${edit.reasoning.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                <div class="ae-diff-container">
+                    <div class="ae-diff-col">${diffs.oldHtml}</div>
+                    <div class="ae-diff-col">${diffs.newHtml}</div>
+                </div>
+                <div class="ae-footer">
+                    <span style="font-size:0.8em; color:var(--text-muted);">${edit.sourceDraft}</span>
+                    ${actionHtml}
+                </div>
+            `;
+
+            if (edit.status === 'apply') {
+                card.querySelector('.apply-btn').addEventListener('click', () => {
+                    // Apply the edit
+                    const targetContent = this.state.getContent(edit.targetMessageIdx);
+                    const updatedContent = targetContent.replace(edit.oldText, edit.newText);
+                    this.state.editTurn(edit.targetMessageIdx, updatedContent);
+                    
+                    // Close and re-render
+                    document.getElementById('apply-edits-modal').classList.add('hidden');
+                    this.renderAll();
+                    this.autoSave();
+                });
+            }
+
+            container.appendChild(card);
+        });
     }
 
     scrollToBottom() {

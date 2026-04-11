@@ -16,32 +16,25 @@ export class SettingsMenu {
         });
         document.getElementById('btn-close-settings').addEventListener('click', () => this.closeAndSave());
         
-        // Page Selector (replaces tabs)
         document.getElementById('settings-page-selector').addEventListener('change', (e) => {
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            const targetId = e.target.value;
-            document.getElementById(targetId).classList.add('active');
+            document.getElementById(e.target.value).classList.add('active');
         });
 
-        // Batch / Parallel dynamic rows
         document.getElementById('set-parallel-count').addEventListener('change', () => this.renderBatchRows());
 
-        // Model Fetching
         document.getElementById('btn-fetch-models').addEventListener('click', () => this.handleFetchModels());
         document.getElementById('btn-manage-favorites').addEventListener('click', () => {
             document.getElementById('favorites-container').classList.toggle('hidden');
             this.renderFavoritesList();
         });
         
-        // Sync primary model dropdown to text input (Tab 1)
         document.getElementById('select-model').addEventListener('change', (e) => {
             document.getElementById('set-model').value = e.target.value;
-            // Also sync the text input in Draft 1
             const draft1Txt = document.getElementById('batch-model-txt-primary');
             if (draft1Txt) draft1Txt.value = e.target.value;
         });
 
-        // Samplers Sync & Reset
         this.bindSamplerPair('slide-context', 'num-context');
         this.bindSamplerPair('slide-max-tokens', 'num-max-tokens');
         this.bindSamplerPair('slide-temp', 'num-temp');
@@ -58,14 +51,12 @@ export class SettingsMenu {
             this.populateUI();
         });
 
-        // Save/Load actions
         document.getElementById('btn-slot-save').addEventListener('click', () => this.uiManager.autoSave());
         document.getElementById('btn-slot-load').addEventListener('click', async () => {
             await this.uiManager.loadStateFromSlot(this.selectedSlotId);
             this.closeAndSave();
         });
         
-        // Edit Name & Edit Desc split
         document.getElementById('btn-slot-edit-name').addEventListener('click', async () => {
             const slot = await this.uiManager.storage.loadSlot(this.selectedSlotId);
             const newName = prompt("Enter slot name:", slot?.name || `Slot ${this.selectedSlotId}`);
@@ -152,13 +143,8 @@ export class SettingsMenu {
             });
         };
 
-        // Primary (Tab 1)
         createOptions(document.getElementById('select-model'), document.getElementById('set-model').value);
-        
-        // Draft 1 (Tab 2)
         createOptions(document.getElementById('batch-model-select-primary'), document.getElementById('set-model').value);
-
-        // Overrides (Tab 2)
         for (let i = 0; i < 4; i++) {
             const txtField = document.getElementById(`batch-model-txt-${i}`);
             const currentVal = txtField ? txtField.value : settings.parallelOverrides[i].model;
@@ -193,7 +179,6 @@ export class SettingsMenu {
         container.innerHTML = '';
         const count = parseInt(document.getElementById('set-parallel-count').value);
 
-        // Draft 1 (Primary - Syncs with settings.model)
         const primaryRow = document.createElement('div');
         primaryRow.className = 'batch-row-container';
         primaryRow.innerHTML = `
@@ -205,16 +190,14 @@ export class SettingsMenu {
         `;
         container.appendChild(primaryRow);
 
-        // Sync Draft 1 inputs with main model inputs
         document.getElementById('batch-model-select-primary').addEventListener('change', (e) => {
             document.getElementById('batch-model-txt-primary').value = e.target.value;
-            document.getElementById('set-model').value = e.target.value; // Sync to Tab 1
+            document.getElementById('set-model').value = e.target.value; 
         });
         document.getElementById('batch-model-txt-primary').addEventListener('input', (e) => {
-            document.getElementById('set-model').value = e.target.value; // Sync to Tab 1
+            document.getElementById('set-model').value = e.target.value; 
         });
 
-        // Draft 2 to N
         for (let i = 0; i < count - 1; i++) {
             const ov = settings.parallelOverrides[i] || { enabled: false, model: '' };
             const row = document.createElement('div');
@@ -300,7 +283,7 @@ export class SettingsMenu {
         reader.onload = async (e) => {
             try {
                 const data = JSON.parse(e.target.result);
-                if (!data.history) throw new Error("Invalid save file format. Expected 'history' array.");
+                if (!data.history) throw new Error("Invalid save file format.");
                 await this.uiManager.storage.saveSlot(this.selectedSlotId, file.name, "Imported", data);
                 this.refreshSlotList();
             } catch (err) {
@@ -322,6 +305,8 @@ export class SettingsMenu {
 
         document.getElementById('set-system-prompt').value = settings.systemPrompt;
         document.getElementById('set-force-think').checked = settings.forceThink;
+        
+        document.getElementById('set-anote-template').value = settings.anoteTemplate;
         document.getElementById('set-anote-content').value = settings.anoteContent;
         document.getElementById('set-anote-unit').value = settings.anoteUnit;
         document.getElementById('set-anote-depth').value = settings.anoteDepth;
@@ -346,7 +331,6 @@ export class SettingsMenu {
         settings.useChatCompletions = document.getElementById('set-use-chat').checked;
         settings.apiKey = document.getElementById('set-api-key').value.trim();
         
-        // Primary Model (can be set from Tab 1 or Draft 1 in Tab 2)
         settings.model = document.getElementById('set-model').value.trim();
 
         settings.parallelEnabled = document.getElementById('set-parallel-enabled').checked;
@@ -361,6 +345,7 @@ export class SettingsMenu {
 
         settings.systemPrompt = document.getElementById('set-system-prompt').value;
         settings.forceThink = document.getElementById('set-force-think').checked;
+        settings.anoteTemplate = document.getElementById('set-anote-template').value;
         settings.anoteContent = document.getElementById('set-anote-content').value;
         settings.anoteUnit = document.getElementById('set-anote-unit').value;
         settings.anoteDepth = parseInt(document.getElementById('set-anote-depth').value);
