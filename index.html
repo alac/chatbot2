@@ -144,17 +144,18 @@
                     <h3>Save Slots</h3>
                     <div id="slot-list" class="slot-list"></div>
                     <div id="slot-actions" class="slot-actions hidden">
-                        <p id="selected-slot-label">Selected: None</p>
+                        <p id="selected-slot-label" style="font-weight: bold; margin-bottom: 8px;">Selected: None</p>
                         <div class="action-grid">
                             <button id="btn-slot-save" class="primary">💾 Save</button>
                             <button id="btn-slot-load" class="primary">📂 Load</button>
-                            <button id="btn-slot-edit">✏️ Edit Meta</button>
+                            <button id="btn-slot-edit-name">✏️ Edit Name</button>
+                            <button id="btn-slot-edit-desc">📝 Edit Desc</button>
                             <button id="btn-slot-delete" class="danger">🗑️ Delete</button>
                         </div>
                         <hr>
                         <div class="action-grid">
                             <button id="btn-export-json">📥 Export JSON</button>
-                            <button id="btn-export-txt">📝 Export TXT</button>
+                            <button id="btn-export-txt">📄 Export TXT</button>
                             <button id="btn-import-json">📤 Import JSON</button>
                             <input type="file" id="file-import-json" accept=".json" class="hidden">
                         </div>

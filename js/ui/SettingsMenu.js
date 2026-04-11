@@ -1,4 +1,4 @@
-import { settings } from '../state/AppSettings.js'; // Adjust path if needed
+import { settings } from '../state/AppSettings.js'; 
 import { OpenAIClient } from '../api/OpenAIClient.js';
 
 export class SettingsMenu {
@@ -16,27 +16,32 @@ export class SettingsMenu {
         });
         document.getElementById('btn-close-settings').addEventListener('click', () => this.closeAndSave());
         
-        // Page Selector
+        // Page Selector (replaces tabs)
         document.getElementById('settings-page-selector').addEventListener('change', (e) => {
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            document.getElementById(e.target.value).classList.add('active');
+            const targetId = e.target.value;
+            document.getElementById(targetId).classList.add('active');
         });
 
         // Batch / Parallel dynamic rows
         document.getElementById('set-parallel-count').addEventListener('change', () => this.renderBatchRows());
 
+        // Model Fetching
         document.getElementById('btn-fetch-models').addEventListener('click', () => this.handleFetchModels());
         document.getElementById('btn-manage-favorites').addEventListener('click', () => {
             document.getElementById('favorites-container').classList.toggle('hidden');
             this.renderFavoritesList();
         });
         
-        // Sync primary model dropdown to text input
+        // Sync primary model dropdown to text input (Tab 1)
         document.getElementById('select-model').addEventListener('change', (e) => {
             document.getElementById('set-model').value = e.target.value;
+            // Also sync the text input in Draft 1
+            const draft1Txt = document.getElementById('batch-model-txt-primary');
+            if (draft1Txt) draft1Txt.value = e.target.value;
         });
 
-        // Samplers
+        // Samplers Sync & Reset
         this.bindSamplerPair('slide-context', 'num-context');
         this.bindSamplerPair('slide-max-tokens', 'num-max-tokens');
         this.bindSamplerPair('slide-temp', 'num-temp');
@@ -59,22 +64,36 @@ export class SettingsMenu {
             await this.uiManager.loadStateFromSlot(this.selectedSlotId);
             this.closeAndSave();
         });
-        document.getElementById('btn-slot-delete').addEventListener('click', async () => {
-            if (confirm("Delete this save slot?")) {
-                await this.uiManager.storage.deleteSlot(this.selectedSlotId);
-                if (this.uiManager.activeSlot === this.selectedSlotId) this.uiManager.state.clear();
-                this.refreshSlotList();
-                this.uiManager.renderAll();
-            }
-        });
-        document.getElementById('btn-slot-edit').addEventListener('click', async () => {
+        
+        // Edit Name & Edit Desc split
+        document.getElementById('btn-slot-edit-name').addEventListener('click', async () => {
             const slot = await this.uiManager.storage.loadSlot(this.selectedSlotId);
             const newName = prompt("Enter slot name:", slot?.name || `Slot ${this.selectedSlotId}`);
-            if (newName) {
+            if (newName !== null) {
                 await this.uiManager.storage.saveSlot(this.selectedSlotId, newName, slot?.description || "", slot?.data || this.uiManager.state.exportData());
                 this.refreshSlotList();
             }
         });
+        document.getElementById('btn-slot-edit-desc').addEventListener('click', async () => {
+            const slot = await this.uiManager.storage.loadSlot(this.selectedSlotId);
+            const newDesc = prompt("Enter slot description:", slot?.description || "");
+            if (newDesc !== null) {
+                await this.uiManager.storage.saveSlot(this.selectedSlotId, slot?.name || `Slot ${this.selectedSlotId}`, newDesc, slot?.data || this.uiManager.state.exportData());
+                this.refreshSlotList();
+            }
+        });
+
+        document.getElementById('btn-slot-delete').addEventListener('click', async () => {
+            if (confirm("Delete this save slot?")) {
+                await this.uiManager.storage.deleteSlot(this.selectedSlotId);
+                if (this.uiManager.activeSlot === this.selectedSlotId) {
+                    this.uiManager.state.clear();
+                }
+                this.refreshSlotList();
+                this.uiManager.renderAll();
+            }
+        });
+
         document.getElementById('btn-export-txt').addEventListener('click', () => this.exportText());
         document.getElementById('btn-export-json').addEventListener('click', () => this.exportJSON());
         
@@ -93,6 +112,7 @@ export class SettingsMenu {
         const btn = document.getElementById('btn-fetch-models');
         btn.textContent = "Fetching...";
         btn.disabled = true;
+        
         settings.apiUrl = document.getElementById('set-api-url').value.trim();
         settings.apiKey = document.getElementById('set-api-key').value.trim();
 
@@ -112,6 +132,7 @@ export class SettingsMenu {
 
     updateAllModelDropdowns() {
         const createOptions = (selectEl, selectedVal) => {
+            if(!selectEl) return;
             selectEl.innerHTML = '<option value="" disabled selected>Select a model...</option>';
             let list = this.cachedFetchedModels || settings.favoriteModels;
             const favs = list.filter(m => settings.favoriteModels.includes(m)).sort();
@@ -131,13 +152,17 @@ export class SettingsMenu {
             });
         };
 
-        // Primary
-        createOptions(document.getElementById('select-model'), settings.model);
+        // Primary (Tab 1)
+        createOptions(document.getElementById('select-model'), document.getElementById('set-model').value);
         
-        // Batch Overrides
-        for (let i=0; i<4; i++) {
-            const sel = document.getElementById(`batch-model-select-${i}`);
-            if (sel) createOptions(sel, settings.parallelOverrides[i].model);
+        // Draft 1 (Tab 2)
+        createOptions(document.getElementById('batch-model-select-primary'), document.getElementById('set-model').value);
+
+        // Overrides (Tab 2)
+        for (let i = 0; i < 4; i++) {
+            const txtField = document.getElementById(`batch-model-txt-${i}`);
+            const currentVal = txtField ? txtField.value : settings.parallelOverrides[i].model;
+            createOptions(document.getElementById(`batch-model-select-${i}`), currentVal);
         }
     }
 
@@ -168,27 +193,53 @@ export class SettingsMenu {
         container.innerHTML = '';
         const count = parseInt(document.getElementById('set-parallel-count').value);
 
+        // Draft 1 (Primary - Syncs with settings.model)
+        const primaryRow = document.createElement('div');
+        primaryRow.className = 'batch-row-container';
+        primaryRow.innerHTML = `
+            <div class="batch-row-top">Draft 1 (Primary Model)</div>
+            <div class="batch-row-bottom">
+                <select id="batch-model-select-primary"><option value="" disabled>Select model...</option></select>
+                <input type="text" id="batch-model-txt-primary" value="${settings.model}" placeholder="Model ID">
+            </div>
+        `;
+        container.appendChild(primaryRow);
+
+        // Sync Draft 1 inputs with main model inputs
+        document.getElementById('batch-model-select-primary').addEventListener('change', (e) => {
+            document.getElementById('batch-model-txt-primary').value = e.target.value;
+            document.getElementById('set-model').value = e.target.value; // Sync to Tab 1
+        });
+        document.getElementById('batch-model-txt-primary').addEventListener('input', (e) => {
+            document.getElementById('set-model').value = e.target.value; // Sync to Tab 1
+        });
+
+        // Draft 2 to N
         for (let i = 0; i < count - 1; i++) {
             const ov = settings.parallelOverrides[i] || { enabled: false, model: '' };
             const row = document.createElement('div');
-            row.className = 'batch-row';
+            row.className = 'batch-row-container';
             
             row.innerHTML = `
-                <span>Draft ${i+2}: Override</span>
-                <input type="checkbox" id="batch-override-chk-${i}" ${ov.enabled ? 'checked' : ''}>
-                <select id="batch-model-select-${i}">
-                    <option value="" disabled>Select model...</option>
-                </select>
-                <input type="text" id="batch-model-txt-${i}" value="${ov.model}" placeholder="Model ID">
+                <div class="batch-row-top">
+                    <span>Draft ${i+2}</span>
+                    <label style="flex-direction:row; align-items:center;">
+                        <input type="checkbox" id="batch-override-chk-${i}" ${ov.enabled ? 'checked' : ''}> Override
+                    </label>
+                </div>
+                <div class="batch-row-bottom">
+                    <select id="batch-model-select-${i}"><option value="" disabled>Select model...</option></select>
+                    <input type="text" id="batch-model-txt-${i}" value="${ov.model}" placeholder="Model ID">
+                </div>
             `;
             container.appendChild(row);
 
-            // Sync select and text input for this row
             document.getElementById(`batch-model-select-${i}`).addEventListener('change', (e) => {
                 document.getElementById(`batch-model-txt-${i}`).value = e.target.value;
             });
         }
-        this.updateAllModelDropdowns(); // Populate the new selects
+        
+        this.updateAllModelDropdowns();
     }
 
     async refreshSlotList() {
@@ -249,7 +300,7 @@ export class SettingsMenu {
         reader.onload = async (e) => {
             try {
                 const data = JSON.parse(e.target.result);
-                if (!data.history) throw new Error("Invalid save file");
+                if (!data.history) throw new Error("Invalid save file format. Expected 'history' array.");
                 await this.uiManager.storage.saveSlot(this.selectedSlotId, file.name, "Imported", data);
                 this.refreshSlotList();
             } catch (err) {
@@ -294,6 +345,8 @@ export class SettingsMenu {
         settings.apiUrl = document.getElementById('set-api-url').value.trim();
         settings.useChatCompletions = document.getElementById('set-use-chat').checked;
         settings.apiKey = document.getElementById('set-api-key').value.trim();
+        
+        // Primary Model (can be set from Tab 1 or Draft 1 in Tab 2)
         settings.model = document.getElementById('set-model').value.trim();
 
         settings.parallelEnabled = document.getElementById('set-parallel-enabled').checked;

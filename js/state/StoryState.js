@@ -2,7 +2,6 @@ import { settings } from './AppSettings.js';
 
 export class StoryState {
     constructor() {
-        // schema: { role, isBatch: bool, activeDraftIndex: num, drafts: [{model, content, reasoning, status, duration}], meta }
         this.history = []; 
         this.mode = 'chat';
         this.lastRawPayload = null; 
@@ -13,7 +12,6 @@ export class StoryState {
         this.lastRawPayload = null;
     }
 
-    // Standard turn (User or non-parallel Assistant)
     addTurn(role, content, reasoning = '', meta = {}) {
         this.history.push({ 
             role, 
@@ -24,7 +22,6 @@ export class StoryState {
         this.trimOldDrafts();
     }
 
-    // Initiates a batch turn
     addBatchTurn(count) {
         const drafts = [];
         for(let i=0; i<count; i++) {
@@ -36,6 +33,7 @@ export class StoryState {
             activeDraftIndex: 0,
             drafts: drafts
         });
+        this.trimOldDrafts();
     }
 
     updateBatchDraft(msgIndex, draftIndex, data) {
@@ -50,7 +48,6 @@ export class StoryState {
         }
     }
 
-    // Get the actively selected content for a message
     getContent(index) {
         const msg = this.history[index];
         if (!msg || !msg.drafts[msg.activeDraftIndex]) return "";
@@ -71,12 +68,11 @@ export class StoryState {
         if (index >= 0 && index < this.history.length) {
             const msg = this.history[index];
             msg.drafts[msg.activeDraftIndex].content = newContent;
-            // Manual edit implies batch is resolved
-            msg.isBatch = false; 
+            msg.isBatch = false; // Editing a message collapses its batch structure visually
         }
     }
 
-    // Memory Saver: Collapse unused drafts older than N messages
+    // Discard losing drafts older than N messages to save space
     trimOldDrafts(keepCount = 4) {
         if (this.history.length <= keepCount) return;
         const cutoffIdx = this.history.length - keepCount;
@@ -87,7 +83,7 @@ export class StoryState {
                 const activeDraft = msg.drafts[msg.activeDraftIndex];
                 msg.isBatch = false;
                 msg.activeDraftIndex = 0;
-                msg.drafts = [activeDraft]; // Discard the losers
+                msg.drafts = [activeDraft]; 
             }
         }
     }
@@ -99,9 +95,8 @@ export class StoryState {
             messages.push({ role: "system", content: settings.systemPrompt.trim() });
         }
 
-        // Map history using the *active* draft contents
-        for (const msg of this.history) {
-            messages.push({ role: msg.role, content: this.getContent(this.history.indexOf(msg)) });
+        for (let i = 0; i < this.history.length; i++) {
+            messages.push({ role: this.history[i].role, content: this.getContent(i) });
         }
 
         const anote = settings.anoteContent.trim();
