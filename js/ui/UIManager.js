@@ -76,24 +76,22 @@ export class UIManager {
         const messages = this.state.buildPromptPayload();
         this.currentJob = new GenerationJob();
         
-        // Append placeholder for assistant
         const newIdx = this.state.history.length;
         this.state.addTurn('assistant', '');
         const domElements = this.appendTurnToDOM('assistant', '', '', {}, newIdx);
-        
-        let streamingContent = "";
-        let streamingReasoning = "";
 
         try {
-            for await (const chunk of this.currentJob.streamGeneration(messages)) {
-                if (chunk.type === 'reasoning') {
-                    streamingReasoning += chunk.text;
-                    domElements.reasoningNode.textContent = streamingReasoning;
+            // Because our stream yields the absolute parsed strings, we just overwrite textContent
+            for await (const state of this.currentJob.streamGeneration(messages)) {
+                
+                // Update Reasoning Node
+                if (state.reasoning) {
+                    domElements.reasoningNode.textContent = state.reasoning;
                     domElements.reasoningDiv.classList.remove('hidden');
-                } else {
-                    streamingContent += chunk.text;
-                    domElements.contentNode.textContent = streamingContent;
                 }
+
+                // Update Content Node
+                domElements.contentNode.textContent = state.content;
                 this.scrollToBottom();
             }
         } catch (error) {
@@ -105,23 +103,30 @@ export class UIManager {
             domElements.cursor.remove();
             
             // Hide reasoning by default when finished
-            if (streamingReasoning) domElements.reasoningDiv.classList.add('hidden');
+            if (this.currentJob.finalReasoning) {
+                domElements.reasoningDiv.classList.add('hidden');
+            }
             
-            // Update state
-            this.state.history[newIdx].content = this.currentJob.content;
-            this.state.history[newIdx].reasoning = this.currentJob.reasoning;
+            // Sync final state
+            this.state.history[newIdx].content = this.currentJob.finalContent;
+            this.state.history[newIdx].reasoning = this.currentJob.finalReasoning;
             this.state.history[newIdx].meta = {
                 model: settings.model,
                 duration: this.currentJob.duration
             };
             this.state.lastRawPayload = this.currentJob.rawPayload;
 
+            // If a strict API (like GLM) rejected the <think> prompt and returned nothing
+            if (!this.currentJob.finalContent && !this.currentJob.finalReasoning) {
+                domElements.contentNode.textContent = "[Empty Response. The model may have rejected the forced <think> prefix.]";
+            }
+
             this.currentJob = null;
             document.getElementById('btn-abort').classList.add('hidden');
             document.getElementById('btn-send').classList.remove('hidden');
             this.input.focus();
             
-            this.renderAll(); // Re-render to attach final action bar
+            this.renderAll(); 
             this.autoSave();
         }
     }

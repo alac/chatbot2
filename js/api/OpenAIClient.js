@@ -16,8 +16,15 @@ export class OpenAIClient {
 export class GenerationJob {
     constructor() {
         this.abortController = new AbortController();
-        this.content = "";
-        this.reasoning = "";
+        
+        // Seed the content buffer if we forced the model to think
+        this.rawContent = settings.forceThink ? "<think>\n" : "";
+        this.apiReasoning = "";
+        this.hasNativeReasoning = false; // Tracks if the API uses native reasoning fields
+        
+        this.finalContent = "";
+        this.finalReasoning = "";
+        
         this.startTime = Date.now();
         this.duration = 0;
         this.rawPayload = null;
@@ -71,7 +78,6 @@ export class GenerationJob {
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
-        let isThinking = settings.forceThink;
 
         try {
             while (true) {
@@ -82,57 +88,78 @@ export class GenerationJob {
                 const lines = buffer.split('\n');
                 buffer = lines.pop(); 
 
+                let hasUpdates = false;
+
                 for (const line of lines) {
                     if (line.trim() === "" || line.trim() === "data: [DONE]") continue;
                     if (line.startsWith("data: ")) {
                         try {
                             const data = JSON.parse(line.slice(6));
                             const delta = data.choices[0]?.delta || {};
+                            
                             const textChunk = delta.content || data.choices[0]?.text || "";
-                            const reasonChunk = delta.reasoning_content || "";
+                            
+                            // FIX: Check both common keys for native reasoning
+                            const reasonChunk = delta.reasoning_content || delta.reasoning || "";
 
-                            // 1. Direct Reasoning from API (vLLM / O1)
                             if (reasonChunk) {
-                                this.reasoning += reasonChunk;
-                                yield { type: 'reasoning', text: reasonChunk };
+                                this.apiReasoning += reasonChunk;
+                                this.hasNativeReasoning = true;
+                                hasUpdates = true;
                             }
-
-                            // 2. Parse inline <think> tags (Ollama / DeepSeek-R1 raw)
                             if (textChunk) {
-                                let chunkStr = textChunk;
-                                
-                                // State machine for inline tags
-                                if (chunkStr.includes('<think>')) {
-                                    isThinking = true;
-                                    chunkStr = chunkStr.replace('<think>', '');
-                                }
-                                if (chunkStr.includes('</think>')) {
-                                    isThinking = false;
-                                    const parts = chunkStr.split('</think>');
-                                    if (parts[0]) {
-                                        this.reasoning += parts[0];
-                                        yield { type: 'reasoning', text: parts[0] };
-                                    }
-                                    chunkStr = parts[1] || "";
-                                }
-
-                                if (isThinking) {
-                                    this.reasoning += chunkStr;
-                                    yield { type: 'reasoning', text: chunkStr };
-                                } else if (chunkStr !== "") {
-                                    this.content += chunkStr;
-                                    yield { type: 'content', text: chunkStr };
-                                }
+                                this.rawContent += textChunk;
+                                hasUpdates = true;
                             }
                         } catch (e) {
-                            // Ignore parse errors on partial chunks
+                            // Ignore parse errors on partial JSON chunks
                         }
                     }
+                }
+
+                // If we received new tokens, parse the entire buffer idempotently
+                if (hasUpdates) {
+                    this.parseState();
+                    yield { content: this.finalContent, reasoning: this.finalReasoning };
                 }
             }
         } finally {
             reader.releaseLock();
             this.duration = ((Date.now() - this.startTime) / 1000).toFixed(1);
         }
+    }
+
+    // Runs over the accumulated string to safely extract thinking blocks
+    parseState() {
+        this.finalContent = this.rawContent;
+        this.finalReasoning = this.apiReasoning;
+
+        // If the API sends native reasoning, we don't need to regex parse the content.
+        if (this.hasNativeReasoning) {
+            // Strip the fake `<think>\n` we seeded if it's there, so it doesn't leak into the UI
+            if (settings.forceThink) {
+                this.finalContent = this.finalContent.replace(/^<think>\n/, "");
+            }
+        } else {
+            // Fallback: The API doesn't use native reasoning fields (e.g. Ollama).
+            // We must extract the <think> blocks manually.
+            const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/gi;
+            let match;
+            let extractedReasoning = "";
+            
+            while ((match = thinkRegex.exec(this.rawContent)) !== null) {
+                extractedReasoning += match[1];
+            }
+
+            if (extractedReasoning) {
+                this.finalReasoning = extractedReasoning;
+                // Strip the tags and reasoning from the final content
+                this.finalContent = this.rawContent.replace(/<think>([\s\S]*?)(?:<\/think>|$)/gi, "");
+            }
+        }
+
+        // Final cleanup
+        this.finalContent = this.finalContent.trimStart(); 
+        this.finalReasoning = this.finalReasoning.trim();
     }
 }
