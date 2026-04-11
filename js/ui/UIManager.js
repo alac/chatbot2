@@ -1,13 +1,15 @@
-import { settings, StoryState } from '../state.js';
-import { GenerationJob } from '../api/OpenAIClient.js';
+import { settings, StoryState } from '../state/AppSettings.js'; // Adjust path if you split state
+import { ParallelGenerationBatch } from '../api/OpenAIClient.js';
 import { StorageManager } from '../storage/StorageManager.js';
 
 export class UIManager {
     constructor() {
         this.state = new StoryState();
         this.storage = new StorageManager();
-        this.currentJob = null;
+        this.activeBatch = null;
         this.activeSlot = 1;
+        this.batchTimer = null;
+        this.batchStartTime = 0;
         
         this.container = document.getElementById('output-container');
         this.input = document.getElementById('user-input');
@@ -18,13 +20,10 @@ export class UIManager {
 
     async initApp() {
         await this.storage.init();
-        
-        // Auto-load last session
         const lastSlot = localStorage.getItem('last_active_slot') || 1;
         this.activeSlot = parseInt(lastSlot);
         await this.loadStateFromSlot(this.activeSlot);
         
-        // Scroll listener for Jump to Bottom FAB
         const fab = document.getElementById('btn-jump-bottom');
         this.container.addEventListener('scroll', () => {
             const isScrolledUp = (this.container.scrollHeight - this.container.scrollTop - this.container.clientHeight) > 200;
@@ -74,54 +73,54 @@ export class UIManager {
         document.getElementById('btn-abort').classList.remove('hidden');
 
         const messages = this.state.buildPromptPayload();
-        this.currentJob = new GenerationJob();
+        
+        const count = settings.parallelEnabled ? parseInt(settings.parallelCount) : 1;
+        this.activeBatch = new ParallelGenerationBatch(messages, count, settings.parallelOverrides);
         
         const newIdx = this.state.history.length;
-        this.state.addTurn('assistant', '');
-        const domElements = this.appendTurnToDOM('assistant', '', '', {}, newIdx);
+        this.state.addBatchTurn(count);
+        
+        // Setup UI hooks for the new turn
+        const domElements = this.appendTurnToDOM('assistant', newIdx);
+        
+        // Start high-performance timer
+        this.batchStartTime = Date.now();
+        this.batchTimer = setInterval(() => {
+            const timerEl = document.getElementById(`batch-timer-${newIdx}`);
+            if (timerEl) timerEl.textContent = `(${((Date.now() - this.batchStartTime)/1000).toFixed(1)}s)`;
+        }, 100);
 
         try {
-            // Because our stream yields the absolute parsed strings, we just overwrite textContent
-            for await (const state of this.currentJob.streamGeneration(messages)) {
+            await this.activeBatch.startAll((draftIdx, data) => {
+                // Update state
+                this.state.updateBatchDraft(newIdx, draftIdx, data);
                 
-                // Update Reasoning Node
-                if (state.reasoning) {
-                    domElements.reasoningNode.textContent = state.reasoning;
-                    domElements.reasoningDiv.classList.remove('hidden');
+                // If the updated draft is the actively viewed one, update DOM text
+                if (this.state.history[newIdx].activeDraftIndex === draftIdx) {
+                    if (data.reasoning) {
+                        domElements.reasoningNode.textContent = data.reasoning;
+                        domElements.reasoningDiv.classList.remove('hidden');
+                    }
+                    domElements.contentNode.textContent = data.content;
+                    this.scrollToBottom();
                 }
 
-                // Update Content Node
-                domElements.contentNode.textContent = state.content;
-                this.scrollToBottom();
-            }
-        } catch (error) {
-            if (error.name !== "AbortError") {
-                console.error(error);
-                domElements.contentNode.textContent += `\n[Error: ${error.message}]`;
-            }
+                // Update Switcher Icons
+                const iconEl = document.getElementById(`draft-icon-${newIdx}-${draftIdx}`);
+                if (iconEl) {
+                    iconEl.textContent = data.status === 'done' ? '✔️' : (data.status === 'error' ? '❌' : '🕒');
+                }
+            });
         } finally {
-            domElements.cursor.remove();
-            
-            // Hide reasoning by default when finished
-            if (this.currentJob.finalReasoning) {
-                domElements.reasoningDiv.classList.add('hidden');
+            clearInterval(this.batchTimer);
+            if (this.activeBatch && this.activeBatch.jobs[0]) {
+                this.state.lastRawPayload = this.activeBatch.jobs[0].rawPayload;
             }
+            this.activeBatch = null;
             
-            // Sync final state
-            this.state.history[newIdx].content = this.currentJob.finalContent;
-            this.state.history[newIdx].reasoning = this.currentJob.finalReasoning;
-            this.state.history[newIdx].meta = {
-                model: settings.model,
-                duration: this.currentJob.duration
-            };
-            this.state.lastRawPayload = this.currentJob.rawPayload;
-
-            // If a strict API (like GLM) rejected the <think> prompt and returned nothing
-            if (!this.currentJob.finalContent && !this.currentJob.finalReasoning) {
-                domElements.contentNode.textContent = "[Empty Response. The model may have rejected the forced <think> prefix.]";
-            }
-
-            this.currentJob = null;
+            // Cleanup UI
+            if (domElements.cursor) domElements.cursor.remove();
+            
             document.getElementById('btn-abort').classList.add('hidden');
             document.getElementById('btn-send').classList.remove('hidden');
             this.input.focus();
@@ -132,19 +131,27 @@ export class UIManager {
     }
 
     handleAbort() {
-        if (this.currentJob) this.currentJob.cancel();
+        if (this.activeBatch) this.activeBatch.cancelAll();
     }
 
     renderAll() {
         this.container.innerHTML = '';
         this.container.className = `${this.state.mode}-mode`;
         this.state.history.forEach((turn, idx) => {
-            this.appendTurnToDOM(turn.role, turn.content, turn.reasoning, turn.meta, idx);
+            this.appendTurnToDOM(turn.role, idx);
         });
         this.scrollToBottom();
     }
 
-    appendTurnToDOM(role, content, reasoning, meta, index) {
+    // Handles rendering a turn entirely from state by its index
+    appendTurnToDOM(role, index) {
+        const msg = this.state.history[index];
+        const isStreaming = this.activeBatch && index === this.state.history.length - 1;
+        
+        const activeDraft = msg.drafts[msg.activeDraftIndex];
+        const content = activeDraft.content;
+        const reasoning = activeDraft.reasoning;
+        
         const wrapper = document.createElement('div');
         wrapper.className = `turn ${role}`;
 
@@ -153,7 +160,8 @@ export class UIManager {
 
         // Reasoning Block
         const reasoningDiv = document.createElement('div');
-        reasoningDiv.className = 'thinking-block hidden';
+        reasoningDiv.className = 'thinking-block';
+        if (!reasoning || (!isStreaming && role === 'assistant')) reasoningDiv.classList.add('hidden');
         const reasoningNode = document.createTextNode(reasoning || '');
         reasoningDiv.appendChild(reasoningNode);
         bubble.appendChild(reasoningDiv);
@@ -164,9 +172,9 @@ export class UIManager {
         const contentNode = document.createTextNode(content || '');
         contentDiv.appendChild(contentNode);
         
-        // Streaming Cursor (only added if this is a live generation)
-        const cursor = document.createElement('span');
-        if (this.currentJob && index === this.state.history.length - 1) {
+        let cursor = null;
+        if (isStreaming) {
+            cursor = document.createElement('span');
             cursor.className = 'streaming-indicator';
             contentDiv.appendChild(cursor);
         }
@@ -174,26 +182,75 @@ export class UIManager {
         bubble.appendChild(contentDiv);
         wrapper.appendChild(bubble);
 
-        // Action Bar (Not shown during streaming)
-        if (!this.currentJob || index < this.state.history.length - 1) {
+        // --- BATCH SWITCHER (Appended below text if isBatch) ---
+        if (msg.isBatch) {
+            const switcher = document.createElement('div');
+            switcher.className = 'draft-switcher';
+            
+            const btnPrev = document.createElement('button');
+            btnPrev.textContent = '◀';
+            btnPrev.onclick = () => this.switchDraft(index, -1);
+            
+            const select = document.createElement('select');
+            msg.drafts.forEach((d, i) => {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `V${i+1} | ${d.model ? d.model.split('/').pop() : 'Unknown'}`;
+                if (i === msg.activeDraftIndex) opt.selected = true;
+                select.appendChild(opt);
+            });
+            select.onchange = (e) => {
+                this.state.setActiveDraft(index, parseInt(e.target.value));
+                this.renderAll();
+            };
+
+            const btnNext = document.createElement('button');
+            btnNext.textContent = '▶';
+            btnNext.onclick = () => this.switchDraft(index, 1);
+
+            const statusDiv = document.createElement('div');
+            statusDiv.style.marginLeft = '8px';
+            msg.drafts.forEach((d, i) => {
+                const span = document.createElement('span');
+                span.id = `draft-icon-${index}-${i}`;
+                span.textContent = d.status === 'done' ? '✔️' : (d.status === 'error' ? '❌' : '🕒');
+                if (i === msg.activeDraftIndex) span.style.border = '1px solid var(--accent)';
+                statusDiv.appendChild(span);
+            });
+
+            const timerSpan = document.createElement('span');
+            timerSpan.id = `batch-timer-${index}`;
+            timerSpan.style.marginLeft = '4px';
+            if (!isStreaming) timerSpan.textContent = `(${activeDraft.duration}s)`;
+
+            switcher.appendChild(btnPrev);
+            switcher.appendChild(select);
+            switcher.appendChild(btnNext);
+            switcher.appendChild(statusDiv);
+            switcher.appendChild(timerSpan);
+            
+            wrapper.appendChild(switcher);
+        }
+
+        // --- ACTION BAR ---
+        if (!isStreaming) {
             const actionBar = document.createElement('div');
             actionBar.className = 'action-bar';
             
-            // Metadata (Left)
             const metaSpan = document.createElement('span');
-            if (meta && meta.model) {
-                const shortModel = meta.model.split('/').pop();
-                metaSpan.textContent = `${shortModel} • ${meta.duration}s`;
+            if (activeDraft.model) {
+                const shortModel = activeDraft.model.split('/').pop();
+                metaSpan.textContent = `${shortModel} • ${activeDraft.duration}s`;
             }
             actionBar.appendChild(metaSpan);
 
-            // Icons (Right)
             const iconsDiv = document.createElement('div');
             iconsDiv.className = 'action-icons';
 
             if (reasoning) {
                 const btnThink = document.createElement('span');
                 btnThink.textContent = '🧠';
+                btnThink.className = 'think-toggle';
                 btnThink.title = "Toggle Thinking";
                 btnThink.addEventListener('click', () => {
                     reasoningDiv.classList.toggle('hidden');
@@ -212,13 +269,12 @@ export class UIManager {
             btnEdit.textContent = '✏️';
             btnEdit.title = "Edit";
             btnEdit.addEventListener('click', () => {
-                document.getElementById('edit-message-content').value = this.state.history[index].content;
+                document.getElementById('edit-message-content').value = content;
                 document.getElementById('btn-edit-save').dataset.idx = index;
                 document.getElementById('edit-modal').classList.remove('hidden');
             });
             iconsDiv.appendChild(btnEdit);
 
-            // View Prompt (Only for latest assistant message)
             if (role === 'assistant' && index === this.state.history.length - 1 && this.state.lastRawPayload) {
                 const btnPrompt = document.createElement('span');
                 btnPrompt.textContent = '🔍';
@@ -251,13 +307,20 @@ export class UIManager {
         return { contentNode, reasoningNode, reasoningDiv, cursor };
     }
 
+    switchDraft(msgIndex, dir) {
+        const msg = this.state.history[msgIndex];
+        const len = msg.drafts.length;
+        const newIdx = (msg.activeDraftIndex + dir + len) % len;
+        this.state.setActiveDraft(msgIndex, newIdx);
+        this.renderAll();
+    }
+
     scrollToBottom() {
         this.container.scrollTop = this.container.scrollHeight;
         document.getElementById('btn-jump-bottom').classList.add('hidden');
     }
 
     async autoSave() {
-        // Use a generic name if none exists (in a full app, prompt for name)
         await this.storage.saveSlot(this.activeSlot, `Slot ${this.activeSlot}`, `Auto-saved`, this.state.exportData());
         localStorage.setItem('last_active_slot', this.activeSlot);
         if (window.settingsUI) window.settingsUI.refreshSlotList();
@@ -269,7 +332,7 @@ export class UIManager {
             this.state.loadFromData(slot.data);
             document.getElementById('mode-selector').value = this.state.mode;
         } else {
-            this.state.clear(); // Empty slot
+            this.state.clear(); 
         }
         this.renderAll();
     }

@@ -22,7 +22,6 @@
         <!-- Messages injected here -->
     </main>
 
-    <!-- Jump to Bottom FAB -->
     <button id="btn-jump-bottom" class="fab hidden">⬇️</button>
 
     <footer id="input-area">
@@ -37,37 +36,37 @@
     <div id="settings-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Settings</h2>
+                <select id="settings-page-selector" class="page-select">
+                    <option value="tab-connection">1. API & Models</option>
+                    <option value="tab-batch">2. Batch / Parallel</option>
+                    <option value="tab-format">3. Format & A/N</option>
+                    <option value="tab-samplers">4. Samplers</option>
+                    <option value="tab-saveload">5. Save / Load</option>
+                </select>
                 <button id="btn-close-settings" class="close-btn">&times;</button>
-            </div>
-            <div class="modal-tabs">
-                <button class="tab-btn active" data-target="tab-connection">API & Models</button>
-                <button class="tab-btn" data-target="tab-format">Format & A/N</button>
-                <button class="tab-btn" data-target="tab-samplers">Samplers</button>
-                <button class="tab-btn" data-target="tab-saveload">Save / Load</button>
             </div>
             <div class="modal-body">
                 
-                <!-- Connection Tab -->
+                <!-- 1. Connection Tab -->
                 <div id="tab-connection" class="tab-pane active">
-                    <div class="setting-row">
+                    <div class="setting-row column">
                         <span class="label-text">API Base URL</span>
-                        <input type="text" id="set-api-url" placeholder="https://api.openai.com/v1" style="flex:1; margin-left: 10px;">
+                        <input type="text" id="set-api-url" placeholder="https://api.openai.com/v1">
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Use Chat Completions (/chat/completions)</span>
                         <input type="checkbox" id="set-use-chat" checked>
                     </div>
-                    <div class="setting-row">
+                    <div class="setting-row column">
                         <span class="label-text">API Key</span>
-                        <input type="password" id="set-api-key" placeholder="sk-..." style="flex:1; margin-left: 10px;">
+                        <input type="password" id="set-api-key" placeholder="sk-...">
                     </div>
                     <hr>
                     <div class="setting-row">
-                        <select id="select-model" style="flex:1;">
+                        <select id="select-model" class="model-dropdown" style="flex:1;">
                             <option value="" disabled selected>Select a model...</option>
                         </select>
-                        <button id="btn-fetch-models" class="secondary">Fetch</button>
+                        <button id="btn-fetch-models" class="secondary">Fetch Models</button>
                     </div>
                     <div class="setting-row">
                         <input type="text" id="set-model" placeholder="Model ID..." style="flex:1;">
@@ -79,15 +78,30 @@
                     </div>
                 </div>
 
-                <!-- Format Tab -->
+                <!-- 2. Batch / Parallel Tab -->
+                <div id="tab-batch" class="tab-pane">
+                    <div class="setting-row">
+                        <span class="label-text">Enable Parallel Requests</span>
+                        <input type="checkbox" id="set-parallel-enabled">
+                    </div>
+                    <div class="setting-row" id="parallel-count-row">
+                        <span class="label-text">Number of Drafts</span>
+                        <select id="set-parallel-count" style="width: 80px;">
+                            <option value="2">2</option><option value="3">3</option>
+                            <option value="4">4</option><option value="5">5</option>
+                        </select>
+                    </div>
+                    <hr>
+                    <div id="parallel-rows-container">
+                        <!-- Rows injected via JS -->
+                    </div>
+                </div>
+
+                <!-- 3. Format Tab -->
                 <div id="tab-format" class="tab-pane">
                     <div class="setting-row column">
                         <span class="label-text">System Prompt</span>
                         <textarea id="set-system-prompt" rows="3" placeholder="You are a helpful AI..."></textarea>
-                    </div>
-                    <div class="setting-row">
-                        <span class="label-text" title="Automatically start assistant replies with <think>\n">Force &lt;think&gt; Prefix</span>
-                        <input type="checkbox" id="set-force-think">
                     </div>
                     <hr>
                     <h3>Author's Note</h3>
@@ -105,10 +119,14 @@
                     </div>
                 </div>
 
-                <!-- Samplers Tab -->
+                <!-- 4. Samplers Tab -->
                 <div id="tab-samplers" class="tab-pane">
                     <button id="btn-neutralize-samplers" class="secondary">Reset to Neutral</button>
-                    
+                    <div class="setting-row" style="margin-top: 8px;">
+                        <span class="label-text" title="Automatically start assistant replies with <think>\n">Force &lt;think&gt; Prefix</span>
+                        <input type="checkbox" id="set-force-think">
+                    </div>
+                    <hr>
                     <div class="setting-row sampler-row"><span class="label-text">Context Length</span><input type="range" id="slide-context" min="512" max="128000" step="256"><input type="number" id="num-context"></div>
                     <div class="setting-row sampler-row"><span class="label-text">Max Response</span><input type="range" id="slide-max-tokens" min="16" max="8192" step="16"><input type="number" id="num-max-tokens"></div>
                     <div class="setting-row sampler-row"><span class="label-text">Temperature</span><input type="range" id="slide-temp" min="0" max="3" step="0.05"><input type="number" id="num-temp" step="0.05"></div>
@@ -121,12 +139,10 @@
                     <div class="setting-row sampler-row"><span class="label-text">Rep. Penalty</span><input type="range" id="slide-rep-pen" min="1" max="2" step="0.01"><input type="number" id="num-rep-pen" step="0.01"></div>
                 </div>
 
-                <!-- Save/Load Tab -->
+                <!-- 5. Save/Load Tab -->
                 <div id="tab-saveload" class="tab-pane">
                     <h3>Save Slots</h3>
-                    <div id="slot-list" class="slot-list">
-                        <!-- Slots injected by JS -->
-                    </div>
+                    <div id="slot-list" class="slot-list"></div>
                     <div id="slot-actions" class="slot-actions hidden">
                         <p id="selected-slot-label">Selected: None</p>
                         <div class="action-grid">
@@ -144,6 +160,7 @@
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
     </div>

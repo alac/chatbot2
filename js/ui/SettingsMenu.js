@@ -1,4 +1,4 @@
-import { settings } from '../state.js';
+import { settings } from '../state/AppSettings.js'; // Adjust path if needed
 import { OpenAIClient } from '../api/OpenAIClient.js';
 
 export class SettingsMenu {
@@ -12,28 +12,31 @@ export class SettingsMenu {
     bindEvents() {
         document.getElementById('btn-settings').addEventListener('click', () => {
             this.modal.classList.remove('hidden');
-            this.refreshSlotList(); // Update save slots when opened
+            this.refreshSlotList(); 
         });
         document.getElementById('btn-close-settings').addEventListener('click', () => this.closeAndSave());
         
-        document.querySelectorAll('.tab-btn').forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-                e.target.classList.add('active');
-                document.getElementById(e.target.dataset.target).classList.add('active');
-            });
+        // Page Selector
+        document.getElementById('settings-page-selector').addEventListener('change', (e) => {
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById(e.target.value).classList.add('active');
         });
+
+        // Batch / Parallel dynamic rows
+        document.getElementById('set-parallel-count').addEventListener('change', () => this.renderBatchRows());
 
         document.getElementById('btn-fetch-models').addEventListener('click', () => this.handleFetchModels());
         document.getElementById('btn-manage-favorites').addEventListener('click', () => {
             document.getElementById('favorites-container').classList.toggle('hidden');
             this.renderFavoritesList();
         });
+        
+        // Sync primary model dropdown to text input
         document.getElementById('select-model').addEventListener('change', (e) => {
             document.getElementById('set-model').value = e.target.value;
         });
 
+        // Samplers
         this.bindSamplerPair('slide-context', 'num-context');
         this.bindSamplerPair('slide-max-tokens', 'num-max-tokens');
         this.bindSamplerPair('slide-temp', 'num-temp');
@@ -73,6 +76,10 @@ export class SettingsMenu {
             }
         });
         document.getElementById('btn-export-txt').addEventListener('click', () => this.exportText());
+        document.getElementById('btn-export-json').addEventListener('click', () => this.exportJSON());
+        
+        document.getElementById('btn-import-json').addEventListener('click', () => document.getElementById('file-import-json').click());
+        document.getElementById('file-import-json').addEventListener('change', (e) => this.importJSON(e));
     }
 
     bindSamplerPair(slideId, numId) {
@@ -92,26 +99,46 @@ export class SettingsMenu {
         try {
             const models = await OpenAIClient.fetchModels();
             this.cachedFetchedModels = models.map(m => m.id || m.name);
-            this.updateModelDropdown();
+            this.updateAllModelDropdowns();
             this.renderFavoritesList();
             btn.textContent = "Success!";
         } catch (e) {
             alert(e.message);
             btn.textContent = "Fetch Failed";
         } finally {
-            setTimeout(() => { btn.textContent = "Fetch"; btn.disabled = false; }, 2000);
+            setTimeout(() => { btn.textContent = "Fetch Models"; btn.disabled = false; }, 2000);
         }
     }
 
-    updateModelDropdown() {
-        const select = document.getElementById('select-model');
-        select.innerHTML = '<option value="" disabled selected>Select a model...</option>';
-        let list = this.cachedFetchedModels || settings.favoriteModels;
-        const favs = list.filter(m => settings.favoriteModels.includes(m)).sort();
-        const others = list.filter(m => !settings.favoriteModels.includes(m)).sort();
+    updateAllModelDropdowns() {
+        const createOptions = (selectEl, selectedVal) => {
+            selectEl.innerHTML = '<option value="" disabled selected>Select a model...</option>';
+            let list = this.cachedFetchedModels || settings.favoriteModels;
+            const favs = list.filter(m => settings.favoriteModels.includes(m)).sort();
+            const others = list.filter(m => !settings.favoriteModels.includes(m)).sort();
 
-        favs.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = `⭐ ${m}`; select.appendChild(opt); });
-        others.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; select.appendChild(opt); });
+            favs.forEach(m => { 
+                const opt = document.createElement('option'); 
+                opt.value = m; opt.textContent = `⭐ ${m}`; 
+                if (m === selectedVal) opt.selected = true;
+                selectEl.appendChild(opt); 
+            });
+            others.forEach(m => { 
+                const opt = document.createElement('option'); 
+                opt.value = m; opt.textContent = m; 
+                if (m === selectedVal) opt.selected = true;
+                selectEl.appendChild(opt); 
+            });
+        };
+
+        // Primary
+        createOptions(document.getElementById('select-model'), settings.model);
+        
+        // Batch Overrides
+        for (let i=0; i<4; i++) {
+            const sel = document.getElementById(`batch-model-select-${i}`);
+            if (sel) createOptions(sel, settings.parallelOverrides[i].model);
+        }
     }
 
     renderFavoritesList() {
@@ -130,10 +157,38 @@ export class SettingsMenu {
                 if (e.target.checked && !settings.favoriteModels.includes(m)) settings.favoriteModels.push(m);
                 else settings.favoriteModels = settings.favoriteModels.filter(f => f !== m);
                 settings.save();
-                this.updateModelDropdown();
+                this.updateAllModelDropdowns();
             });
             row.appendChild(label); row.appendChild(checkbox); listDiv.appendChild(row);
         });
+    }
+
+    renderBatchRows() {
+        const container = document.getElementById('parallel-rows-container');
+        container.innerHTML = '';
+        const count = parseInt(document.getElementById('set-parallel-count').value);
+
+        for (let i = 0; i < count - 1; i++) {
+            const ov = settings.parallelOverrides[i] || { enabled: false, model: '' };
+            const row = document.createElement('div');
+            row.className = 'batch-row';
+            
+            row.innerHTML = `
+                <span>Draft ${i+2}: Override</span>
+                <input type="checkbox" id="batch-override-chk-${i}" ${ov.enabled ? 'checked' : ''}>
+                <select id="batch-model-select-${i}">
+                    <option value="" disabled>Select model...</option>
+                </select>
+                <input type="text" id="batch-model-txt-${i}" value="${ov.model}" placeholder="Model ID">
+            `;
+            container.appendChild(row);
+
+            // Sync select and text input for this row
+            document.getElementById(`batch-model-select-${i}`).addEventListener('change', (e) => {
+                document.getElementById(`batch-model-txt-${i}`).value = e.target.value;
+            });
+        }
+        this.updateAllModelDropdowns(); // Populate the new selects
     }
 
     async refreshSlotList() {
@@ -146,7 +201,7 @@ export class SettingsMenu {
             card.className = `slot-card ${slot.id === this.uiManager.activeSlot ? 'active' : ''}`;
             
             const dateStr = slot.lastEdited ? new Date(slot.lastEdited).toLocaleString() : 'Empty';
-            const msgCount = slot.data ? slot.messageCount : 0;
+            const msgCount = slot.data ? slot.data.history.length : 0;
 
             card.innerHTML = `
                 <div class="slot-title"><span>${slot.name}</span> <span class="slot-meta">Msgs: ${msgCount}</span></div>
@@ -167,12 +222,41 @@ export class SettingsMenu {
     }
 
     exportText() {
-        const text = this.uiManager.state.history.map(m => `${m.role.toUpperCase()}:\n${m.content}\n`).join('\n');
+        const text = this.uiManager.state.history.map(m => {
+            let content = m.isBatch ? m.drafts[m.activeDraftIndex].content : m.content;
+            return `${m.role.toUpperCase()}:\n${content}\n`;
+        }).join('\n');
         const blob = new Blob([text], { type: 'text/plain' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `story_export_${Date.now()}.txt`;
         a.click();
+    }
+
+    exportJSON() {
+        const data = this.uiManager.state.exportData();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `story_save_${Date.now()}.json`;
+        a.click();
+    }
+
+    importJSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (!data.history) throw new Error("Invalid save file");
+                await this.uiManager.storage.saveSlot(this.selectedSlotId, file.name, "Imported", data);
+                this.refreshSlotList();
+            } catch (err) {
+                alert("Failed to import JSON: " + err.message);
+            }
+        };
+        reader.readAsText(file);
     }
 
     populateUI() {
@@ -181,6 +265,10 @@ export class SettingsMenu {
         document.getElementById('set-api-key').value = settings.apiKey;
         document.getElementById('set-model').value = settings.model;
         
+        document.getElementById('set-parallel-enabled').checked = settings.parallelEnabled;
+        document.getElementById('set-parallel-count').value = settings.parallelCount;
+        this.renderBatchRows();
+
         document.getElementById('set-system-prompt').value = settings.systemPrompt;
         document.getElementById('set-force-think').checked = settings.forceThink;
         document.getElementById('set-anote-content').value = settings.anoteContent;
@@ -199,7 +287,7 @@ export class SettingsMenu {
         setPair(settings.tfs, 'slide-tfs', 'num-tfs');
         setPair(settings.repPen, 'slide-rep-pen', 'num-rep-pen');
 
-        this.updateModelDropdown();
+        this.updateAllModelDropdowns();
     }
 
     closeAndSave() {
@@ -207,6 +295,16 @@ export class SettingsMenu {
         settings.useChatCompletions = document.getElementById('set-use-chat').checked;
         settings.apiKey = document.getElementById('set-api-key').value.trim();
         settings.model = document.getElementById('set-model').value.trim();
+
+        settings.parallelEnabled = document.getElementById('set-parallel-enabled').checked;
+        settings.parallelCount = parseInt(document.getElementById('set-parallel-count').value);
+        for (let i = 0; i < settings.parallelCount - 1; i++) {
+            const chk = document.getElementById(`batch-override-chk-${i}`);
+            const txt = document.getElementById(`batch-model-txt-${i}`);
+            if (chk && txt) {
+                settings.parallelOverrides[i] = { enabled: chk.checked, model: txt.value.trim() };
+            }
+        }
 
         settings.systemPrompt = document.getElementById('set-system-prompt').value;
         settings.forceThink = document.getElementById('set-force-think').checked;

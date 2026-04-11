@@ -1,4 +1,4 @@
-import { settings } from '../state.js';
+import { settings } from '../state/AppSettings.js';
 
 export class OpenAIClient {
     static async fetchModels() {
@@ -14,17 +14,17 @@ export class OpenAIClient {
 }
 
 export class GenerationJob {
-    constructor() {
+    constructor(modelOverride = null) {
         this.abortController = new AbortController();
+        this.model = modelOverride || settings.model;
         
-        // Seed the content buffer if we forced the model to think
         this.rawContent = settings.forceThink ? "<think>\n" : "";
         this.apiReasoning = "";
-        this.hasNativeReasoning = false; // Tracks if the API uses native reasoning fields
+        this.hasNativeReasoning = false;
         
         this.finalContent = "";
         this.finalReasoning = "";
-        
+        this.status = "streaming";
         this.startTime = Date.now();
         this.duration = 0;
         this.rawPayload = null;
@@ -34,12 +34,13 @@ export class GenerationJob {
         this.abortController.abort();
     }
 
-    async *streamGeneration(messages) {
+    // Uses callback instead of async generator for easier parallel management
+    async start(messages, onUpdate) {
         const baseUrl = settings.apiUrl.replace(/\/$/, '');
         const endpoint = settings.useChatCompletions ? `${baseUrl}/chat/completions` : `${baseUrl}/completions`;
 
         const payload = {
-            model: settings.model,
+            model: this.model,
             temperature: parseFloat(settings.temperature),
             max_tokens: parseInt(settings.maxTokens),
             top_p: parseFloat(settings.topP),
@@ -60,26 +61,26 @@ export class GenerationJob {
 
         this.rawPayload = payload;
 
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${settings.apiKey}`
-            },
-            body: JSON.stringify(payload),
-            signal: this.abortController.signal
-        });
-
-        if (!response.ok) {
-            const err = await response.text();
-            throw new Error(`API Error ${response.status}: ${err}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let buffer = "";
-
         try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${settings.apiKey}`
+                },
+                body: JSON.stringify(payload),
+                signal: this.abortController.signal
+            });
+
+            if (!response.ok) {
+                const err = await response.text();
+                throw new Error(`API Error ${response.status}: ${err}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -98,8 +99,6 @@ export class GenerationJob {
                             const delta = data.choices[0]?.delta || {};
                             
                             const textChunk = delta.content || data.choices[0]?.text || "";
-                            
-                            // FIX: Check both common keys for native reasoning
                             const reasonChunk = delta.reasoning_content || delta.reasoning || "";
 
                             if (reasonChunk) {
@@ -117,32 +116,31 @@ export class GenerationJob {
                     }
                 }
 
-                // If we received new tokens, parse the entire buffer idempotently
                 if (hasUpdates) {
                     this.parseState();
-                    yield { content: this.finalContent, reasoning: this.finalReasoning };
+                    onUpdate();
                 }
             }
+            this.status = "done";
+        } catch (err) {
+            if (err.name !== "AbortError") {
+                this.finalContent += `\n[Error: ${err.message}]`;
+            }
+            this.status = "error";
         } finally {
-            reader.releaseLock();
             this.duration = ((Date.now() - this.startTime) / 1000).toFixed(1);
+            this.parseState();
+            onUpdate();
         }
     }
 
-    // Runs over the accumulated string to safely extract thinking blocks
     parseState() {
         this.finalContent = this.rawContent;
         this.finalReasoning = this.apiReasoning;
 
-        // If the API sends native reasoning, we don't need to regex parse the content.
         if (this.hasNativeReasoning) {
-            // Strip the fake `<think>\n` we seeded if it's there, so it doesn't leak into the UI
-            if (settings.forceThink) {
-                this.finalContent = this.finalContent.replace(/^<think>\n/, "");
-            }
+            if (settings.forceThink) this.finalContent = this.finalContent.replace(/^<think>\n/, "");
         } else {
-            // Fallback: The API doesn't use native reasoning fields (e.g. Ollama).
-            // We must extract the <think> blocks manually.
             const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/gi;
             let match;
             let extractedReasoning = "";
@@ -153,13 +151,44 @@ export class GenerationJob {
 
             if (extractedReasoning) {
                 this.finalReasoning = extractedReasoning;
-                // Strip the tags and reasoning from the final content
                 this.finalContent = this.rawContent.replace(/<think>([\s\S]*?)(?:<\/think>|$)/gi, "");
             }
         }
-
-        // Final cleanup
         this.finalContent = this.finalContent.trimStart(); 
         this.finalReasoning = this.finalReasoning.trim();
+    }
+}
+
+export class ParallelGenerationBatch {
+    constructor(messages, count, overrides) {
+        this.jobs = [];
+        for(let i=0; i<count; i++) {
+            let mod = settings.model;
+            if (i > 0 && overrides[i-1] && overrides[i-1].enabled && overrides[i-1].model) {
+                mod = overrides[i-1].model;
+            }
+            this.jobs.push(new GenerationJob(mod));
+        }
+        this.messages = messages;
+    }
+
+    cancelAll() {
+        this.jobs.forEach(j => j.cancel());
+    }
+
+    async startAll(onUpdateCallback) {
+        const promises = this.jobs.map((job, index) => {
+            return job.start(this.messages, () => {
+                // When any job updates, fire the master callback with index and full state
+                onUpdateCallback(index, {
+                    model: job.model,
+                    content: job.finalContent,
+                    reasoning: job.finalReasoning,
+                    status: job.status,
+                    duration: job.duration
+                });
+            });
+        });
+        await Promise.allSettled(promises);
     }
 }
