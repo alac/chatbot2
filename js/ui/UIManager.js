@@ -6,7 +6,6 @@ export class UIManager {
         this.state = new StoryState();
         this.currentJob = null;
         
-        // DOM Elements
         this.container = document.getElementById('output-container');
         this.input = document.getElementById('user-input');
         this.btnSend = document.getElementById('btn-send');
@@ -37,24 +36,20 @@ export class UIManager {
         const text = this.input.value.trim();
         if (!text && this.state.history.length === 0) return;
 
-        // 1. Add User Input to State and render it
         if (text) {
             this.state.addTurn('user', text);
             this.appendTurnToDOM('user', text);
             this.input.value = '';
         }
 
-        // 2. Prepare for AI generation
         this.btnSend.classList.add('hidden');
         this.btnAbort.classList.remove('hidden');
 
         const messages = this.state.buildPromptPayload();
         this.currentJob = new GenerationJob();
         
-        // Add an empty turn in state for the assistant
         this.state.addTurn('assistant', '');
         
-        // Create the UI element we will stream into
         const bubbleEl = this.appendTurnToDOM('assistant', '');
         const textNode = document.createTextNode('');
         const cursor = document.createElement('span');
@@ -65,8 +60,7 @@ export class UIManager {
         this.scrollToBottom();
 
         try {
-            // 3. Stream the response
-            for await (const token of this.currentJob.streamChatCompletions(messages)) {
+            for await (const token of this.currentJob.streamGeneration(messages)) {
                 textNode.textContent += token;
                 this.scrollToBottom();
             }
@@ -76,9 +70,7 @@ export class UIManager {
                 textNode.textContent += `\n[Error: ${error.message}]`;
             }
         } finally {
-            // 4. Cleanup
             cursor.remove();
-            // Sync the final accumulated text back to the state
             this.state.history[this.state.history.length - 1].content = this.currentJob.accumulatedText;
             
             this.currentJob = null;
@@ -89,15 +81,13 @@ export class UIManager {
     }
 
     handleAbort() {
-        if (this.currentJob) {
-            this.currentJob.cancel();
-        }
+        if (this.currentJob) this.currentJob.cancel();
     }
 
     appendTurnToDOM(role, text) {
         const div = document.createElement('div');
         div.className = `turn ${role}`;
-        div.textContent = text;
+        div.textContent = text; // textContent properly respects white-space: pre-wrap
         this.container.appendChild(div);
         return div;
     }

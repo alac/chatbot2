@@ -2,12 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Modular AI Frontend</title>
     <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
-    <!-- Top Navigation -->
     <header id="top-nav">
         <div class="logo">AI Prototype</div>
         <div class="nav-controls">
@@ -19,17 +18,13 @@
         </div>
     </header>
 
-    <!-- Main Output Area -->
-    <main id="output-container" class="chat-mode">
-        <!-- Text/Chat bubbles will be injected here by UIManager -->
-    </main>
+    <main id="output-container" class="chat-mode"></main>
 
-    <!-- Input Area -->
     <footer id="input-area">
         <textarea id="user-input" placeholder="Type your message... (Shift+Enter for newline)"></textarea>
         <div class="input-controls">
-            <button id="btn-send">Send</button>
-            <button id="btn-abort" class="hidden">Stop</button>
+            <button id="btn-send" class="primary">Send</button>
+            <button id="btn-abort" class="danger hidden">Stop</button>
         </div>
     </footer>
 
@@ -38,7 +33,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Settings</h2>
-                <button id="btn-close-settings">&times;</button>
+                <button id="btn-close-settings" class="close-btn">&times;</button>
             </div>
             <div class="modal-tabs">
                 <button class="tab-btn active" data-target="tab-connection">Connection</button>
@@ -46,38 +41,129 @@
                 <button class="tab-btn" data-target="tab-samplers">Samplers</button>
             </div>
             <div class="modal-body">
+                
                 <!-- Connection Tab -->
                 <div id="tab-connection" class="tab-pane active">
-                    <label>API URL (OpenAI Compatible)
-                        <input type="text" id="set-api-url" placeholder="https://api.openai.com/v1/chat/completions">
-                    </label>
-                    <label>API Key
+                    <div class="setting-row column">
+                        <span class="label-text">API Base URL (e.g., https://api.openai.com/v1)</span>
+                        <input type="text" id="set-api-url" placeholder="https://api.openai.com/v1">
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Use Chat Completions (/chat/completions)</span>
+                        <input type="checkbox" id="set-use-chat" checked>
+                    </div>
+                    <div class="setting-row column">
+                        <span class="label-text">API Key</span>
                         <input type="password" id="set-api-key" placeholder="sk-...">
-                    </label>
-                    <label>Model
-                        <input type="text" id="set-model" placeholder="gpt-3.5-turbo">
-                    </label>
+                    </div>
+                    
+                    <div class="setting-row" style="margin-top: 10px;">
+                        <button id="btn-fetch-models" class="secondary">Fetch Models</button>
+                    </div>
+                    
+                    <div class="setting-row column">
+                        <span class="label-text">Model Selection</span>
+                        <select id="select-model">
+                            <option value="" disabled selected>Select a model...</option>
+                        </select>
+                    </div>
+
+                    <div class="setting-row">
+                        <input type="text" id="set-model" placeholder="gpt-3.5-turbo" style="flex:1;">
+                        <button id="btn-manage-favorites" class="secondary" title="Manage Favorites">⭐</button>
+                    </div>
+
+                    <!-- Favorites Manager (Hidden by default) -->
+                    <div id="favorites-container" class="hidden">
+                        <h3>Manage Favorites</h3>
+                        <div id="favorites-list"></div>
+                    </div>
                 </div>
+
                 <!-- Format Tab -->
                 <div id="tab-format" class="tab-pane">
-                    <label>System Prompt / Memory
+                    <div class="setting-row column">
+                        <span class="label-text">System Prompt</span>
                         <textarea id="set-system-prompt" rows="4" placeholder="You are a helpful AI..."></textarea>
-                    </label>
+                    </div>
+                    <hr>
+                    <h3>Author's Note</h3>
+                    <div class="setting-row column">
+                        <textarea id="set-anote-content" rows="3" placeholder="[Author's note: ...]"></textarea>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Injection Unit</span>
+                        <select id="set-anote-unit">
+                            <option value="message">Message</option>
+                            <option value="sentence">Sentence</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Injection Depth (0 = End)</span>
+                        <input type="number" id="set-anote-depth" min="0" max="10" value="0" style="width: 80px;">
+                    </div>
                 </div>
+
                 <!-- Samplers Tab -->
                 <div id="tab-samplers" class="tab-pane">
-                    <label>Temperature (<span id="val-temp">0.7</span>)
-                        <input type="range" id="set-temp" min="0" max="2" step="0.01">
-                    </label>
-                    <label>Max Tokens (<span id="val-max-tokens">512</span>)
-                        <input type="range" id="set-max-tokens" min="16" max="8192" step="16">
-                    </label>
+                    <button id="btn-neutralize-samplers" class="secondary" style="margin-bottom: 10px;">Reset to Neutral</button>
+                    
+                    <div class="setting-row sampler-row">
+                        <span class="label-text">Context Length</span>
+                        <input type="range" id="slide-context" min="512" max="128000" step="256">
+                        <input type="number" id="num-context" min="512" max="2000000" style="width: 80px;">
+                    </div>
+                    <div class="setting-row sampler-row">
+                        <span class="label-text">Max Response Tokens</span>
+                        <input type="range" id="slide-max-tokens" min="16" max="8192" step="16">
+                        <input type="number" id="num-max-tokens" min="16" max="128000" style="width: 80px;">
+                    </div>
+                    <div class="setting-row sampler-row">
+                        <span class="label-text">Temperature</span>
+                        <input type="range" id="slide-temp" min="0" max="3" step="0.05">
+                        <input type="number" id="num-temp" min="0" max="5" step="0.05" style="width: 80px;">
+                    </div>
+                    <div class="setting-row sampler-row">
+                        <span class="label-text">Min-P</span>
+                        <input type="range" id="slide-min-p" min="0" max="1" step="0.01">
+                        <input type="number" id="num-min-p" min="0" max="1" step="0.01" style="width: 80px;">
+                    </div>
+                    <div class="setting-row sampler-row">
+                        <span class="label-text">Top-P</span>
+                        <input type="range" id="slide-top-p" min="0" max="1" step="0.01">
+                        <input type="number" id="num-top-p" min="0" max="1" step="0.01" style="width: 80px;">
+                    </div>
+                    <div class="setting-row sampler-row">
+                        <span class="label-text">Top-K</span>
+                        <input type="range" id="slide-top-k" min="0" max="100" step="1">
+                        <input type="number" id="num-top-k" min="0" max="1000" step="1" style="width: 80px;">
+                    </div>
+                    <div class="setting-row sampler-row">
+                        <span class="label-text">Top-A</span>
+                        <input type="range" id="slide-top-a" min="0" max="1" step="0.01">
+                        <input type="number" id="num-top-a" min="0" max="1" step="0.01" style="width: 80px;">
+                    </div>
+                    <div class="setting-row sampler-row">
+                        <span class="label-text">Typical P</span>
+                        <input type="range" id="slide-typical" min="0" max="1" step="0.01">
+                        <input type="number" id="num-typical" min="0" max="1" step="0.01" style="width: 80px;">
+                    </div>
+                    <div class="setting-row sampler-row">
+                        <span class="label-text">TFS</span>
+                        <input type="range" id="slide-tfs" min="0" max="1" step="0.01">
+                        <input type="number" id="num-tfs" min="0" max="1" step="0.01" style="width: 80px;">
+                    </div>
+                    <div class="setting-row sampler-row">
+                        <span class="label-text">Repetition Penalty</span>
+                        <input type="range" id="slide-rep-pen" min="1" max="2" step="0.01">
+                        <input type="number" id="num-rep-pen" min="1" max="5" step="0.01" style="width: 80px;">
+                    </div>
                 </div>
+
             </div>
         </div>
     </div>
 
-    <!-- Entry Point -->
     <script type="module" src="js/main.js"></script>
 </body>
 </html>

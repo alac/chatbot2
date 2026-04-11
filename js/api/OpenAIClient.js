@@ -1,27 +1,64 @@
 import { settings } from '../state/AppSettings.js';
 
+export class OpenAIClient {
+    
+    // Fetches models from the compatible endpoint
+    static async fetchModels() {
+        const url = `${settings.apiUrl.replace(/\/$/, '')}/models`;
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${settings.apiKey}`
+            }
+        });
+
+        if (!response.ok) throw new Error(`Failed to fetch models: ${response.statusText}`);
+        const data = await response.json();
+        return data.data || data; // Handle OpenAI standard {"data": [...]} or raw arrays
+    }
+}
+
 export class GenerationJob {
     constructor() {
         this.abortController = new AbortController();
         this.accumulatedText = "";
-        this.isDone = false;
     }
 
     cancel() {
         this.abortController.abort();
     }
 
-    // Returns an Async Generator yielding chunks of text
-    async *streamChatCompletions(messages) {
+    async *streamGeneration(messages) {
+        // Construct endpoint based on Chat vs Completion toggle
+        const baseUrl = settings.apiUrl.replace(/\/$/, '');
+        const endpoint = settings.useChatCompletions 
+            ? `${baseUrl}/chat/completions` 
+            : `${baseUrl}/completions`;
+
+        // Map expansive samplers. (OpenAI ignores unknowns, OpenRouter/Kobold accepts them)
         const payload = {
             model: settings.model,
-            messages: messages,
             temperature: parseFloat(settings.temperature),
             max_tokens: parseInt(settings.maxTokens),
+            top_p: parseFloat(settings.topP),
+            min_p: parseFloat(settings.minP),
+            top_k: parseInt(settings.topK),
+            top_a: parseFloat(settings.topA),
+            typical_p: parseFloat(settings.typical),
+            tfs_z: parseFloat(settings.tfs),
+            repetition_penalty: parseFloat(settings.repPen),
             stream: true
         };
 
-        const response = await fetch(settings.apiUrl, {
+        if (settings.useChatCompletions) {
+            payload.messages = messages;
+        } else {
+            // Flatten messages into a raw prompt if using standard /completions
+            payload.prompt = messages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') + '\nAssistant: ';
+        }
+
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -32,8 +69,8 @@ export class GenerationJob {
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API Error ${response.status}: ${errorText}`);
+            const err = await response.text();
+            throw new Error(`API Error ${response.status}: ${err}`);
         }
 
         const reader = response.body.getReader();
@@ -47,27 +84,21 @@ export class GenerationJob {
                 
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
-                
-                // Keep the last incomplete line in the buffer
-                buffer = lines.pop();
+                buffer = lines.pop(); // Keep incomplete line
 
                 for (const line of lines) {
-                    if (line.trim() === "") continue;
-                    if (line.trim() === "data: [DONE]") {
-                        this.isDone = true;
-                        return;
-                    }
+                    if (line.trim() === "" || line.trim() === "data: [DONE]") continue;
                     if (line.startsWith("data: ")) {
-                        const dataStr = line.slice(6);
                         try {
-                            const data = JSON.parse(dataStr);
-                            const token = data.choices[0]?.delta?.content || "";
+                            const data = JSON.parse(line.slice(6));
+                            // Handle both /chat/completions (delta.content) and /completions (text) shapes
+                            const token = data.choices[0]?.delta?.content || data.choices[0]?.text || "";
                             if (token) {
                                 this.accumulatedText += token;
                                 yield token;
                             }
                         } catch (e) {
-                            console.warn("Failed to parse SSE chunk", line, e);
+                            console.warn("Parse error on chunk:", line);
                         }
                     }
                 }
