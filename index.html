@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modular AI Frontend</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <!-- Top Navigation -->
+    <header id="top-nav">
+        <div class="logo">AI Prototype</div>
+        <div class="nav-controls">
+            <select id="mode-selector">
+                <option value="chat">Chat Mode</option>
+                <option value="story">Story Mode</option>
+            </select>
+            <button id="btn-settings">⚙️ Settings</button>
+        </div>
+    </header>
+
+    <!-- Main Output Area -->
+    <main id="output-container" class="chat-mode">
+        <!-- Text/Chat bubbles will be injected here by UIManager -->
+    </main>
+
+    <!-- Input Area -->
+    <footer id="input-area">
+        <textarea id="user-input" placeholder="Type your message... (Shift+Enter for newline)"></textarea>
+        <div class="input-controls">
+            <button id="btn-send">Send</button>
+            <button id="btn-abort" class="hidden">Stop</button>
+        </div>
+    </footer>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button id="btn-close-settings">&times;</button>
+            </div>
+            <div class="modal-tabs">
+                <button class="tab-btn active" data-target="tab-connection">Connection</button>
+                <button class="tab-btn" data-target="tab-format">Format</button>
+                <button class="tab-btn" data-target="tab-samplers">Samplers</button>
+            </div>
+            <div class="modal-body">
+                <!-- Connection Tab -->
+                <div id="tab-connection" class="tab-pane active">
+                    <label>API URL (OpenAI Compatible)
+                        <input type="text" id="set-api-url" placeholder="https://api.openai.com/v1/chat/completions">
+                    </label>
+                    <label>API Key
+                        <input type="password" id="set-api-key" placeholder="sk-...">
+                    </label>
+                    <label>Model
+                        <input type="text" id="set-model" placeholder="gpt-3.5-turbo">
+                    </label>
+                </div>
+                <!-- Format Tab -->
+                <div id="tab-format" class="tab-pane">
+                    <label>System Prompt / Memory
+                        <textarea id="set-system-prompt" rows="4" placeholder="You are a helpful AI..."></textarea>
+                    </label>
+                </div>
+                <!-- Samplers Tab -->
+                <div id="tab-samplers" class="tab-pane">
+                    <label>Temperature (<span id="val-temp">0.7</span>)
+                        <input type="range" id="set-temp" min="0" max="2" step="0.01">
+                    </label>
+                    <label>Max Tokens (<span id="val-max-tokens">512</span>)
+                        <input type="range" id="set-max-tokens" min="16" max="8192" step="16">
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Entry Point -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
