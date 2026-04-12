@@ -16,10 +16,10 @@ export class AppSettings {
             { enabled: false, model: '' }
         ];
 
+        // Format & A/N
         this.systemPrompt = "You are a helpful AI assistant.";
         this.forceThink = false;
         
-        // A/N
         this.anoteTemplate = "[Author's note: <|>]";
         this.anoteContent = "";
         this.anoteUnit = "message"; 
@@ -28,6 +28,7 @@ export class AppSettings {
         // Quick Replies
         this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
 
+        // Samplers
         this.contextLength = 4096;
         this.maxTokens = 512;
         this.temperature = 1.0;
@@ -38,6 +39,13 @@ export class AppSettings {
         this.typical = 1.0;
         this.tfs = 1.0;
         this.repPen = 1.0;
+        this.stopSequences = "";
+
+        // UX
+        this.displayMode = 'chat';
+        this.theme = 'kobold';
+        this.renderMarkdown = true;
+        this.regexes = []; // { pattern, replacement, applyOutgoing, applyVisually }
         
         this.load();
     }
@@ -50,6 +58,7 @@ export class AppSettings {
             if (!Array.isArray(this.parallelOverrides)) this.parallelOverrides = [{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''}];
             if (!this.anoteTemplate) this.anoteTemplate = "[Author's note: <|>]";
             if (!this.quickReplies) this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
+            if (!Array.isArray(this.regexes)) this.regexes = [];
         }
     }
 
@@ -66,6 +75,24 @@ export class AppSettings {
         this.typical = 1.0;
         this.tfs = 1.0;
         this.repPen = 1.0;
+    }
+
+    applyRegexes(text, type) {
+        if (!text) return text;
+        let res = text;
+        this.regexes.forEach(rx => {
+            if ((type === 'outgoing' && rx.applyOutgoing) || (type === 'visually' && rx.applyVisually)) {
+                if (rx.pattern) {
+                    try {
+                        const r = new RegExp(rx.pattern, 'g');
+                        res = res.replace(r, rx.replacement);
+                    } catch (e) {
+                        // ignore broken regexes
+                    }
+                }
+            }
+        });
+        return res;
     }
 }
 

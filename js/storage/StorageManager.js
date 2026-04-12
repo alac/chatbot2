@@ -56,7 +56,6 @@ export class StorageManager {
             const store = tx.objectStore(this.storeName);
             const req = store.getAll();
             req.onsuccess = () => {
-                // Ensure we return an array of 10 slots, even if empty
                 const results = req.result;
                 const slots = [];
                 for (let i = 1; i <= 10; i++) {

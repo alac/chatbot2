@@ -17,6 +17,7 @@ export class UIManager {
         this.input = document.getElementById('user-input');
         
         this.isUserScrolledUp = false;
+        this.extractedEdits = [];
 
         this.bindEvents();
         this.initApp();
@@ -47,12 +48,6 @@ export class UIManager {
         
         this.input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.handleSend(); }
-        });
-        
-        document.getElementById('mode-selector').addEventListener('change', (e) => {
-            this.state.mode = e.target.value;
-            this.renderAll();
-            this.autoSave();
         });
 
         // Quick Menu Toggle
@@ -164,7 +159,7 @@ export class UIManager {
                         if (reasonNode) reasonNode.textContent = data.reasoning;
                         if (reasonDiv) reasonDiv.classList.remove('hidden');
                     }
-                    if (contentNode) contentNode.textContent = data.content;
+                    if (contentNode) this.setNodeContent(contentNode, data.content);
                     
                     if (!this.isUserScrolledUp) this.scrollToBottom();
                 }
@@ -188,6 +183,10 @@ export class UIManager {
             
             const oldWrapper = document.getElementById(`turn-wrapper-${newIdx}`);
             if (oldWrapper) oldWrapper.remove();
+            
+            // Generate full payload logic again to establish context boundaries
+            this.state.buildPromptPayload();
+
             this.appendTurnToDOM('assistant', newIdx);
 
             if (!this.isUserScrolledUp) this.scrollToBottom();
@@ -199,10 +198,28 @@ export class UIManager {
         if (this.activeBatch) this.activeBatch.cancelAll();
     }
 
+    setNodeContent(node, content) {
+        const visuallyApplied = settings.applyRegexes(content, 'visually');
+        if (settings.renderMarkdown) {
+            node.innerHTML = marked.parse(visuallyApplied);
+            node.classList.add('markdown-body');
+        } else {
+            node.textContent = visuallyApplied;
+            node.classList.remove('markdown-body');
+        }
+    }
+
     renderAll() {
         this.container.innerHTML = '';
-        this.container.className = `${this.state.mode}-mode`;
+        this.container.className = `${settings.displayMode}-mode`;
         this.state.history.forEach((turn, idx) => {
+            // Render Divider explicitly before the first IN-CONTEXT message if there is a boundary
+            if (idx === this.state.contextBoundaryIndex + 1) {
+                const divider = document.createElement('div');
+                divider.className = 'context-divider';
+                divider.textContent = 'Context Boundary';
+                this.container.appendChild(divider);
+            }
             this.appendTurnToDOM(turn.role, idx);
         });
         if (!this.isUserScrolledUp) this.scrollToBottom();
@@ -212,6 +229,7 @@ export class UIManager {
         const msg = this.state.history[index];
         const isStreaming = this.activeBatch && index === this.state.history.length - 1;
         const isLatestMessage = index === this.state.history.length - 1;
+        const isOutOfContext = index <= this.state.contextBoundaryIndex;
         
         const activeDraft = msg.drafts[msg.activeDraftIndex];
         const content = activeDraft.content;
@@ -219,6 +237,7 @@ export class UIManager {
         
         const wrapper = document.createElement('div');
         wrapper.className = `turn ${role}`;
+        if (isOutOfContext) wrapper.classList.add('out-of-context');
         wrapper.id = `turn-wrapper-${index}`;
 
         const bubble = document.createElement('div');
@@ -288,6 +307,7 @@ export class UIManager {
             btnDelete.addEventListener('click', () => {
                 if (confirm("Delete this message?")) {
                     this.state.deleteTurn(index);
+                    this.state.buildPromptPayload(); // Refresh boundaries
                     this.renderAll();
                     this.autoSave();
                 }
@@ -304,12 +324,9 @@ export class UIManager {
         reasoningDiv.id = `reasoning-block-${index}`;
         if (!reasoning || (!isStreaming && role === 'assistant')) reasoningDiv.classList.add('hidden');
         
-        const reasoningNode = document.createTextNode(reasoning || '');
-        reasoningDiv.appendChild(reasoningNode);
         const spanReason = document.createElement('span');
         spanReason.id = `reasoning-${index}`;
-        spanReason.appendChild(reasoningNode);
-        reasoningDiv.innerHTML = '';
+        spanReason.textContent = reasoning || '';
         reasoningDiv.appendChild(spanReason);
         
         bubble.appendChild(reasoningDiv);
@@ -318,9 +335,10 @@ export class UIManager {
         const contentDiv = document.createElement('div');
         contentDiv.className = 'turn-content';
         
-        const spanContent = document.createElement('span');
+        const spanContent = document.createElement('div');
+        spanContent.style.display = "inline";
         spanContent.id = `content-${index}`;
-        spanContent.textContent = content || '';
+        this.setNodeContent(spanContent, content || '');
         contentDiv.appendChild(spanContent);
         
         if (isStreaming) {
@@ -396,8 +414,6 @@ export class UIManager {
         }
 
         this.container.appendChild(wrapper);
-
-        return { contentNode: spanContent, reasoningNode: spanReason, reasoningDiv };
     }
 
     switchDraft(msgIndex, dir) {
@@ -417,7 +433,7 @@ export class UIManager {
         const newText = this.state.getContent(msgIndex);
         const newReasoning = this.state.getReasoning(msgIndex);
 
-        if (contentNode) contentNode.textContent = newText;
+        if (contentNode) this.setNodeContent(contentNode, newText);
         if (reasonNode) reasonNode.textContent = newReasoning;
         
         if (reasonDiv) {
@@ -482,7 +498,7 @@ export class UIManager {
 
         this.extractedEdits = [];
 
-        // Check if it's a batch with multiple drafts, otherwise just scan the one draft
+        // Scan the drafts
         const draftsToScan = lastMsg.isBatch ? lastMsg.drafts : [lastMsg.drafts[lastMsg.activeDraftIndex]];
 
         draftsToScan.forEach((draft, idx) => {
@@ -505,15 +521,21 @@ export class UIManager {
                     newText: match[2].trim(),
                     reasoning: match[3].trim(),
                     sourceDraft: draftLabel,
-                    score: 99999999 // Default high score (not found)
+                    score: 99999999
                 });
             }
         });
 
         if (this.extractedEdits.length === 0) return alert("No <edit> tags found in the latest message.");
 
+        this.evaluateEditsStatus();
+        this.renderApplyEditsList();
+        document.getElementById('apply-edits-modal').classList.remove('hidden');
+    }
+
+    evaluateEditsStatus() {
         // Validation & Scoring (Scan last 10 messages)
-        const scanHistory = this.state.history.slice(-11, -1); // Exclude the latest message itself
+        const scanHistory = this.state.history.slice(-11, -1); 
         const startIndexOffset = Math.max(0, this.state.history.length - 11);
 
         this.extractedEdits.forEach(edit => {
@@ -522,7 +544,6 @@ export class UIManager {
 
             // Search backwards so more recent matches get processed
             for (let i = scanHistory.length - 1; i >= 0; i--) {
-                const msg = scanHistory[i];
                 const content = this.state.getContent(startIndexOffset + i);
                 
                 // Check if already applied
@@ -544,13 +565,13 @@ export class UIManager {
 
         // Sort by score ascending
         this.extractedEdits.sort((a, b) => a.score - b.score);
-        this.renderApplyEditsList();
-        document.getElementById('apply-edits-modal').classList.remove('hidden');
     }
 
     renderApplyEditsList() {
         const container = document.getElementById('ae-list-container');
+        const st = container.scrollTop;
         container.innerHTML = '';
+        
         const filter = document.getElementById('ae-filter-draft').value;
 
         this.extractedEdits.forEach(edit => {
@@ -588,15 +609,21 @@ export class UIManager {
                     const updatedContent = targetContent.replace(edit.oldText, edit.newText);
                     this.state.editTurn(edit.targetMessageIdx, updatedContent);
                     
-                    // Close and re-render
-                    document.getElementById('apply-edits-modal').classList.add('hidden');
+                    // Re-render chat background
+                    this.state.buildPromptPayload(); // refresh boundaries
                     this.renderAll();
                     this.autoSave();
+                    
+                    // Re-evaluate list dynamically instead of closing modal
+                    this.evaluateEditsStatus();
+                    this.renderApplyEditsList();
                 });
             }
 
             container.appendChild(card);
         });
+        
+        container.scrollTop = st; // Restore scroll position after internal layout wipe
     }
 
     scrollToBottom() {
@@ -614,10 +641,11 @@ export class UIManager {
         const slot = await this.storage.loadSlot(id);
         if (slot && slot.data) {
             this.state.loadFromData(slot.data);
-            document.getElementById('mode-selector').value = this.state.mode;
+            document.getElementById('set-display-mode').value = settings.displayMode;
         } else {
             this.state.clear(); 
         }
+        this.state.buildPromptPayload(); // setup initial context limits correctly
         this.renderAll();
     }
 }

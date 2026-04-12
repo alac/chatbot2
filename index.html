@@ -5,20 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Modular AI Frontend</title>
     <link rel="stylesheet" href="css/main.css">
+    <!-- Import Marked.js for Markdown Rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <header id="top-nav">
         <div class="logo">AI Prototype</div>
         <div class="nav-controls">
-            <select id="mode-selector">
-                <option value="chat">Chat Mode</option>
-                <option value="story">Story Mode</option>
-            </select>
             <button id="btn-settings">⚙️ Settings</button>
         </div>
     </header>
 
-    <main id="output-container" class="chat-mode"></main>
+    <main id="output-container"></main>
 
     <button id="btn-jump-bottom" class="fab hidden">⬇️</button>
 
@@ -54,6 +52,7 @@
                     <option value="tab-format">3. Format & A/N</option>
                     <option value="tab-samplers">4. Samplers</option>
                     <option value="tab-saveload">5. Save / Load</option>
+                    <option value="tab-ux">6. UX & Display</option>
                 </select>
                 <button id="btn-close-settings" class="close-btn">&times;</button>
             </div>
@@ -141,6 +140,10 @@
                         <span class="label-text" title="Automatically start assistant replies with <think>\n">Force &lt;think&gt; Prefix</span>
                         <input type="checkbox" id="set-force-think">
                     </div>
+                    <div class="setting-row column">
+                        <span class="label-text" title="Comma separated strings to stop generation">Stop Sequences</span>
+                        <input type="text" id="set-stop-seqs" placeholder="e.g. User:, [END]">
+                    </div>
                     <hr>
                     <div class="setting-row sampler-row"><span class="label-text">Context Length</span><input type="range" id="slide-context" min="512" max="128000" step="256"><input type="number" id="num-context"></div>
                     <div class="setting-row sampler-row"><span class="label-text">Max Response</span><input type="range" id="slide-max-tokens" min="16" max="8192" step="16"><input type="number" id="num-max-tokens"></div>
@@ -174,6 +177,52 @@
                             <button id="btn-import-json">📤 Import</button>
                             <input type="file" id="file-import-json" accept=".json" class="hidden">
                         </div>
+                    </div>
+                </div>
+
+                <!-- 6. UX & Display Tab -->
+                <div id="tab-ux" class="tab-pane">
+                    <div class="setting-row">
+                        <span class="label-text">Display Mode</span>
+                        <select id="set-display-mode">
+                            <option value="chat">Chat Mode</option>
+                            <option value="story">Story Mode</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Color Scheme</span>
+                        <select id="set-theme">
+                            <option value="kobold">Kobold (Default)</option>
+                            <option value="black-white">Black on White</option>
+                            <option value="white-black">White on Black</option>
+                            <option value="paper">Paper</option>
+                            <option value="pastel">Pastel</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Render Markdown</span>
+                        <input type="checkbox" id="set-render-markdown" checked>
+                    </div>
+                    <hr>
+                    <h3>Regex Replace</h3>
+                    <div class="setting-row">
+                        <span class="label-text">Active Rules</span>
+                        <input type="number" id="set-regex-count" min="0" max="20" value="0" style="width:60px;">
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="regex-table" style="width:100%; border-collapse:collapse; text-align:left; font-size:0.9em;">
+                            <thead>
+                                <tr style="border-bottom:1px solid var(--border);">
+                                    <th style="padding:4px;">Pattern (RegEx)</th>
+                                    <th style="padding:4px;">Replacement</th>
+                                    <th style="padding:4px;" title="Modify text before sending to AI">Out</th>
+                                    <th style="padding:4px;" title="Modify text on screen visually">Vis</th>
+                                </tr>
+                            </thead>
+                            <tbody id="regex-tbody">
+                                <!-- Dynamically generated -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

@@ -53,6 +53,11 @@ export class GenerationJob {
             stream: true
         };
 
+        const stopTokens = settings.stopSequences.split(',').map(s => s.trim()).filter(s => s);
+        if (stopTokens.length > 0) {
+            payload.stop = stopTokens;
+        }
+
         if (settings.useChatCompletions) {
             payload.messages = messages;
         } else {

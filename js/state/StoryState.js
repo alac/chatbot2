@@ -4,14 +4,15 @@ export class StoryState {
     constructor() {
         this.history = []; 
         this.redoStack = []; // Stores popped messages
-        this.mode = 'chat';
         this.lastRawPayload = null; 
+        this.contextBoundaryIndex = -1;
     }
 
     clear() {
         this.history = [];
         this.redoStack = [];
         this.lastRawPayload = null;
+        this.contextBoundaryIndex = -1;
     }
 
     addTurn(role, content, reasoning = '', meta = {}) {
@@ -112,13 +113,38 @@ export class StoryState {
     buildPromptPayload() {
         const messages = [];
         
+        let sysAnoteString = settings.systemPrompt.trim();
+        if (settings.anoteUnit === "message" && settings.anoteContent.trim()) {
+            sysAnoteString += "\n" + settings.anoteTemplate.replace('<|>', settings.anoteContent.trim());
+        }
+
+        // Token Estimation Limit logic
+        let unchangingTokens = Math.ceil(sysAnoteString.length / 4) + parseInt(settings.maxTokens);
+        let budget = parseInt(settings.contextLength) - unchangingTokens;
+
+        this.contextBoundaryIndex = -1;
+        let includedHistoryMsgs = [];
+
+        for (let i = this.history.length - 1; i >= 0; i--) {
+            let msgContent = this.getContent(i);
+            msgContent = settings.applyRegexes(msgContent, 'outgoing');
+            
+            let T = Math.ceil(msgContent.length / 4); // basic token cost estimate
+            if (budget - T >= 0) {
+                budget -= T;
+                includedHistoryMsgs.unshift({ role: this.history[i].role, content: msgContent });
+            } else {
+                this.contextBoundaryIndex = i; // This and all previous are excluded
+                break;
+            }
+        }
+
+        // Build Final Array
         if (settings.systemPrompt.trim() !== "") {
             messages.push({ role: "system", content: settings.systemPrompt.trim() });
         }
 
-        for (let i = 0; i < this.history.length; i++) {
-            messages.push({ role: this.history[i].role, content: this.getContent(i) });
-        }
+        includedHistoryMsgs.forEach(m => messages.push(m));
 
         const anote = settings.anoteContent.trim();
         if (anote !== "") {
@@ -156,10 +182,14 @@ export class StoryState {
     loadFromData(data) {
         this.history = data.history || [];
         this.redoStack = data.redoStack || [];
-        this.mode = data.mode || 'chat';
+        this.contextBoundaryIndex = data.contextBoundaryIndex !== undefined ? data.contextBoundaryIndex : -1;
     }
 
     exportData() {
-        return { history: this.history, redoStack: this.redoStack, mode: this.mode };
+        return { 
+            history: this.history, 
+            redoStack: this.redoStack, 
+            contextBoundaryIndex: this.contextBoundaryIndex 
+        };
     }
 }

@@ -22,6 +22,7 @@ export class SettingsMenu {
         });
 
         document.getElementById('set-parallel-count').addEventListener('change', () => this.renderBatchRows());
+        document.getElementById('set-regex-count').addEventListener('change', () => this.renderRegexRows());
 
         document.getElementById('btn-fetch-models').addEventListener('click', () => this.handleFetchModels());
         document.getElementById('btn-manage-favorites').addEventListener('click', () => {
@@ -51,6 +52,7 @@ export class SettingsMenu {
             this.populateUI();
         });
 
+        // Save Slots
         document.getElementById('btn-slot-save').addEventListener('click', () => this.uiManager.autoSave());
         document.getElementById('btn-slot-load').addEventListener('click', async () => {
             await this.uiManager.loadStateFromSlot(this.selectedSlotId);
@@ -85,9 +87,9 @@ export class SettingsMenu {
             }
         });
 
+        // Exports
         document.getElementById('btn-export-txt').addEventListener('click', () => this.exportText());
         document.getElementById('btn-export-json').addEventListener('click', () => this.exportJSON());
-        
         document.getElementById('btn-import-json').addEventListener('click', () => document.getElementById('file-import-json').click());
         document.getElementById('file-import-json').addEventListener('change', (e) => this.importJSON(e));
     }
@@ -225,6 +227,35 @@ export class SettingsMenu {
         this.updateAllModelDropdowns();
     }
 
+    renderRegexRows() {
+        const tbody = document.getElementById('regex-tbody');
+        const count = parseInt(document.getElementById('set-regex-count').value);
+        
+        // Save existing before re-rendering
+        const currentData = [];
+        for (let i = 0; i < tbody.children.length; i++) {
+            currentData.push({
+                pattern: document.getElementById(`reg-pat-${i}`).value,
+                replacement: document.getElementById(`reg-rep-${i}`).value,
+                applyOutgoing: document.getElementById(`reg-out-${i}`).checked,
+                applyVisually: document.getElementById(`reg-vis-${i}`).checked
+            });
+        }
+
+        tbody.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const rx = currentData[i] || settings.regexes[i] || { pattern:'', replacement:'', applyOutgoing:false, applyVisually:true };
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding:4px;"><input type="text" id="reg-pat-${i}" value="${rx.pattern}" placeholder="/search/g"></td>
+                <td style="padding:4px;"><input type="text" id="reg-rep-${i}" value="${rx.replacement}" placeholder="replace"></td>
+                <td style="padding:4px; text-align:center;"><input type="checkbox" id="reg-out-${i}" ${rx.applyOutgoing ? 'checked' : ''}></td>
+                <td style="padding:4px; text-align:center;"><input type="checkbox" id="reg-vis-${i}" ${rx.applyVisually ? 'checked' : ''}></td>
+            `;
+            tbody.appendChild(tr);
+        }
+    }
+
     async refreshSlotList() {
         const listDiv = document.getElementById('slot-list');
         listDiv.innerHTML = '';
@@ -305,12 +336,14 @@ export class SettingsMenu {
 
         document.getElementById('set-system-prompt').value = settings.systemPrompt;
         document.getElementById('set-force-think').checked = settings.forceThink;
+        document.getElementById('set-stop-seqs').value = settings.stopSequences;
         
         document.getElementById('set-anote-template').value = settings.anoteTemplate;
         document.getElementById('set-anote-content').value = settings.anoteContent;
         document.getElementById('set-anote-unit').value = settings.anoteUnit;
         document.getElementById('set-anote-depth').value = settings.anoteDepth;
 
+        // Samplers
         const setPair = (val, slideId, numId) => { document.getElementById(slideId).value = val; document.getElementById(numId).value = val; };
         setPair(settings.contextLength, 'slide-context', 'num-context');
         setPair(settings.maxTokens, 'slide-max-tokens', 'num-max-tokens');
@@ -322,6 +355,13 @@ export class SettingsMenu {
         setPair(settings.typical, 'slide-typical', 'num-typical');
         setPair(settings.tfs, 'slide-tfs', 'num-tfs');
         setPair(settings.repPen, 'slide-rep-pen', 'num-rep-pen');
+
+        // UX
+        document.getElementById('set-display-mode').value = settings.displayMode;
+        document.getElementById('set-theme').value = settings.theme;
+        document.getElementById('set-render-markdown').checked = settings.renderMarkdown;
+        document.getElementById('set-regex-count').value = settings.regexes.length;
+        this.renderRegexRows();
 
         this.updateAllModelDropdowns();
     }
@@ -345,6 +385,8 @@ export class SettingsMenu {
 
         settings.systemPrompt = document.getElementById('set-system-prompt').value;
         settings.forceThink = document.getElementById('set-force-think').checked;
+        settings.stopSequences = document.getElementById('set-stop-seqs').value;
+        
         settings.anoteTemplate = document.getElementById('set-anote-template').value;
         settings.anoteContent = document.getElementById('set-anote-content').value;
         settings.anoteUnit = document.getElementById('set-anote-unit').value;
@@ -360,8 +402,29 @@ export class SettingsMenu {
         settings.typical = parseFloat(document.getElementById('num-typical').value);
         settings.tfs = parseFloat(document.getElementById('num-tfs').value);
         settings.repPen = parseFloat(document.getElementById('num-rep-pen').value);
+
+        settings.displayMode = document.getElementById('set-display-mode').value;
+        settings.theme = document.getElementById('set-theme').value;
+        settings.renderMarkdown = document.getElementById('set-render-markdown').checked;
+        
+        // Save Regexes
+        const rxCount = parseInt(document.getElementById('set-regex-count').value);
+        settings.regexes = [];
+        for (let i = 0; i < rxCount; i++) {
+            settings.regexes.push({
+                pattern: document.getElementById(`reg-pat-${i}`).value,
+                replacement: document.getElementById(`reg-rep-${i}`).value,
+                applyOutgoing: document.getElementById(`reg-out-${i}`).checked,
+                applyVisually: document.getElementById(`reg-vis-${i}`).checked
+            });
+        }
         
         settings.save();
+        
+        // Apply display settings dynamically
+        document.documentElement.setAttribute('data-theme', settings.theme);
+        this.uiManager.renderAll(); 
+
         this.modal.classList.add('hidden');
     }
 }
