@@ -170,7 +170,12 @@ export class UIManager {
             this.openMergeUI(document.getElementById('autosum-stream-output').value.trim());
         });
 
-        // Merge Modal Buttons
+        // Merge Modal Navigation & Buttons
+        document.getElementById('merge-page-selector').addEventListener('change', (e) => {
+            const modal = document.getElementById('autosum-merge-modal');
+            modal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById(e.target.value).classList.add('active');
+        });
         document.getElementById('btn-close-autosum-merge').addEventListener('click', () => document.getElementById('autosum-merge-modal').classList.add('hidden'));
         document.getElementById('btn-merge-cancel').addEventListener('click', () => document.getElementById('autosum-merge-modal').classList.add('hidden'));
         document.getElementById('btn-merge-append').addEventListener('click', () => {
@@ -758,8 +763,6 @@ export class UIManager {
 
         // Estimate costs
         const sysAnoteStr = settings.systemPrompt.trim() + "\n" + settings.anoteContent.trim();
-        const memCost = Math.ceil(settings.systemPrompt.trim().length / 4);
-        const anCost = Math.ceil(settings.anoteContent.trim().length / 4);
         const maxResp = parseInt(settings.maxTokens);
         
         let sumCost = 0;
@@ -952,8 +955,14 @@ export class UIManager {
             this.mergeLines.push({ checkbox, text: diff.value });
         });
 
+        // Ensure we default to the first tab visually
+        const mergeModal = document.getElementById('autosum-merge-modal');
+        mergeModal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        document.getElementById('merge-tab-edit').classList.add('active');
+        document.getElementById('merge-page-selector').value = 'merge-tab-edit';
+
         this.updateMergePreview();
-        document.getElementById('autosum-merge-modal').classList.remove('hidden');
+        mergeModal.classList.remove('hidden');
     }
 
     updateMergePreview() {

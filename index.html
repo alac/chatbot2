@@ -56,23 +56,28 @@
         <div class="modal-content">
             <div class="modal-header">
                 <select id="chat-settings-page-selector" class="page-select">
-                    <option value="tab-memory">1. Memory & A/N</option>
-                    <option value="tab-summary">2. Summary</option>
+                    <option value="tab-memory">1. Memory</option>
+                    <option value="tab-anote">2. Author's Note</option>
+                    <option value="tab-summary">3. Summary</option>
+                    <option value="tab-autosummarize">4. Autosummarize</option>
                 </select>
                 <button id="btn-close-chat-settings" class="close-btn">&times;</button>
             </div>
             <div class="modal-body">
                 
-                <!-- 1. Memory & A/N Tab -->
-                <div id="tab-memory" class="tab-pane active">
-                    <div class="setting-row column">
-                        <span class="label-text">Memory</span>
-                        <textarea id="set-system-prompt" rows="5" placeholder="You are a helpful AI..."></textarea>
+                <!-- 1. Memory Tab -->
+                <div id="tab-memory" class="tab-pane active" style="height: 100%;">
+                    <div class="setting-row column" style="height: 100%;">
+                        <span class="label-text">Memory (System Prompt)</span>
+                        <textarea id="set-system-prompt" style="flex: 1; resize: none; min-height: 250px;" placeholder="You are a helpful AI..."></textarea>
                     </div>
-                    <hr>
+                </div>
+
+                <!-- 2. Author's Note Tab -->
+                <div id="tab-anote" class="tab-pane">
                     <h3>Author's Note</h3>
                     <div class="setting-row column">
-                        <textarea id="set-anote-content" rows="3" placeholder="e.g. Write descriptively."></textarea>
+                        <textarea id="set-anote-content" rows="4" placeholder="e.g. Write descriptively."></textarea>
                     </div>
                     <div class="setting-row" style="margin-top: 8px;">
                         <span class="label-text">A/N Template</span>
@@ -89,13 +94,16 @@
                     </div>
                 </div>
 
-                <!-- 2. Summary Tab -->
-                <div id="tab-summary" class="tab-pane">
-                    <div class="setting-row column">
+                <!-- 3. Summary Tab -->
+                <div id="tab-summary" class="tab-pane" style="height: 100%;">
+                    <div class="setting-row column" style="height: 100%;">
                         <span class="label-text">Current Summary</span>
-                        <textarea id="set-summary-content" rows="6" placeholder="The story so far..."></textarea>
+                        <textarea id="set-summary-content" style="flex: 1; resize: none; min-height: 250px;" placeholder="The story so far..."></textarea>
                     </div>
-                    <hr>
+                </div>
+
+                <!-- 4. Autosummarize Settings Tab -->
+                <div id="tab-autosummarize" class="tab-pane">
                     <h3>Autosummarize Settings</h3>
                     <div class="setting-row">
                         <span class="label-text">Track Summary State</span>
@@ -114,7 +122,8 @@
                         <span class="label-text" style="font-weight:bold;">Prompt: <span id="lbl-active-sum-prompt" style="font-weight:normal; color:var(--accent);">Default</span></span>
                         <button id="btn-select-sum-prompt" class="secondary">Choose Prompt</button>
                     </div>
-                    <button id="btn-run-autosummarize" class="primary" style="margin-top: 10px; width: 100%;">Run Autosummarize Now</button>
+                    <hr>
+                    <button id="btn-run-autosummarize" class="primary" style="padding: 12px; font-size: 1.1em;">Run Autosummarize Now</button>
                 </div>
             </div>
         </div>
@@ -343,24 +352,34 @@
 
     <!-- Autosummarize Merge Modal -->
     <div id="autosum-merge-modal" class="modal hidden">
-        <div class="modal-content" style="max-height: 90vh; width: 800px; max-width:95vw;">
+        <div class="modal-content" style="max-height: 90vh; width: 800px; max-width:95vw; display:flex; flex-direction:column;">
             <div class="modal-header">
-                <h2>Merge Summary</h2>
+                <select id="merge-page-selector" class="page-select" style="max-width: 250px;">
+                    <option value="merge-tab-edit">1. Edit Lines</option>
+                    <option value="merge-tab-preview">2. Preview</option>
+                </select>
                 <button id="btn-close-autosum-merge" class="close-btn">&times;</button>
             </div>
-            <div class="modal-body" style="display:flex; flex-direction:column; gap: 10px; overflow:hidden;">
-                <p style="font-size: 0.85em; color: var(--text-muted);">Toggle the lines you want to keep. They will be concatenated into the final summary.</p>
+            <div class="modal-body" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
                 
-                <div id="merge-list-container" style="flex: 2; overflow-y:auto; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main);">
-                    <!-- Lines injected here -->
+                <!-- Tab 1: Edit Lines -->
+                <div id="merge-tab-edit" class="tab-pane active" style="flex:1; overflow:hidden;">
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Toggle the lines you want to keep. They will be concatenated into the final summary.</p>
+                    <div id="merge-list-container" style="flex:1; overflow-y:auto; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main);">
+                        <!-- Lines injected here -->
+                    </div>
                 </div>
 
-                <div style="flex: 1; display:flex; flex-direction:column; gap: 4px;">
-                    <span class="label-text">Preview Output:</span>
-                    <textarea id="merge-preview-textarea" style="flex:1; resize:none;" readonly></textarea>
+                <!-- Tab 2: Preview -->
+                <div id="merge-tab-preview" class="tab-pane" style="flex:1;">
+                    <textarea id="merge-preview-textarea" style="flex:1; resize:none; font-family: monospace; width: 100%; height: 100%;" readonly></textarea>
                 </div>
 
-                <div class="action-grid" style="margin-top: 8px;">
+            </div>
+            
+            <!-- Persistent Action Footer -->
+            <div style="padding: 16px; border-top: 1px solid var(--border); background: var(--bg-panel); flex-shrink: 0;">
+                <div class="action-grid">
                     <button id="btn-merge-cancel" class="danger">Cancel</button>
                     <button id="btn-merge-append" class="secondary" title="Ignore toggles and just append">Force Append</button>
                     <button id="btn-merge-accept" class="primary">Accept Selected</button>
