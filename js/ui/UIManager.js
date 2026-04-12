@@ -1,8 +1,8 @@
 import { settings } from '../state/AppSettings.js';
 import { StoryState } from '../state/StoryState.js';
-import { ParallelGenerationBatch } from '../api/OpenAIClient.js';
+import { ParallelGenerationBatch, GenerationJob } from '../api/OpenAIClient.js';
 import { StorageManager } from '../storage/StorageManager.js';
-import { diffWords } from '../utils/diff.js';
+import { diffWords, diffLines } from '../utils/diff.js';
 
 export class UIManager {
     constructor() {
@@ -18,6 +18,10 @@ export class UIManager {
         
         this.isUserScrolledUp = false;
         this.extractedEdits = [];
+
+        // Autosummarize specific tracking
+        this.activeSumJob = null;
+        this.sumTargetIndices = [];
 
         this.bindEvents();
         this.initApp();
@@ -39,6 +43,8 @@ export class UIManager {
             this.isUserScrolledUp = false;
             this.scrollToBottom();
         });
+
+        this.updateSummaryMeter();
     }
 
     bindEvents() {
@@ -100,6 +106,85 @@ export class UIManager {
             this.autoSave();
         });
         document.getElementById('btn-close-prompt').addEventListener('click', () => document.getElementById('prompt-modal').classList.add('hidden'));
+
+        // --- Summary specific bindings ---
+        document.getElementById('summary-meter-container').addEventListener('click', (e) => {
+            if (e.target.id === 'btn-quick-summarize') {
+                this.startAutosummarize();
+            } else {
+                this.updateSummaryMeterDetails();
+                document.getElementById('meter-details-modal').classList.remove('hidden');
+            }
+        });
+        document.getElementById('btn-close-meter-details').addEventListener('click', () => document.getElementById('meter-details-modal').classList.add('hidden'));
+
+        document.getElementById('btn-run-autosummarize').addEventListener('click', () => {
+            document.getElementById('chat-settings-modal').classList.add('hidden');
+            this.startAutosummarize();
+        });
+
+        // Prompt Selector
+        document.getElementById('btn-select-sum-prompt').addEventListener('click', () => this.openAutoSumPromptSelector());
+        document.getElementById('btn-close-sum-prompt').addEventListener('click', () => document.getElementById('autosum-prompt-modal').classList.add('hidden'));
+        document.getElementById('btn-edit-sum-prompt-toggle').addEventListener('click', () => {
+            const isEditing = !document.getElementById('sum-prompt-edit-container').classList.contains('hidden');
+            if (isEditing) {
+                document.getElementById('sum-prompt-edit-container').classList.add('hidden');
+                document.getElementById('sum-prompt-btn-container').classList.remove('hidden');
+            } else {
+                document.getElementById('sum-prompt-edit-textarea').value = settings.autoSummarizePrompts;
+                document.getElementById('sum-prompt-edit-container').classList.remove('hidden');
+                document.getElementById('sum-prompt-btn-container').classList.add('hidden');
+            }
+        });
+        document.getElementById('btn-save-sum-prompts').addEventListener('click', () => {
+            settings.autoSummarizePrompts = document.getElementById('sum-prompt-edit-textarea').value;
+            settings.save();
+            document.getElementById('sum-prompt-edit-container').classList.add('hidden');
+            document.getElementById('sum-prompt-btn-container').classList.remove('hidden');
+            this.openAutoSumPromptSelector(); 
+        });
+
+        // Resolution Modal Buttons
+        document.getElementById('btn-close-autosum-stream').addEventListener('click', () => {
+            if (this.activeSumJob) this.activeSumJob.cancel();
+            document.getElementById('autosum-stream-modal').classList.add('hidden');
+        });
+        document.getElementById('btn-autosum-cancel').addEventListener('click', () => {
+            document.getElementById('autosum-stream-modal').classList.add('hidden');
+        });
+        document.getElementById('btn-autosum-replace').addEventListener('click', () => {
+            this.state.summary = document.getElementById('autosum-stream-output').value.trim();
+            this.applySummarizeFlags();
+            document.getElementById('autosum-stream-modal').classList.add('hidden');
+        });
+        document.getElementById('btn-autosum-append').addEventListener('click', () => {
+            const output = document.getElementById('autosum-stream-output').value.trim();
+            if (this.state.summary) this.state.summary += "\n\n" + output;
+            else this.state.summary = output;
+            this.applySummarizeFlags();
+            document.getElementById('autosum-stream-modal').classList.add('hidden');
+        });
+        document.getElementById('btn-autosum-edit').addEventListener('click', () => {
+            document.getElementById('autosum-stream-modal').classList.add('hidden');
+            this.openMergeUI(document.getElementById('autosum-stream-output').value.trim());
+        });
+
+        // Merge Modal Buttons
+        document.getElementById('btn-close-autosum-merge').addEventListener('click', () => document.getElementById('autosum-merge-modal').classList.add('hidden'));
+        document.getElementById('btn-merge-cancel').addEventListener('click', () => document.getElementById('autosum-merge-modal').classList.add('hidden'));
+        document.getElementById('btn-merge-append').addEventListener('click', () => {
+            const output = document.getElementById('autosum-stream-output').value.trim();
+            if (this.state.summary) this.state.summary += "\n\n" + output;
+            else this.state.summary = output;
+            this.applySummarizeFlags();
+            document.getElementById('autosum-merge-modal').classList.add('hidden');
+        });
+        document.getElementById('btn-merge-accept').addEventListener('click', () => {
+            this.state.summary = document.getElementById('merge-preview-textarea').value.trim();
+            this.applySummarizeFlags();
+            document.getElementById('autosum-merge-modal').classList.add('hidden');
+        });
     }
 
     handleRetry() {
@@ -133,7 +218,9 @@ export class UIManager {
         document.getElementById('btn-abort').classList.remove('hidden');
         this.isUserScrolledUp = false;
 
-        const messages = this.state.buildPromptPayload();
+        const payloadObj = this.state.buildPromptPayload();
+        const messages = payloadObj.messages;
+
         const count = settings.parallelEnabled ? parseInt(settings.parallelCount) : 1;
         this.activeBatch = new ParallelGenerationBatch(messages, count, settings.parallelOverrides);
         
@@ -187,10 +274,10 @@ export class UIManager {
             const oldWrapper = document.getElementById(`turn-wrapper-${newIdx}`);
             if (oldWrapper) oldWrapper.remove();
             
-            // Generate full payload logic again to establish context boundaries
+            // Re-calc boundaries and update meter
             this.state.buildPromptPayload();
-
             this.appendTurnToDOM('assistant', newIdx);
+            this.updateSummaryMeter();
 
             if (!this.isUserScrolledUp) this.scrollToBottom();
             this.autoSave();
@@ -239,6 +326,7 @@ export class UIManager {
             this.appendTurnToDOM(turn.role, idx);
         });
         if (!this.isUserScrolledUp) this.scrollToBottom();
+        this.updateSummaryMeter();
     }
 
     appendTurnToDOM(role, index) {
@@ -659,6 +747,223 @@ export class UIManager {
         container.scrollTop = st; // Restore scroll position after internal layout wipe
     }
 
+    // --- AUTOSUMMARIZE ---
+    updateSummaryMeter() {
+        const container = document.getElementById('summary-meter-container');
+        if (!settings.trackSummary) {
+            container.classList.add('hidden');
+            return;
+        }
+        container.classList.remove('hidden');
+
+        // Estimate costs
+        const sysAnoteStr = settings.systemPrompt.trim() + "\n" + settings.anoteContent.trim();
+        const memCost = Math.ceil(settings.systemPrompt.trim().length / 4);
+        const anCost = Math.ceil(settings.anoteContent.trim().length / 4);
+        const maxResp = parseInt(settings.maxTokens);
+        
+        let sumCost = 0;
+        if (this.state.summary.trim()) {
+            sumCost = Math.ceil((this.state.summary.trim().length + 20) / 4);
+        }
+
+        const maxContext = parseInt(settings.contextLength);
+        const unchanging = Math.ceil(sysAnoteStr.length / 4) + maxResp + sumCost;
+        let budget = maxContext - unchanging;
+
+        let summedCost = 0;
+        let unsummedCost = 0;
+
+        // Walk back history to find boundary
+        for (let i = this.state.history.length - 1; i >= 0; i--) {
+            const msgContent = this.state.getContent(i);
+            const T = Math.ceil(msgContent.length / 4);
+            if (budget - T >= 0) {
+                budget -= T;
+                if (this.state.history[i].wasSummarized) summedCost += T;
+                else unsummedCost += T;
+            } else {
+                break;
+            }
+        }
+
+        const availableBudget = maxContext - unchanging;
+        let pct = 0;
+        if (availableBudget > 0) {
+            pct = Math.min(100, Math.round((unsummedCost / availableBudget) * 100));
+        }
+
+        const fill = document.getElementById('summary-meter-fill');
+        const text = document.getElementById('summary-meter-text');
+        fill.style.width = `${pct}%`;
+        text.textContent = `${pct}%`;
+
+        // Update colors based on urgency
+        if (pct >= 90) fill.style.background = 'rgba(239, 68, 68, 0.6)'; // red
+        else if (pct >= 60) fill.style.background = 'rgba(234, 179, 8, 0.6)'; // yellow
+        else fill.style.background = 'rgba(59, 130, 246, 0.4)'; // blue
+    }
+
+    updateSummaryMeterDetails() {
+        const memCost = Math.ceil(settings.systemPrompt.trim().length / 4);
+        const anCost = Math.ceil(settings.anoteContent.trim().length / 4);
+        let sumCost = this.state.summary.trim() ? Math.ceil((this.state.summary.trim().length + 20) / 4) : 0;
+        const maxResp = parseInt(settings.maxTokens);
+        const maxContext = parseInt(settings.contextLength);
+        const sysAnoteStr = settings.systemPrompt.trim() + "\n" + settings.anoteContent.trim();
+        const unchanging = Math.ceil(sysAnoteStr.length / 4) + maxResp + sumCost;
+        
+        let budget = maxContext - unchanging;
+        let summedCost = 0;
+        let unsummedCost = 0;
+
+        for (let i = this.state.history.length - 1; i >= 0; i--) {
+            const T = Math.ceil(this.state.getContent(i).length / 4);
+            if (budget - T >= 0) {
+                budget -= T;
+                if (this.state.history[i].wasSummarized) summedCost += T;
+                else unsummedCost += T;
+            } else break;
+        }
+
+        document.getElementById('meter-stat-max').textContent = maxContext;
+        document.getElementById('meter-stat-resp').textContent = maxResp;
+        document.getElementById('meter-stat-mem').textContent = memCost;
+        document.getElementById('meter-stat-an').textContent = anCost;
+        document.getElementById('meter-stat-sum').textContent = sumCost;
+        document.getElementById('meter-stat-budget').textContent = maxContext - unchanging;
+        document.getElementById('meter-stat-summed').textContent = summedCost;
+        document.getElementById('meter-stat-unsummed').textContent = unsummedCost;
+    }
+
+    openAutoSumPromptSelector() {
+        const container = document.getElementById('sum-prompt-btn-container');
+        container.innerHTML = '';
+        
+        const raw = settings.autoSummarizePrompts || "";
+        const parts = raw.split('::').filter(p => p.trim() !== '');
+        
+        parts.forEach(p => {
+            const lines = p.trim().split('\n');
+            const title = lines.shift().trim();
+            const content = lines.join('\n').trim();
+            
+            const btn = document.createElement('button');
+            btn.className = 'secondary';
+            if (this.state.selectedAutoSumPromptTitle === title) btn.classList.add('primary');
+            
+            btn.textContent = title;
+            btn.title = content;
+            btn.addEventListener('click', () => {
+                this.state.selectedAutoSumPromptTitle = title;
+                this.state.selectedAutoSumPromptText = content;
+                document.getElementById('lbl-active-sum-prompt').textContent = title;
+                document.getElementById('autosum-prompt-modal').classList.add('hidden');
+                this.autoSave();
+            });
+            container.appendChild(btn);
+        });
+
+        document.getElementById('autosum-prompt-modal').classList.remove('hidden');
+    }
+
+    async startAutosummarize() {
+        const payloadObj = this.state.buildPromptPayload(true, this.state.selectedAutoSumPromptText);
+        this.sumTargetIndices = payloadObj.includedIndices; // Track which messages were actually sent
+
+        document.getElementById('autosum-stream-title').textContent = "Generating Summary...";
+        document.getElementById('btn-close-autosum-stream').classList.remove('hidden');
+        document.getElementById('autosum-resolution-btns').classList.add('hidden');
+        
+        const outputArea = document.getElementById('autosum-stream-output');
+        outputArea.value = "";
+        document.getElementById('autosum-stream-modal').classList.remove('hidden');
+
+        // Get model override
+        let model = settings.model;
+        if (settings.summarizeModel) model = settings.summarizeModel;
+
+        this.activeSumJob = new GenerationJob(model);
+        
+        try {
+            await this.activeSumJob.start(payloadObj.messages, () => {
+                outputArea.value = this.activeSumJob.finalContent;
+                outputArea.scrollTop = outputArea.scrollHeight;
+            });
+        } finally {
+            this.activeSumJob = null;
+            document.getElementById('autosum-stream-title').textContent = "Summary Generation Complete";
+            document.getElementById('btn-close-autosum-stream').classList.add('hidden');
+            document.getElementById('autosum-resolution-btns').classList.remove('hidden');
+        }
+    }
+
+    applySummarizeFlags() {
+        this.sumTargetIndices.forEach(idx => {
+            if (this.state.history[idx]) {
+                this.state.history[idx].wasSummarized = true;
+            }
+        });
+        if (window.settingsUI) window.settingsUI.populateUI(); // Refresh summary textbox if modal is open
+        this.updateSummaryMeter();
+        this.autoSave();
+    }
+
+    openMergeUI(newSummary) {
+        const oldSummary = this.state.summary.trim();
+        const container = document.getElementById('merge-list-container');
+        container.innerHTML = '';
+        
+        // Use DP diffLines to find overlap
+        const diffs = diffLines(oldSummary, newSummary);
+
+        this.mergeLines = [];
+
+        diffs.forEach(diff => {
+            if (!diff.value.trim()) return; // skip empty lines
+
+            const label = document.createElement('label');
+            label.className = `merge-line`;
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = true; // By default everything is ON
+
+            if (diff.type === 'delete') {
+                label.classList.add('merge-old');
+                label.title = "Old Summary";
+            } else if (diff.type === 'insert') {
+                label.classList.add('merge-new');
+                label.title = "New Summary";
+            } else {
+                label.classList.add('merge-equal');
+                label.title = "Overlap / Unchanged";
+            }
+
+            const span = document.createElement('span');
+            span.textContent = diff.value;
+
+            checkbox.addEventListener('change', () => this.updateMergePreview());
+            
+            label.appendChild(checkbox);
+            label.appendChild(span);
+            container.appendChild(label);
+
+            this.mergeLines.push({ checkbox, text: diff.value });
+        });
+
+        this.updateMergePreview();
+        document.getElementById('autosum-merge-modal').classList.remove('hidden');
+    }
+
+    updateMergePreview() {
+        const out = this.mergeLines
+            .filter(l => l.checkbox.checked)
+            .map(l => l.text)
+            .join('\n');
+        document.getElementById('merge-preview-textarea').value = out;
+    }
+
     scrollToBottom() {
         this.container.scrollTop = this.container.scrollHeight;
         document.getElementById('btn-jump-bottom').classList.add('hidden');
@@ -675,6 +980,9 @@ export class UIManager {
         if (slot && slot.data) {
             this.state.loadFromData(slot.data);
             document.getElementById('set-display-mode').value = settings.displayMode;
+            if (document.getElementById('lbl-active-sum-prompt')) {
+                document.getElementById('lbl-active-sum-prompt').textContent = this.state.selectedAutoSumPromptTitle;
+            }
         } else {
             this.state.clear(); 
         }

@@ -28,6 +28,11 @@ export class AppSettings {
         // Quick Replies
         this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
 
+        // Summary Settings
+        this.trackSummary = true;
+        this.summarizeModel = '';
+        this.autoSummarizePrompts = "::Event Log\nSummarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.\n\n::Story Synopsis\nWrite a prose summary of the recent events, continuing smoothly from the previous summary.";
+
         // Samplers
         this.contextLength = 4096;
         this.maxTokens = 512;
@@ -45,7 +50,7 @@ export class AppSettings {
         this.displayMode = 'chat';
         this.theme = 'kobold';
         this.renderMarkdown = true;
-        this.regexes = []; // { pattern, replacement, applyOutgoing, applyVisually }
+        this.regexes = []; 
         
         this.load();
     }
@@ -59,6 +64,7 @@ export class AppSettings {
             if (!this.anoteTemplate) this.anoteTemplate = "[Author's note: <|>]";
             if (!this.quickReplies) this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
             if (!Array.isArray(this.regexes)) this.regexes = [];
+            if (!this.autoSummarizePrompts) this.autoSummarizePrompts = "::Event Log\nSummarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.\n\n::Story Synopsis\nWrite a prose summary of the recent events, continuing smoothly from the previous summary.";
         }
     }
 

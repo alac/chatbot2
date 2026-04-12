@@ -11,7 +11,16 @@
 <body>
     <header id="top-nav">
         <div class="logo">AI Prototype</div>
+        
+        <!-- Summary Tracking Meter -->
+        <div id="summary-meter-container" class="hidden" title="Click for details">
+            <div id="summary-meter-fill"></div>
+            <span id="summary-meter-text">0%</span>
+            <button id="btn-quick-summarize" title="Autosummarize Now">✨</button>
+        </div>
+
         <div class="nav-controls">
+            <button id="btn-chat-settings">📝 Chat Settings</button>
             <button id="btn-settings">⚙️ Settings</button>
         </div>
     </header>
@@ -42,17 +51,85 @@
         </div>
     </footer>
 
-    <!-- Settings Modal -->
+    <!-- Chat Settings Modal -->
+    <div id="chat-settings-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <select id="chat-settings-page-selector" class="page-select">
+                    <option value="tab-memory">1. Memory & A/N</option>
+                    <option value="tab-summary">2. Summary</option>
+                </select>
+                <button id="btn-close-chat-settings" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                
+                <!-- 1. Memory & A/N Tab -->
+                <div id="tab-memory" class="tab-pane active">
+                    <div class="setting-row column">
+                        <span class="label-text">Memory</span>
+                        <textarea id="set-system-prompt" rows="5" placeholder="You are a helpful AI..."></textarea>
+                    </div>
+                    <hr>
+                    <h3>Author's Note</h3>
+                    <div class="setting-row column">
+                        <textarea id="set-anote-content" rows="3" placeholder="e.g. Write descriptively."></textarea>
+                    </div>
+                    <div class="setting-row" style="margin-top: 8px;">
+                        <span class="label-text">A/N Template</span>
+                        <input type="text" id="set-anote-template" placeholder="[Author's note: <|>]" style="flex:1; margin-left: 10px;">
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Injection:</span>
+                        <select id="set-anote-unit" style="width:100px;">
+                            <option value="message">Message</option>
+                            <option value="sentence">Sentence</option>
+                        </select>
+                        <span class="label-text"> Depth:</span>
+                        <input type="number" id="set-anote-depth" min="0" max="10" value="0" style="width: 50px;">
+                    </div>
+                </div>
+
+                <!-- 2. Summary Tab -->
+                <div id="tab-summary" class="tab-pane">
+                    <div class="setting-row column">
+                        <span class="label-text">Current Summary</span>
+                        <textarea id="set-summary-content" rows="6" placeholder="The story so far..."></textarea>
+                    </div>
+                    <hr>
+                    <h3>Autosummarize Settings</h3>
+                    <div class="setting-row">
+                        <span class="label-text">Track Summary State</span>
+                        <input type="checkbox" id="set-track-summary">
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Summarize Model</span>
+                        <select id="select-summarize-model" class="model-dropdown" style="flex:1; margin-left:10px;">
+                            <option value="">(Use Default Model)</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <input type="text" id="set-summarize-model-txt" placeholder="Model ID Override..." style="flex:1;">
+                    </div>
+                    <div class="setting-row" style="margin-top: 10px;">
+                        <span class="label-text" style="font-weight:bold;">Prompt: <span id="lbl-active-sum-prompt" style="font-weight:normal; color:var(--accent);">Default</span></span>
+                        <button id="btn-select-sum-prompt" class="secondary">Choose Prompt</button>
+                    </div>
+                    <button id="btn-run-autosummarize" class="primary" style="margin-top: 10px; width: 100%;">Run Autosummarize Now</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Settings Modal -->
     <div id="settings-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
                 <select id="settings-page-selector" class="page-select">
                     <option value="tab-connection">1. API & Models</option>
                     <option value="tab-batch">2. Batch / Parallel</option>
-                    <option value="tab-format">3. Format & A/N</option>
-                    <option value="tab-samplers">4. Samplers</option>
-                    <option value="tab-saveload">5. Save / Load</option>
-                    <option value="tab-ux">6. UX & Display</option>
+                    <option value="tab-samplers">3. Samplers</option>
+                    <option value="tab-saveload">4. Save / Load</option>
+                    <option value="tab-ux">5. UX & Display</option>
                 </select>
                 <button id="btn-close-settings" class="close-btn">&times;</button>
             </div>
@@ -74,7 +151,7 @@
                     </div>
                     <hr>
                     <div class="setting-row">
-                        <span class="label-text">Model</span>
+                        <span class="label-text">Default Model</span>
                         <select id="select-model" class="model-dropdown" style="flex:1; margin-left: 10px;">
                             <option value="" disabled selected>Select a model...</option>
                         </select>
@@ -107,33 +184,7 @@
                     <div id="parallel-rows-container"></div>
                 </div>
 
-                <!-- 3. Format Tab -->
-                <div id="tab-format" class="tab-pane">
-                    <div class="setting-row column">
-                        <span class="label-text">System Prompt</span>
-                        <textarea id="set-system-prompt" rows="3" placeholder="You are a helpful AI..."></textarea>
-                    </div>
-                    <hr>
-                    <h3>Author's Note</h3>
-                    <div class="setting-row column">
-                        <span class="label-text">A/N Template</span>
-                        <input type="text" id="set-anote-template" placeholder="[Author's note: <|>]">
-                    </div>
-                    <div class="setting-row column">
-                        <textarea id="set-anote-content" rows="2" placeholder="e.g. Write descriptively."></textarea>
-                    </div>
-                    <div class="setting-row">
-                        <span class="label-text">Injection:</span>
-                        <select id="set-anote-unit" style="width:100px;">
-                            <option value="message">Message</option>
-                            <option value="sentence">Sentence</option>
-                        </select>
-                        <span class="label-text"> Depth:</span>
-                        <input type="number" id="set-anote-depth" min="0" max="10" value="0" style="width: 50px;">
-                    </div>
-                </div>
-
-                <!-- 4. Samplers Tab -->
+                <!-- 3. Samplers Tab -->
                 <div id="tab-samplers" class="tab-pane">
                     <button id="btn-neutralize-samplers" class="secondary">Reset to Neutral</button>
                     <div class="setting-row" style="margin-top: 8px;">
@@ -157,7 +208,7 @@
                     <div class="setting-row sampler-row"><span class="label-text">Rep. Penalty</span><input type="range" id="slide-rep-pen" min="1" max="2" step="0.01"><input type="number" id="num-rep-pen" step="0.01"></div>
                 </div>
 
-                <!-- 5. Save/Load Tab -->
+                <!-- 4. Save/Load Tab -->
                 <div id="tab-saveload" class="tab-pane">
                     <h3>Save Slots</h3>
                     <div id="slot-list" class="slot-list"></div>
@@ -180,7 +231,7 @@
                     </div>
                 </div>
 
-                <!-- 6. UX & Display Tab -->
+                <!-- 5. UX & Display Tab -->
                 <div id="tab-ux" class="tab-pane">
                     <div class="setting-row">
                         <span class="label-text">Display Mode</span>
@@ -246,6 +297,97 @@
                     <textarea id="qr-edit-textarea" style="flex:1; min-height: 200px; font-family: monospace;"></textarea>
                     <button id="btn-save-qr" class="primary">Save Quick Replies</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Autosummarize Prompt Selector Modal -->
+    <div id="autosum-prompt-modal" class="modal hidden">
+        <div class="modal-content" style="max-height: 90vh; width: 700px;">
+            <div class="modal-header">
+                <h2>Select Autosummarize Prompt</h2>
+                <div>
+                    <button id="btn-edit-sum-prompt-toggle" class="secondary">Edit Definitions</button>
+                    <button id="btn-close-sum-prompt" class="close-btn">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column;">
+                <div id="sum-prompt-btn-container" style="display:flex; flex-direction:column; gap: 8px; overflow-y:auto;"></div>
+                <div id="sum-prompt-edit-container" class="hidden" style="flex:1; display:flex; flex-direction:column; gap: 8px; height: 100%;">
+                    <p style="font-size: 0.85em; color: var(--text-muted);">Format: <code>::Prompt Title\nInstructions for the AI...\n\n::Next Prompt...</code></p>
+                    <textarea id="sum-prompt-edit-textarea" style="flex:1; min-height: 300px; font-family: monospace;"></textarea>
+                    <button id="btn-save-sum-prompts" class="primary">Save Global Prompts</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Autosummarize Streaming/Resolution Modal -->
+    <div id="autosum-stream-modal" class="modal hidden">
+        <div class="modal-content" style="max-height: 80vh; width: 600px;">
+            <div class="modal-header">
+                <h2 id="autosum-stream-title">Generating Summary...</h2>
+                <button id="btn-close-autosum-stream" class="close-btn hidden">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 10px;">
+                <textarea id="autosum-stream-output" style="flex:1; min-height: 200px; font-family: monospace; resize:vertical;" readonly></textarea>
+                <div id="autosum-resolution-btns" class="action-grid hidden">
+                    <button id="btn-autosum-cancel" class="danger">Cancel</button>
+                    <button id="btn-autosum-replace" class="primary">Replace</button>
+                    <button id="btn-autosum-append" class="primary">Append</button>
+                    <button id="btn-autosum-edit" class="secondary">Edit Merge</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Autosummarize Merge Modal -->
+    <div id="autosum-merge-modal" class="modal hidden">
+        <div class="modal-content" style="max-height: 90vh; width: 800px; max-width:95vw;">
+            <div class="modal-header">
+                <h2>Merge Summary</h2>
+                <button id="btn-close-autosum-merge" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 10px; overflow:hidden;">
+                <p style="font-size: 0.85em; color: var(--text-muted);">Toggle the lines you want to keep. They will be concatenated into the final summary.</p>
+                
+                <div id="merge-list-container" style="flex: 2; overflow-y:auto; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main);">
+                    <!-- Lines injected here -->
+                </div>
+
+                <div style="flex: 1; display:flex; flex-direction:column; gap: 4px;">
+                    <span class="label-text">Preview Output:</span>
+                    <textarea id="merge-preview-textarea" style="flex:1; resize:none;" readonly></textarea>
+                </div>
+
+                <div class="action-grid" style="margin-top: 8px;">
+                    <button id="btn-merge-cancel" class="danger">Cancel</button>
+                    <button id="btn-merge-append" class="secondary" title="Ignore toggles and just append">Force Append</button>
+                    <button id="btn-merge-accept" class="primary">Accept Selected</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Meter Details Modal -->
+    <div id="meter-details-modal" class="modal hidden">
+        <div class="modal-content" style="width: 400px;">
+            <div class="modal-header">
+                <h2>Context Budget</h2>
+                <button id="btn-close-meter-details" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <table style="width:100%; border-collapse:collapse; text-align:left;">
+                    <tr style="border-bottom:1px solid var(--border);"><th style="padding:4px;">Item</th><th style="padding:4px;">Est. Tokens</th></tr>
+                    <tr><td style="padding:4px;">Max Context</td><td id="meter-stat-max" style="padding:4px;">0</td></tr>
+                    <tr><td style="padding:4px;">Max Response</td><td id="meter-stat-resp" style="padding:4px;">0</td></tr>
+                    <tr><td style="padding:4px;">Memory</td><td id="meter-stat-mem" style="padding:4px;">0</td></tr>
+                    <tr><td style="padding:4px;">Author's Note</td><td id="meter-stat-an" style="padding:4px;">0</td></tr>
+                    <tr><td style="padding:4px;">Summary</td><td id="meter-stat-sum" style="padding:4px;">0</td></tr>
+                    <tr style="border-top:1px solid var(--border);"><td style="padding:4px; font-weight:bold;">Available Budget</td><td id="meter-stat-budget" style="padding:4px; font-weight:bold;">0</td></tr>
+                    <tr><td style="padding:4px; color:var(--text-muted);">Summarized Msgs</td><td id="meter-stat-summed" style="padding:4px; color:var(--text-muted);">0</td></tr>
+                    <tr><td style="padding:4px; color:var(--accent);">Unsummarized Msgs</td><td id="meter-stat-unsummed" style="padding:4px; color:var(--accent);">0</td></tr>
+                </table>
             </div>
         </div>
     </div>

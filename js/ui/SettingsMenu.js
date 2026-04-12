@@ -3,21 +3,36 @@ import { OpenAIClient } from '../api/OpenAIClient.js';
 
 export class SettingsMenu {
     constructor(uiManager) {
-        this.modal = document.getElementById('settings-modal');
         this.uiManager = uiManager;
+        this.globalModal = document.getElementById('settings-modal');
+        this.chatModal = document.getElementById('chat-settings-modal');
         this.bindEvents();
         this.populateUI();
     }
 
     bindEvents() {
+        // Modals Toggles
         document.getElementById('btn-settings').addEventListener('click', () => {
-            this.modal.classList.remove('hidden');
+            this.globalModal.classList.remove('hidden');
             this.refreshSlotList(); 
         });
         document.getElementById('btn-close-settings').addEventListener('click', () => this.closeAndSave());
         
+        document.getElementById('btn-chat-settings').addEventListener('click', () => {
+            this.populateUI(); // ensure summary field is latest
+            this.chatModal.classList.remove('hidden');
+        });
+        document.getElementById('btn-close-chat-settings').addEventListener('click', () => {
+            this.closeAndSaveChatSettings();
+        });
+
+        // Tab Selectors
         document.getElementById('settings-page-selector').addEventListener('change', (e) => {
-            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            this.globalModal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById(e.target.value).classList.add('active');
+        });
+        document.getElementById('chat-settings-page-selector').addEventListener('change', (e) => {
+            this.chatModal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
             document.getElementById(e.target.value).classList.add('active');
         });
 
@@ -34,6 +49,10 @@ export class SettingsMenu {
             document.getElementById('set-model').value = e.target.value;
             const draft1Txt = document.getElementById('batch-model-txt-primary');
             if (draft1Txt) draft1Txt.value = e.target.value;
+        });
+
+        document.getElementById('select-summarize-model').addEventListener('change', (e) => {
+            document.getElementById('set-summarize-model-txt').value = e.target.value;
         });
 
         this.bindSamplerPair('slide-context', 'num-context');
@@ -124,12 +143,17 @@ export class SettingsMenu {
     }
 
     updateAllModelDropdowns() {
-        const createOptions = (selectEl, selectedVal) => {
+        const createOptions = (selectEl, selectedVal, includeEmptyOverride = false) => {
             if(!selectEl) return;
-            selectEl.innerHTML = '<option value="" disabled selected>Select a model...</option>';
             let list = this.cachedFetchedModels || settings.favoriteModels;
             const favs = list.filter(m => settings.favoriteModels.includes(m)).sort();
             const others = list.filter(m => !settings.favoriteModels.includes(m)).sort();
+
+            if (includeEmptyOverride) {
+                selectEl.innerHTML = '<option value="">(Use Default Model)</option>';
+            } else {
+                selectEl.innerHTML = '<option value="" disabled selected>Select a model...</option>';
+            }
 
             favs.forEach(m => { 
                 const opt = document.createElement('option'); 
@@ -146,6 +170,7 @@ export class SettingsMenu {
         };
 
         createOptions(document.getElementById('select-model'), document.getElementById('set-model').value);
+        createOptions(document.getElementById('select-summarize-model'), document.getElementById('set-summarize-model-txt').value, true);
         createOptions(document.getElementById('batch-model-select-primary'), document.getElementById('set-model').value);
         for (let i = 0; i < 4; i++) {
             const txtField = document.getElementById(`batch-model-txt-${i}`);
@@ -325,6 +350,7 @@ export class SettingsMenu {
     }
 
     populateUI() {
+        // Global
         document.getElementById('set-api-url').value = settings.apiUrl;
         document.getElementById('set-use-chat').checked = settings.useChatCompletions;
         document.getElementById('set-api-key').value = settings.apiKey;
@@ -334,14 +360,23 @@ export class SettingsMenu {
         document.getElementById('set-parallel-count').value = settings.parallelCount;
         this.renderBatchRows();
 
-        document.getElementById('set-system-prompt').value = settings.systemPrompt;
         document.getElementById('set-force-think').checked = settings.forceThink;
         document.getElementById('set-stop-seqs').value = settings.stopSequences;
         
+        // Chat Settings (Memory & A/N)
+        document.getElementById('set-system-prompt').value = settings.systemPrompt;
         document.getElementById('set-anote-template').value = settings.anoteTemplate;
         document.getElementById('set-anote-content').value = settings.anoteContent;
         document.getElementById('set-anote-unit').value = settings.anoteUnit;
         document.getElementById('set-anote-depth').value = settings.anoteDepth;
+        
+        // Summary Settings
+        document.getElementById('set-summary-content').value = this.uiManager.state.summary;
+        document.getElementById('set-track-summary').checked = settings.trackSummary;
+        document.getElementById('set-summarize-model-txt').value = settings.summarizeModel;
+        if (document.getElementById('lbl-active-sum-prompt')) {
+            document.getElementById('lbl-active-sum-prompt').textContent = this.uiManager.state.selectedAutoSumPromptTitle;
+        }
 
         // Samplers
         const setPair = (val, slideId, numId) => { document.getElementById(slideId).value = val; document.getElementById(numId).value = val; };
@@ -383,15 +418,9 @@ export class SettingsMenu {
             }
         }
 
-        settings.systemPrompt = document.getElementById('set-system-prompt').value;
         settings.forceThink = document.getElementById('set-force-think').checked;
         settings.stopSequences = document.getElementById('set-stop-seqs').value;
         
-        settings.anoteTemplate = document.getElementById('set-anote-template').value;
-        settings.anoteContent = document.getElementById('set-anote-content').value;
-        settings.anoteUnit = document.getElementById('set-anote-unit').value;
-        settings.anoteDepth = parseInt(document.getElementById('set-anote-depth').value);
-
         settings.contextLength = parseInt(document.getElementById('num-context').value);
         settings.maxTokens = parseInt(document.getElementById('num-max-tokens').value);
         settings.temperature = parseFloat(document.getElementById('num-temp').value);
@@ -423,8 +452,29 @@ export class SettingsMenu {
         
         // Apply display settings dynamically
         document.documentElement.setAttribute('data-theme', settings.theme);
+        this.uiManager.state.buildPromptPayload(); // refresh boundaries
         this.uiManager.renderAll(); 
 
-        this.modal.classList.add('hidden');
+        this.globalModal.classList.add('hidden');
+    }
+
+    closeAndSaveChatSettings() {
+        settings.systemPrompt = document.getElementById('set-system-prompt').value;
+        settings.anoteTemplate = document.getElementById('set-anote-template').value;
+        settings.anoteContent = document.getElementById('set-anote-content').value;
+        settings.anoteUnit = document.getElementById('set-anote-unit').value;
+        settings.anoteDepth = parseInt(document.getElementById('set-anote-depth').value);
+
+        this.uiManager.state.summary = document.getElementById('set-summary-content').value;
+        settings.trackSummary = document.getElementById('set-track-summary').checked;
+        settings.summarizeModel = document.getElementById('set-summarize-model-txt').value.trim();
+
+        settings.save();
+        this.uiManager.autoSave(); // Save summary to state
+        
+        this.uiManager.state.buildPromptPayload(); // refresh boundaries based on new memory/summary length
+        this.uiManager.renderAll();
+
+        this.chatModal.classList.add('hidden');
     }
 }

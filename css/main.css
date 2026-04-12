@@ -84,13 +84,24 @@
 body { font-family: system-ui, sans-serif; background: var(--bg-main); color: var(--text-main); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 .hidden { display: none !important; }
 
-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: var(--bg-panel); border-bottom: 1px solid var(--border); }
+header { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: var(--bg-panel); border-bottom: 1px solid var(--border); gap: 12px; }
+.logo { font-weight: bold; white-space: nowrap; }
+.nav-controls { display: flex; gap: 8px; flex-wrap: nowrap; }
+
+/* Summary Meter */
+#summary-meter-container { display: flex; align-items: center; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; padding: 0; position: relative; width: 120px; height: 34px; overflow: hidden; cursor: pointer; flex: 1; max-width: 200px; }
+#summary-meter-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(59, 130, 246, 0.4); width: 0%; transition: width 0.3s; z-index: 1;}
+#summary-meter-text { position: absolute; width: 100%; text-align: center; font-size: 0.85em; font-weight: bold; z-index: 2; pointer-events: none; line-height: 34px; }
+#btn-quick-summarize { position: absolute; right: 0; top: 0; bottom: 0; background: transparent; border: none; border-left: 1px solid var(--border); border-radius: 0; z-index: 3; padding: 0 8px; font-size: 1.1em; }
+#btn-quick-summarize:hover { background: rgba(255,255,255,0.1); }
+
 button, select, input, textarea { background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; font-family: inherit; }
 button { cursor: pointer; transition: background 0.2s; }
 button:hover { background: var(--border); }
 button.primary { background: var(--accent); border-color: var(--accent); font-weight: bold; color: white; }
 button.primary:hover { background: var(--accent-hover); }
 button.danger { background: var(--danger); border-color: var(--danger); color: white;}
+button.secondary { border-color: var(--text-muted); }
 hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 
 .fab { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); border-radius: 50%; width: 40px; height: 40px; font-size: 20px; background: var(--bg-panel); border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 50; transition: opacity 0.3s; display: flex; justify-content: center; align-items: center; padding: 0; cursor: pointer;}
@@ -192,6 +203,15 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .sampler-row input[type="range"] { flex: 1; }
 .sampler-row input[type="number"] { width: 70px; }
 
+/* Merge UI List Items */
+.merge-line { display: flex; align-items: flex-start; gap: 8px; padding: 6px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
+.merge-line:hover { background: rgba(255,255,255,0.05); }
+.merge-line input[type="checkbox"] { margin-top: 4px; cursor: pointer; }
+.merge-line span { flex: 1; white-space: pre-wrap; font-family: monospace; font-size: 0.9em; word-break: break-word; }
+.merge-old { background: rgba(239, 68, 68, 0.1); border-left: 3px solid var(--danger); }
+.merge-new { background: rgba(34, 197, 94, 0.1); border-left: 3px solid #22c55e; }
+.merge-equal { background: transparent; border-left: 3px solid var(--text-muted); opacity: 0.8; }
+
 /* Batch Rows */
 .batch-row-container { display: flex; flex-direction: column; gap: 6px; background: var(--bg-main); padding: 10px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 10px;}
 .batch-row-top { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 0.9em; color: var(--text-muted);}
@@ -219,4 +239,6 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 @media (max-width: 768px) {
     .modal-content { width: 100vw; height: 100vh; border-radius: 0; }
     .setting-row { flex-wrap: wrap; }
+    header { flex-wrap: wrap; }
+    .nav-controls { flex: 1; justify-content: flex-end; }
 }
