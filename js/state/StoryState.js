@@ -20,7 +20,7 @@ export class StoryState {
             role, 
             isBatch: false, 
             activeDraftIndex: 0, 
-            drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0 }]
+            drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0, markdownOverride: null }]
         });
         this.redoStack = []; // Clear redo on new action
         this.trimOldDrafts();
@@ -29,7 +29,7 @@ export class StoryState {
     addBatchTurn(count) {
         const drafts = [];
         for(let i=0; i<count; i++) {
-            drafts.push({ model: '', content: '', reasoning: '', status: 'streaming', duration: 0 });
+            drafts.push({ model: '', content: '', reasoning: '', status: 'streaming', duration: 0, markdownOverride: null });
         }
         this.history.push({
             role: 'assistant',

@@ -84,7 +84,13 @@ export class AppSettings {
             if ((type === 'outgoing' && rx.applyOutgoing) || (type === 'visually' && rx.applyVisually)) {
                 if (rx.pattern) {
                     try {
-                        const r = new RegExp(rx.pattern, 'g');
+                        let r;
+                        const match = rx.pattern.match(/^\/(.+)\/([a-z]*)$/i);
+                        if (match) {
+                            r = new RegExp(match[1], match[2] || 'g');
+                        } else {
+                            r = new RegExp(rx.pattern, 'g');
+                        }
                         res = res.replace(r, rx.replacement);
                     } catch (e) {
                         // ignore broken regexes

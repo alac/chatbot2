@@ -159,7 +159,10 @@ export class UIManager {
                         if (reasonNode) reasonNode.textContent = data.reasoning;
                         if (reasonDiv) reasonDiv.classList.remove('hidden');
                     }
-                    if (contentNode) this.setNodeContent(contentNode, data.content);
+                    if (contentNode) {
+                        const draftObj = this.state.history[newIdx].drafts[draftIdx];
+                        this.setNodeContent(contentNode, data.content, draftObj);
+                    }
                     
                     if (!this.isUserScrolledUp) this.scrollToBottom();
                 }
@@ -198,9 +201,22 @@ export class UIManager {
         if (this.activeBatch) this.activeBatch.cancelAll();
     }
 
-    setNodeContent(node, content) {
+    shouldUseMarkdown(content, draftOverride) {
+        if (draftOverride !== undefined && draftOverride !== null) {
+            return draftOverride;
+        }
+        const hasEditTags = /<(?:edit|old|new|reasoning)[>\s]/i.test(content);
+        if (hasEditTags) {
+            return false;
+        }
+        return settings.renderMarkdown;
+    }
+
+    setNodeContent(node, content, draft) {
         const visuallyApplied = settings.applyRegexes(content, 'visually');
-        if (settings.renderMarkdown) {
+        const useMd = this.shouldUseMarkdown(content, draft.markdownOverride);
+
+        if (useMd) {
             node.innerHTML = marked.parse(visuallyApplied);
             node.classList.add('markdown-body');
         } else {
@@ -273,6 +289,22 @@ export class UIManager {
                 iconsDiv.appendChild(btnThink);
             }
 
+            // Markdown Toggle Button
+            const btnMd = document.createElement('span');
+            btnMd.textContent = 'Ⓜ️';
+            btnMd.className = 'md-toggle';
+            btnMd.title = "Toggle Markdown";
+            if (this.shouldUseMarkdown(content || '', activeDraft.markdownOverride)) {
+                btnMd.classList.add('active');
+            }
+            btnMd.addEventListener('click', () => {
+                const currentlyOn = this.shouldUseMarkdown(activeDraft.content, activeDraft.markdownOverride);
+                activeDraft.markdownOverride = !currentlyOn;
+                this.renderAll();
+                this.autoSave();
+            });
+            iconsDiv.appendChild(btnMd);
+
             const btnCopy = document.createElement('span');
             btnCopy.textContent = '📋';
             btnCopy.title = "Copy";
@@ -338,7 +370,7 @@ export class UIManager {
         const spanContent = document.createElement('div');
         spanContent.style.display = "inline";
         spanContent.id = `content-${index}`;
-        this.setNodeContent(spanContent, content || '');
+        this.setNodeContent(spanContent, content || '', activeDraft);
         contentDiv.appendChild(spanContent);
         
         if (isStreaming) {
@@ -430,10 +462,12 @@ export class UIManager {
         const reasonNode = document.getElementById(`reasoning-${msgIndex}`);
         const reasonDiv = document.getElementById(`reasoning-block-${msgIndex}`);
         
-        const newText = this.state.getContent(msgIndex);
-        const newReasoning = this.state.getReasoning(msgIndex);
+        const msg = this.state.history[msgIndex];
+        const activeDraft = msg.drafts[draftIdx];
+        const newText = activeDraft.content;
+        const newReasoning = activeDraft.reasoning;
 
-        if (contentNode) this.setNodeContent(contentNode, newText);
+        if (contentNode) this.setNodeContent(contentNode, newText, activeDraft);
         if (reasonNode) reasonNode.textContent = newReasoning;
         
         if (reasonDiv) {
@@ -444,7 +478,6 @@ export class UIManager {
         const select = document.getElementById(`draft-select-${msgIndex}`);
         if (select) select.value = draftIdx;
 
-        const msg = this.state.history[msgIndex];
         msg.drafts.forEach((_, i) => {
             const icon = document.getElementById(`draft-icon-${msgIndex}-${i}`);
             if (icon) {
