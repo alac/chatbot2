@@ -32,14 +32,26 @@
     <footer id="input-area">
         <!-- Quick Menu (Toggled via More button) -->
         <div id="quick-menu" class="hidden">
-            <button id="btn-undo" title="Undo">↩️</button>
-            <button id="btn-redo" title="Redo">↪️</button>
-            <button id="btn-open-quick-replies">💬 Quick Replies</button>
+            <button id="btn-undo" class="quick-btn" title="Undo">
+                <span class="icon">↩️</span><span>Undo</span>
+            </button>
+            <button id="btn-redo" class="quick-btn" title="Redo">
+                <span class="icon">↪️</span><span>Redo</span>
+            </button>
+            <button id="btn-open-quick-replies" class="quick-btn">
+                <span class="icon">💬</span><span>Replies</span>
+            </button>
+            
             <div class="btn-group">
-                <button id="btn-generate-choices" title="Generate branching choices">🔀 Choices</button>
-                <button id="btn-choices-settings" title="Choices Settings" style="padding-left: 8px; padding-right: 8px;">⚙️</button>
+                <button id="btn-generate-choices" class="quick-btn" title="Generate branching choices">
+                    <span class="icon">🔀</span><span>Choices</span>
+                </button>
+                <button id="btn-choices-settings" title="Choices Settings" style="padding: 0 8px;">⚙️</button>
             </div>
-            <button id="btn-open-apply-edits">✨ Apply Edits</button>
+            
+            <button id="btn-open-apply-edits" class="quick-btn">
+                <span class="icon">✨</span><span>Edits</span>
+            </button>
         </div>
         
         <div class="input-row">

@@ -200,3 +200,28 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     header { flex-wrap: wrap; }
     .nav-controls { flex: 1; justify-content: flex-end; }
 }
+
+/* Quick Menu */
+/* Stacked Mobile Buttons */
+.quick-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px !important;
+    font-size: 0.7em !important;
+    line-height: 1;
+    min-width: 50px;
+}
+.quick-btn .icon {
+    font-size: 1.6em; /* Make the emoji bigger */
+    margin-bottom: 3px;
+}
+
+/* Hide scrollbar for a cleaner look if it does overflow on tiny screens */
+#quick-menu {
+    scrollbar-width: none; /* Firefox */
+}
+#quick-menu::-webkit-scrollbar { 
+    display: none; /* Chrome/Safari */
+}
