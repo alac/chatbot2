@@ -19,7 +19,7 @@ export class SettingsMenu {
         document.getElementById('btn-close-settings').addEventListener('click', () => this.closeAndSave());
         
         document.getElementById('btn-chat-settings').addEventListener('click', () => {
-            this.populateUI(); // ensure summary field is latest
+            this.populateUI(); 
             this.chatModal.classList.remove('hidden');
         });
         document.getElementById('btn-close-chat-settings').addEventListener('click', () => {
@@ -45,6 +45,13 @@ export class SettingsMenu {
             this.renderFavoritesList();
         });
         
+        // A/N History toggle
+        document.getElementById('btn-toggle-anote-history').addEventListener('click', () => {
+            const container = document.getElementById('anote-history-container');
+            container.classList.toggle('hidden');
+            if (!container.classList.contains('hidden')) this.renderAnoteHistory();
+        });
+
         document.getElementById('select-model').addEventListener('change', (e) => {
             document.getElementById('set-model').value = e.target.value;
             const draft1Txt = document.getElementById('batch-model-txt-primary');
@@ -256,7 +263,6 @@ export class SettingsMenu {
         const tbody = document.getElementById('regex-tbody');
         const count = parseInt(document.getElementById('set-regex-count').value);
         
-        // Save existing before re-rendering
         const currentData = [];
         for (let i = 0; i < tbody.children.length; i++) {
             currentData.push({
@@ -279,6 +285,28 @@ export class SettingsMenu {
             `;
             tbody.appendChild(tr);
         }
+    }
+
+    renderAnoteHistory() {
+        const tbody = document.getElementById('anote-history-tbody');
+        tbody.innerHTML = '';
+        if (settings.anoteHistory.length === 0) {
+            tbody.innerHTML = '<tr><td style="color:var(--text-muted); text-align:center;">History is empty</td></tr>';
+            return;
+        }
+
+        settings.anoteHistory.forEach(note => {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.textContent = note.length > 80 ? note.substring(0, 80) + '...' : note;
+            td.title = note;
+            tr.addEventListener('click', () => {
+                document.getElementById('set-anote-content').value = note;
+                document.getElementById('anote-history-container').classList.add('hidden');
+            });
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+        });
     }
 
     async refreshSlotList() {
@@ -350,7 +378,6 @@ export class SettingsMenu {
     }
 
     populateUI() {
-        // Global
         document.getElementById('set-api-url').value = settings.apiUrl;
         document.getElementById('set-use-chat').checked = settings.useChatCompletions;
         document.getElementById('set-api-key').value = settings.apiKey;
@@ -363,14 +390,12 @@ export class SettingsMenu {
         document.getElementById('set-force-think').checked = settings.forceThink;
         document.getElementById('set-stop-seqs').value = settings.stopSequences;
         
-        // Chat Settings (Memory & A/N)
         document.getElementById('set-system-prompt').value = settings.systemPrompt;
         document.getElementById('set-anote-template').value = settings.anoteTemplate;
         document.getElementById('set-anote-content').value = settings.anoteContent;
         document.getElementById('set-anote-unit').value = settings.anoteUnit;
         document.getElementById('set-anote-depth').value = settings.anoteDepth;
         
-        // Summary Settings
         document.getElementById('set-summary-content').value = this.uiManager.state.summary;
         document.getElementById('set-track-summary').checked = settings.trackSummary;
         document.getElementById('set-summarize-model-txt').value = settings.summarizeModel;
@@ -378,7 +403,6 @@ export class SettingsMenu {
             document.getElementById('lbl-active-sum-prompt').textContent = this.uiManager.state.selectedAutoSumPromptTitle;
         }
 
-        // Samplers
         const setPair = (val, slideId, numId) => { document.getElementById(slideId).value = val; document.getElementById(numId).value = val; };
         setPair(settings.contextLength, 'slide-context', 'num-context');
         setPair(settings.maxTokens, 'slide-max-tokens', 'num-max-tokens');
@@ -391,7 +415,8 @@ export class SettingsMenu {
         setPair(settings.tfs, 'slide-tfs', 'num-tfs');
         setPair(settings.repPen, 'slide-rep-pen', 'num-rep-pen');
 
-        // UX
+        document.getElementById('num-chars-token').value = settings.charsPerToken;
+
         document.getElementById('set-display-mode').value = settings.displayMode;
         document.getElementById('set-theme').value = settings.theme;
         document.getElementById('set-render-markdown').checked = settings.renderMarkdown;
@@ -405,7 +430,6 @@ export class SettingsMenu {
         settings.apiUrl = document.getElementById('set-api-url').value.trim();
         settings.useChatCompletions = document.getElementById('set-use-chat').checked;
         settings.apiKey = document.getElementById('set-api-key').value.trim();
-        
         settings.model = document.getElementById('set-model').value.trim();
 
         settings.parallelEnabled = document.getElementById('set-parallel-enabled').checked;
@@ -423,6 +447,7 @@ export class SettingsMenu {
         
         settings.contextLength = parseInt(document.getElementById('num-context').value);
         settings.maxTokens = parseInt(document.getElementById('num-max-tokens').value);
+        settings.charsPerToken = parseFloat(document.getElementById('num-chars-token').value);
         settings.temperature = parseFloat(document.getElementById('num-temp').value);
         settings.minP = parseFloat(document.getElementById('num-min-p').value);
         settings.topP = parseFloat(document.getElementById('num-top-p').value);
@@ -436,7 +461,6 @@ export class SettingsMenu {
         settings.theme = document.getElementById('set-theme').value;
         settings.renderMarkdown = document.getElementById('set-render-markdown').checked;
         
-        // Save Regexes
         const rxCount = parseInt(document.getElementById('set-regex-count').value);
         settings.regexes = [];
         for (let i = 0; i < rxCount; i++) {
@@ -450,9 +474,8 @@ export class SettingsMenu {
         
         settings.save();
         
-        // Apply display settings dynamically
         document.documentElement.setAttribute('data-theme', settings.theme);
-        this.uiManager.state.buildPromptPayload(); // refresh boundaries
+        this.uiManager.state.buildPromptPayload(); 
         this.uiManager.renderAll(); 
 
         this.globalModal.classList.add('hidden');
@@ -465,14 +488,22 @@ export class SettingsMenu {
         settings.anoteUnit = document.getElementById('set-anote-unit').value;
         settings.anoteDepth = parseInt(document.getElementById('set-anote-depth').value);
 
+        const currentAnote = settings.anoteContent.trim();
+        if (currentAnote) {
+            if (settings.anoteHistory[0] !== currentAnote) {
+                settings.anoteHistory.unshift(currentAnote);
+                if (settings.anoteHistory.length > 10) settings.anoteHistory.length = 10;
+            }
+        }
+
         this.uiManager.state.summary = document.getElementById('set-summary-content').value;
         settings.trackSummary = document.getElementById('set-track-summary').checked;
         settings.summarizeModel = document.getElementById('set-summarize-model-txt').value.trim();
 
         settings.save();
-        this.uiManager.autoSave(); // Save summary to state
+        this.uiManager.autoSave();
         
-        this.uiManager.state.buildPromptPayload(); // refresh boundaries based on new memory/summary length
+        this.uiManager.state.buildPromptPayload(); 
         this.uiManager.renderAll();
 
         this.chatModal.classList.add('hidden');

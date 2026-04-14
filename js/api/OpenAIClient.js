@@ -24,6 +24,7 @@ export class GenerationJob {
         
         this.finalContent = "";
         this.finalReasoning = "";
+        this.usage = null;
         this.status = "streaming";
         this.startTime = Date.now();
         this.duration = 0;
@@ -34,7 +35,6 @@ export class GenerationJob {
         this.abortController.abort();
     }
 
-    // Uses callback instead of async generator for easier parallel management
     async start(messages, onUpdate) {
         const baseUrl = settings.apiUrl.replace(/\/$/, '');
         const endpoint = settings.useChatCompletions ? `${baseUrl}/chat/completions` : `${baseUrl}/completions`;
@@ -50,19 +50,15 @@ export class GenerationJob {
             typical_p: parseFloat(settings.typical),
             tfs_z: parseFloat(settings.tfs),
             repetition_penalty: parseFloat(settings.repPen),
-            stream: true
+            stream: true,
+            stream_options: { include_usage: true }
         };
 
         const stopTokens = settings.stopSequences.split(',').map(s => s.trim()).filter(s => s);
-        if (stopTokens.length > 0) {
-            payload.stop = stopTokens;
-        }
+        if (stopTokens.length > 0) payload.stop = stopTokens;
 
-        if (settings.useChatCompletions) {
-            payload.messages = messages;
-        } else {
-            payload.prompt = messages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') + '\nAssistant: ';
-        }
+        if (settings.useChatCompletions) payload.messages = messages;
+        else payload.prompt = messages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n') + '\nAssistant: ';
 
         this.rawPayload = payload;
 
@@ -101,19 +97,26 @@ export class GenerationJob {
                     if (line.startsWith("data: ")) {
                         try {
                             const data = JSON.parse(line.slice(6));
-                            const delta = data.choices[0]?.delta || {};
                             
-                            const textChunk = delta.content || data.choices[0]?.text || "";
-                            const reasonChunk = delta.reasoning_content || delta.reasoning || "";
-
-                            if (reasonChunk) {
-                                this.apiReasoning += reasonChunk;
-                                this.hasNativeReasoning = true;
-                                hasUpdates = true;
+                            // Check for usage chunk (often the last empty delta)
+                            if (data.usage) {
+                                this.usage = data.usage;
                             }
-                            if (textChunk) {
-                                this.rawContent += textChunk;
-                                hasUpdates = true;
+
+                            const delta = data.choices && data.choices[0] ? data.choices[0].delta : null;
+                            if (delta) {
+                                const textChunk = delta.content || data.choices[0]?.text || "";
+                                const reasonChunk = delta.reasoning_content || delta.reasoning || "";
+
+                                if (reasonChunk) {
+                                    this.apiReasoning += reasonChunk;
+                                    this.hasNativeReasoning = true;
+                                    hasUpdates = true;
+                                }
+                                if (textChunk) {
+                                    this.rawContent += textChunk;
+                                    hasUpdates = true;
+                                }
                             }
                         } catch (e) {
                             // Ignore parse errors on partial JSON chunks
@@ -167,6 +170,7 @@ export class GenerationJob {
 export class ParallelGenerationBatch {
     constructor(messages, count, overrides) {
         this.jobs = [];
+        this.isFinished = false;
         for(let i=0; i<count; i++) {
             let mod = settings.model;
             if (i > 0 && overrides[i-1] && overrides[i-1].enabled && overrides[i-1].model) {
@@ -184,16 +188,17 @@ export class ParallelGenerationBatch {
     async startAll(onUpdateCallback) {
         const promises = this.jobs.map((job, index) => {
             return job.start(this.messages, () => {
-                // When any job updates, fire the master callback with index and full state
                 onUpdateCallback(index, {
                     model: job.model,
                     content: job.finalContent,
                     reasoning: job.finalReasoning,
                     status: job.status,
-                    duration: job.duration
+                    duration: job.duration,
+                    usage: job.usage
                 });
             });
         });
         await Promise.allSettled(promises);
+        this.isFinished = true;
     }
 }

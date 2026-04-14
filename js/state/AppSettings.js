@@ -24,6 +24,7 @@ export class AppSettings {
         this.anoteContent = "";
         this.anoteUnit = "message"; 
         this.anoteDepth = 0;
+        this.anoteHistory = [];
         
         // Quick Replies
         this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
@@ -35,6 +36,7 @@ export class AppSettings {
 
         // Samplers
         this.contextLength = 4096;
+        this.charsPerToken = 4.0;
         this.maxTokens = 512;
         this.temperature = 1.0;
         this.minP = 0.0;
@@ -64,6 +66,8 @@ export class AppSettings {
             if (!this.anoteTemplate) this.anoteTemplate = "[Author's note: <|>]";
             if (!this.quickReplies) this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
             if (!Array.isArray(this.regexes)) this.regexes = [];
+            if (!Array.isArray(this.anoteHistory)) this.anoteHistory = [];
+            if (!this.charsPerToken) this.charsPerToken = 4.0;
             if (!this.autoSummarizePrompts) this.autoSummarizePrompts = "::Event Log\nSummarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.\n\n::Story Synopsis\nWrite a prose summary of the recent events, continuing smoothly from the previous summary.";
         }
     }

@@ -42,8 +42,10 @@
             <textarea id="user-input" placeholder="Type your message... (Shift+Enter for newline)"></textarea>
             <div class="input-controls">
                 <div class="top-btns">
-                    <button id="btn-send" class="primary">Send</button>
-                    <button id="btn-abort" class="danger hidden">Stop</button>
+                    <div class="send-btn-wrapper">
+                        <button id="btn-send" class="primary">Send</button>
+                        <button id="btn-abort" class="danger hidden">Stop</button>
+                    </div>
                     <button id="btn-retry" title="Retry Last">🔄</button>
                 </div>
                 <button id="btn-more-menu">☰ More</button>
@@ -63,10 +65,10 @@
                 </select>
                 <button id="btn-close-chat-settings" class="close-btn">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="display: flex; flex-direction: column;">
                 
                 <!-- 1. Memory Tab -->
-                <div id="tab-memory" class="tab-pane active" style="height: 100%;">
+                <div id="tab-memory" class="tab-pane active" style="flex: 1;">
                     <div class="setting-row column" style="height: 100%;">
                         <span class="label-text">Memory (System Prompt)</span>
                         <textarea id="set-system-prompt" style="flex: 1; resize: none; min-height: 250px;" placeholder="You are a helpful AI..."></textarea>
@@ -74,14 +76,24 @@
                 </div>
 
                 <!-- 2. Author's Note Tab -->
-                <div id="tab-anote" class="tab-pane">
-                    <h3>Author's Note</h3>
-                    <div class="setting-row column">
-                        <textarea id="set-anote-content" rows="4" placeholder="e.g. Write descriptively."></textarea>
+                <div id="tab-anote" class="tab-pane" style="flex: 1; display: none; flex-direction: column;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>Author's Note</h3>
+                        <button id="btn-toggle-anote-history" class="secondary" style="font-size:0.85em;">History 🕒</button>
+                    </div>
+                    
+                    <div id="anote-history-container" class="hidden" style="margin-bottom: 10px; border: 1px solid var(--border); border-radius: 4px; max-height: 150px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
+                            <tbody id="anote-history-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="setting-row column" style="flex: 1;">
+                        <textarea id="set-anote-content" placeholder="e.g. Write descriptively." style="flex: 1; resize: none; min-height: 150px;"></textarea>
                     </div>
                     <div class="setting-row" style="margin-top: 8px;">
                         <span class="label-text">A/N Template</span>
-                        <input type="text" id="set-anote-template" placeholder="[Author's note: <|>]" style="flex:1; margin-left: 10px;">
+                        <input type="text" id="set-anote-template" placeholder="[Author's note: <|>]" style="flex:1;">
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Injection:</span>
@@ -95,7 +107,7 @@
                 </div>
 
                 <!-- 3. Summary Tab -->
-                <div id="tab-summary" class="tab-pane" style="height: 100%;">
+                <div id="tab-summary" class="tab-pane" style="flex: 1;">
                     <div class="setting-row column" style="height: 100%;">
                         <span class="label-text">Current Summary</span>
                         <textarea id="set-summary-content" style="flex: 1; resize: none; min-height: 250px;" placeholder="The story so far..."></textarea>
@@ -111,7 +123,7 @@
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Summarize Model</span>
-                        <select id="select-summarize-model" class="model-dropdown" style="flex:1; margin-left:10px;">
+                        <select id="select-summarize-model" class="model-dropdown" style="flex:1;">
                             <option value="">(Use Default Model)</option>
                         </select>
                     </div>
@@ -161,10 +173,10 @@
                     <hr>
                     <div class="setting-row">
                         <span class="label-text">Default Model</span>
-                        <select id="select-model" class="model-dropdown" style="flex:1; margin-left: 10px;">
+                        <select id="select-model" class="model-dropdown" style="flex:1;">
                             <option value="" disabled selected>Select a model...</option>
                         </select>
-                        <button id="btn-fetch-models" class="secondary" style="margin-left: 5px;">Fetch</button>
+                        <button id="btn-fetch-models" class="secondary">Fetch</button>
                     </div>
                     <div class="setting-row">
                         <input type="text" id="set-model" placeholder="Model ID..." style="flex:1;">
@@ -206,6 +218,7 @@
                     </div>
                     <hr>
                     <div class="setting-row sampler-row"><span class="label-text">Context Length</span><input type="range" id="slide-context" min="512" max="128000" step="256"><input type="number" id="num-context"></div>
+                    <div class="setting-row sampler-row"><span class="label-text">Chars per Token Est.</span><input type="number" id="num-chars-token" step="0.5" min="1" max="10" style="width: 70px;"></div>
                     <div class="setting-row sampler-row"><span class="label-text">Max Response</span><input type="range" id="slide-max-tokens" min="16" max="8192" step="16"><input type="number" id="num-max-tokens"></div>
                     <div class="setting-row sampler-row"><span class="label-text">Temperature</span><input type="range" id="slide-temp" min="0" max="3" step="0.05"><input type="number" id="num-temp" step="0.05"></div>
                     <div class="setting-row sampler-row"><span class="label-text">Min-P</span><input type="range" id="slide-min-p" min="0" max="1" step="0.01"><input type="number" id="num-min-p" step="0.01"></div>
@@ -218,6 +231,7 @@
                 </div>
 
                 <!-- 4. Save/Load Tab -->
+                <!-- Same as before... -->
                 <div id="tab-saveload" class="tab-pane">
                     <h3>Save Slots</h3>
                     <div id="slot-list" class="slot-list"></div>
@@ -310,6 +324,7 @@
         </div>
     </div>
 
+    <!-- Autosummarize Modals (Skipped for brevity as they are unchanged structurally, but included in full) -->
     <!-- Autosummarize Prompt Selector Modal -->
     <div id="autosum-prompt-modal" class="modal hidden">
         <div class="modal-content" style="max-height: 90vh; width: 700px;">
@@ -331,7 +346,6 @@
         </div>
     </div>
 
-    <!-- Autosummarize Streaming/Resolution Modal -->
     <div id="autosum-stream-modal" class="modal hidden">
         <div class="modal-content" style="max-height: 80vh; width: 600px;">
             <div class="modal-header">
@@ -350,7 +364,6 @@
         </div>
     </div>
 
-    <!-- Autosummarize Merge Modal -->
     <div id="autosum-merge-modal" class="modal hidden">
         <div class="modal-content" style="max-height: 90vh; width: 800px; max-width:95vw; display:flex; flex-direction:column;">
             <div class="modal-header">
@@ -361,23 +374,14 @@
                 <button id="btn-close-autosum-merge" class="close-btn">&times;</button>
             </div>
             <div class="modal-body" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
-                
-                <!-- Tab 1: Edit Lines -->
                 <div id="merge-tab-edit" class="tab-pane active" style="flex:1; overflow:hidden;">
-                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Toggle the lines you want to keep. They will be concatenated into the final summary.</p>
-                    <div id="merge-list-container" style="flex:1; overflow-y:auto; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main);">
-                        <!-- Lines injected here -->
-                    </div>
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Toggle the lines you want to keep.</p>
+                    <div id="merge-list-container" style="flex:1; overflow-y:auto; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-main);"></div>
                 </div>
-
-                <!-- Tab 2: Preview -->
                 <div id="merge-tab-preview" class="tab-pane" style="flex:1;">
                     <textarea id="merge-preview-textarea" style="flex:1; resize:none; font-family: monospace; width: 100%; height: 100%;" readonly></textarea>
                 </div>
-
             </div>
-            
-            <!-- Persistent Action Footer -->
             <div style="padding: 16px; border-top: 1px solid var(--border); background: var(--bg-panel); flex-shrink: 0;">
                 <div class="action-grid">
                     <button id="btn-merge-cancel" class="danger">Cancel</button>
@@ -427,6 +431,23 @@
         </div>
     </div>
 
+    <!-- Token Usage Modal -->
+    <div id="usage-modal" class="modal hidden">
+        <div class="modal-content" style="width: 350px;">
+            <div class="modal-header">
+                <h2>Token Usage</h2>
+                <button id="btn-close-usage" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <table style="width:100%; border-collapse:collapse; text-align:left; font-size:1.1em;">
+                    <tr><td style="padding:6px;">Prompt Tokens:</td><td id="usage-prompt" style="padding:6px; font-weight:bold;">0</td></tr>
+                    <tr><td style="padding:6px;">Completion Tokens:</td><td id="usage-completion" style="padding:6px; font-weight:bold;">0</td></tr>
+                    <tr style="border-top:1px solid var(--border);"><td style="padding:6px;">Total Tokens:</td><td id="usage-total" style="padding:6px; font-weight:bold; color:var(--accent);">0</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- Edit Message Modal -->
     <div id="edit-modal" class="modal hidden">
         <div class="modal-content" style="height: 60vh;">
@@ -460,9 +481,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW registered!', reg))
-                    .catch(err => console.error('SW registration failed:', err));
+                navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW failed:', err));
             });
         }
     </script>

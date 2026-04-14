@@ -10,7 +10,7 @@ export class UIManager {
         this.storage = new StorageManager();
         this.activeBatch = null;
         this.activeSlot = 1;
-        this.batchTimer = null;
+        this.batchTimerInterval = null;
         this.batchStartTime = 0;
         
         this.container = document.getElementById('output-container');
@@ -18,8 +18,6 @@ export class UIManager {
         
         this.isUserScrolledUp = false;
         this.extractedEdits = [];
-
-        // Autosummarize specific tracking
         this.activeSumJob = null;
         this.sumTargetIndices = [];
 
@@ -56,12 +54,26 @@ export class UIManager {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.handleSend(); }
         });
 
-        // Quick Menu Toggle
+        this.input.addEventListener('input', () => {
+            this.input.style.height = 'auto';
+            this.input.style.height = (this.input.scrollHeight) + 'px';
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                if (this.state.history.length === 0) return;
+                const lastIdx = this.state.history.length - 1;
+                const msg = this.state.history[lastIdx];
+                if (msg.isBatch && msg.drafts.length > 1) {
+                    this.switchDraft(lastIdx, e.key === 'ArrowLeft' ? -1 : 1);
+                }
+            }
+        });
+
         document.getElementById('btn-more-menu').addEventListener('click', () => {
             document.getElementById('quick-menu').classList.toggle('hidden');
         });
 
-        // Undo / Redo
         document.getElementById('btn-undo').addEventListener('click', () => {
             if (this.state.undo()) { this.renderAll(); this.autoSave(); }
         });
@@ -69,7 +81,6 @@ export class UIManager {
             if (this.state.redo()) { this.renderAll(); this.autoSave(); }
         });
 
-        // Quick Replies
         document.getElementById('btn-open-quick-replies').addEventListener('click', () => this.openQuickReplies());
         document.getElementById('btn-close-qr').addEventListener('click', () => document.getElementById('quick-replies-modal').classList.add('hidden'));
         document.getElementById('btn-edit-qr-toggle').addEventListener('click', () => {
@@ -91,12 +102,10 @@ export class UIManager {
             this.openQuickReplies(); 
         });
 
-        // Apply Edits
         document.getElementById('btn-open-apply-edits').addEventListener('click', () => this.openApplyEdits());
         document.getElementById('btn-close-ae').addEventListener('click', () => document.getElementById('apply-edits-modal').classList.add('hidden'));
         document.getElementById('ae-filter-draft').addEventListener('change', () => this.renderApplyEditsList());
 
-        // Modals
         document.getElementById('btn-edit-cancel').addEventListener('click', () => document.getElementById('edit-modal').classList.add('hidden'));
         document.getElementById('btn-edit-save').addEventListener('click', () => {
             const idx = parseInt(document.getElementById('btn-edit-save').dataset.idx);
@@ -106,24 +115,19 @@ export class UIManager {
             this.autoSave();
         });
         document.getElementById('btn-close-prompt').addEventListener('click', () => document.getElementById('prompt-modal').classList.add('hidden'));
+        document.getElementById('btn-close-usage').addEventListener('click', () => document.getElementById('usage-modal').classList.add('hidden'));
 
-        // --- Summary specific bindings ---
+        // Summary bindings
         document.getElementById('summary-meter-container').addEventListener('click', (e) => {
-            if (e.target.id === 'btn-quick-summarize') {
-                this.startAutosummarize();
-            } else {
-                this.updateSummaryMeterDetails();
-                document.getElementById('meter-details-modal').classList.remove('hidden');
-            }
+            if (e.target.id === 'btn-quick-summarize') this.startAutosummarize();
+            else { this.updateSummaryMeterDetails(); document.getElementById('meter-details-modal').classList.remove('hidden'); }
         });
         document.getElementById('btn-close-meter-details').addEventListener('click', () => document.getElementById('meter-details-modal').classList.add('hidden'));
-
         document.getElementById('btn-run-autosummarize').addEventListener('click', () => {
             document.getElementById('chat-settings-modal').classList.add('hidden');
             this.startAutosummarize();
         });
 
-        // Prompt Selector
         document.getElementById('btn-select-sum-prompt').addEventListener('click', () => this.openAutoSumPromptSelector());
         document.getElementById('btn-close-sum-prompt').addEventListener('click', () => document.getElementById('autosum-prompt-modal').classList.add('hidden'));
         document.getElementById('btn-edit-sum-prompt-toggle').addEventListener('click', () => {
@@ -145,7 +149,6 @@ export class UIManager {
             this.openAutoSumPromptSelector(); 
         });
 
-        // Resolution Modal Buttons
         document.getElementById('btn-close-autosum-stream').addEventListener('click', () => {
             if (this.activeSumJob) this.activeSumJob.cancel();
             document.getElementById('autosum-stream-modal').classList.add('hidden');
@@ -170,7 +173,6 @@ export class UIManager {
             this.openMergeUI(document.getElementById('autosum-stream-output').value.trim());
         });
 
-        // Merge Modal Navigation & Buttons
         document.getElementById('merge-page-selector').addEventListener('change', (e) => {
             const modal = document.getElementById('autosum-merge-modal');
             modal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -196,9 +198,9 @@ export class UIManager {
         if (this.state.history.length === 0) return;
         const last = this.state.history[this.state.history.length - 1];
         if (last.role === 'assistant') {
-            this.state.undo(); // Moves assistant msg to redo stack
+            this.state.undo();
             this.renderAll();
-            this.handleSend(true); // pass true so it doesn't try to add input box content
+            this.handleSend(true);
         }
     }
 
@@ -210,13 +212,15 @@ export class UIManager {
             if (text) {
                 this.state.addTurn('user', text);
                 this.input.value = '';
+                this.input.style.height = 'auto'; // Reset size
                 this.renderAll(); 
             }
         }
 
-        // Lock in previous switcher
-        const oldSwitcher = document.getElementById(`switcher-${this.state.history.length - 1}`);
-        if (oldSwitcher) oldSwitcher.remove();
+        const oldTop = document.getElementById(`switcher-top-${this.state.history.length - 1}`);
+        const oldBot = document.getElementById(`switcher-bottom-${this.state.history.length - 1}`);
+        if (oldTop) oldTop.remove();
+        if (oldBot) oldBot.remove();
 
         document.getElementById('btn-send').classList.add('hidden');
         document.getElementById('btn-retry').classList.add('hidden');
@@ -224,19 +228,31 @@ export class UIManager {
         this.isUserScrolledUp = false;
 
         const payloadObj = this.state.buildPromptPayload();
-        const messages = payloadObj.messages;
-
         const count = settings.parallelEnabled ? parseInt(settings.parallelCount) : 1;
-        this.activeBatch = new ParallelGenerationBatch(messages, count, settings.parallelOverrides);
+        this.activeBatch = new ParallelGenerationBatch(payloadObj.messages, count, settings.parallelOverrides);
         
         const newIdx = this.state.history.length;
         this.state.addBatchTurn(count);
         this.appendTurnToDOM('assistant', newIdx);
         
+        if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
         this.batchStartTime = Date.now();
-        this.batchTimer = setInterval(() => {
-            const timerEl = document.getElementById(`batch-timer-${newIdx}`);
-            if (timerEl) timerEl.textContent = `(${((Date.now() - this.batchStartTime)/1000).toFixed(1)}s)`;
+        this.batchTimerInterval = setInterval(() => {
+            if (!this.activeBatch || this.activeBatch.isFinished) {
+                clearInterval(this.batchTimerInterval);
+                return;
+            }
+            const elapsed = ((Date.now() - this.batchStartTime)/1000).toFixed(1);
+            
+            // Only update clocks for jobs that are still streaming
+            this.activeBatch.jobs.forEach((job, i) => {
+                if (job.status === 'streaming') {
+                    const tTop = document.getElementById(`batch-timer-top-${newIdx}-${i}`);
+                    const tBot = document.getElementById(`batch-timer-bottom-${newIdx}-${i}`);
+                    if (tTop) tTop.textContent = `(${elapsed}s)`;
+                    if (tBot) tBot.textContent = `(${elapsed}s)`;
+                }
+            });
         }, 100);
 
         try {
@@ -259,13 +275,21 @@ export class UIManager {
                     if (!this.isUserScrolledUp) this.scrollToBottom();
                 }
 
-                const iconEl = document.getElementById(`draft-icon-${newIdx}-${draftIdx}`);
-                if (iconEl) {
-                    iconEl.textContent = data.status === 'done' ? '✔️' : (data.status === 'error' ? '❌' : '🕒');
+                const iconMap = { 'done':'✔️', 'error':'❌', 'streaming':'🕒' };
+                const iTop = document.getElementById(`draft-icon-top-${newIdx}-${draftIdx}`);
+                const iBot = document.getElementById(`draft-icon-bottom-${newIdx}-${draftIdx}`);
+                if (iTop) iTop.textContent = iconMap[data.status] || '';
+                if (iBot) iBot.textContent = iconMap[data.status] || '';
+                
+                if (data.status !== 'streaming') {
+                    const tTop = document.getElementById(`batch-timer-top-${newIdx}-${draftIdx}`);
+                    const tBot = document.getElementById(`batch-timer-bottom-${newIdx}-${draftIdx}`);
+                    if (tTop) tTop.textContent = `(${data.duration}s)`;
+                    if (tBot) tBot.textContent = `(${data.duration}s)`;
                 }
             });
         } finally {
-            clearInterval(this.batchTimer);
+            if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
             if (this.activeBatch && this.activeBatch.jobs[0]) {
                 this.state.lastRawPayload = this.activeBatch.jobs[0].rawPayload;
             }
@@ -279,7 +303,6 @@ export class UIManager {
             const oldWrapper = document.getElementById(`turn-wrapper-${newIdx}`);
             if (oldWrapper) oldWrapper.remove();
             
-            // Re-calc boundaries and update meter
             this.state.buildPromptPayload();
             this.appendTurnToDOM('assistant', newIdx);
             this.updateSummaryMeter();
@@ -294,21 +317,13 @@ export class UIManager {
     }
 
     shouldUseMarkdown(content, draftOverride) {
-        if (draftOverride !== undefined && draftOverride !== null) {
-            return draftOverride;
-        }
-        const hasEditTags = /<(?:edit|old|new|reasoning)[>\s]/i.test(content);
-        if (hasEditTags) {
-            return false;
-        }
-        return settings.renderMarkdown;
+        if (draftOverride !== undefined && draftOverride !== null) return draftOverride;
+        return !/<(?:edit|old|new|reasoning)[>\s]/i.test(content) && settings.renderMarkdown;
     }
 
     setNodeContent(node, content, draft) {
         const visuallyApplied = settings.applyRegexes(content, 'visually');
-        const useMd = this.shouldUseMarkdown(content, draft.markdownOverride);
-
-        if (useMd) {
+        if (this.shouldUseMarkdown(content, draft.markdownOverride)) {
             node.innerHTML = marked.parse(visuallyApplied);
             node.classList.add('markdown-body');
         } else {
@@ -321,7 +336,6 @@ export class UIManager {
         this.container.innerHTML = '';
         this.container.className = `${settings.displayMode}-mode`;
         this.state.history.forEach((turn, idx) => {
-            // Render Divider explicitly before the first IN-CONTEXT message if there is a boundary
             if (idx === this.state.contextBoundaryIndex + 1) {
                 const divider = document.createElement('div');
                 divider.className = 'context-divider';
@@ -332,6 +346,70 @@ export class UIManager {
         });
         if (!this.isUserScrolledUp) this.scrollToBottom();
         this.updateSummaryMeter();
+    }
+
+    buildSwitcherDOM(index, isTop, msg, isStreaming) {
+        const switcher = document.createElement('div');
+        switcher.className = `draft-switcher ${isTop ? 'top' : 'bottom'}`;
+        switcher.id = `switcher-${isTop ? 'top' : 'bottom'}-${index}`;
+        
+        const controlsRow = document.createElement('div');
+        controlsRow.className = 'switcher-controls';
+
+        const btnPrev = document.createElement('button');
+        btnPrev.textContent = '◀';
+        btnPrev.onclick = () => this.switchDraft(index, -1);
+        
+        const select = document.createElement('select');
+        select.id = `draft-select-${isTop ? 'top' : 'bottom'}-${index}`;
+        
+        msg.drafts.forEach((d, i) => {
+            const opt = document.createElement('option');
+            opt.value = i;
+            let modelStr = d.model;
+            if (isStreaming && this.activeBatch && this.activeBatch.jobs[i]) {
+                modelStr = this.activeBatch.jobs[i].model;
+            }
+            opt.textContent = `V${i+1} | ${modelStr ? modelStr.split('/').pop() : 'Unknown'}`;
+            if (i === msg.activeDraftIndex) opt.selected = true;
+            select.appendChild(opt);
+        });
+        select.onchange = (e) => this.switchDraftExplicit(index, parseInt(e.target.value));
+
+        const btnNext = document.createElement('button');
+        btnNext.textContent = '▶';
+        btnNext.onclick = () => this.switchDraft(index, 1);
+
+        controlsRow.appendChild(btnPrev);
+        controlsRow.appendChild(select);
+        controlsRow.appendChild(btnNext);
+
+        const statusRow = document.createElement('div');
+        statusRow.className = 'switcher-status';
+        
+        msg.drafts.forEach((d, i) => {
+            const spanGroup = document.createElement('span');
+            
+            const icon = document.createElement('span');
+            icon.id = `draft-icon-${isTop ? 'top' : 'bottom'}-${index}-${i}`;
+            icon.textContent = d.status === 'done' ? '✔️' : (d.status === 'error' ? '❌' : '🕒');
+            if (i === msg.activeDraftIndex) icon.classList.add('active-icon');
+            
+            const timer = document.createElement('span');
+            timer.id = `batch-timer-${isTop ? 'top' : 'bottom'}-${index}-${i}`;
+            timer.style.marginLeft = '2px';
+            if (!isStreaming || d.status !== 'streaming') {
+                timer.textContent = `(${d.duration}s)`;
+            }
+
+            spanGroup.appendChild(icon);
+            spanGroup.appendChild(timer);
+            statusRow.appendChild(spanGroup);
+        });
+
+        switcher.appendChild(controlsRow);
+        switcher.appendChild(statusRow);
+        return switcher;
     }
 
     appendTurnToDOM(role, index) {
@@ -349,10 +427,15 @@ export class UIManager {
         if (isOutOfContext) wrapper.classList.add('out-of-context');
         wrapper.id = `turn-wrapper-${index}`;
 
+        // Inject Top Switcher if needed
+        if (msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
+            wrapper.appendChild(this.buildSwitcherDOM(index, true, msg, isStreaming));
+        }
+
         const bubble = document.createElement('div');
         bubble.className = 'turn-bubble';
 
-        // --- ACTION BAR (Moved to top of bubble) ---
+        // --- ACTION BAR ---
         if (!isStreaming) {
             const actionBar = document.createElement('div');
             actionBar.className = 'action-bar';
@@ -382,14 +465,11 @@ export class UIManager {
                 iconsDiv.appendChild(btnThink);
             }
 
-            // Markdown Toggle Button
             const btnMd = document.createElement('span');
             btnMd.textContent = 'Ⓜ️';
             btnMd.className = 'md-toggle';
             btnMd.title = "Toggle Markdown";
-            if (this.shouldUseMarkdown(content || '', activeDraft.markdownOverride)) {
-                btnMd.classList.add('active');
-            }
+            if (this.shouldUseMarkdown(content || '', activeDraft.markdownOverride)) btnMd.classList.add('active');
             btnMd.addEventListener('click', () => {
                 const currentlyOn = this.shouldUseMarkdown(activeDraft.content, activeDraft.markdownOverride);
                 activeDraft.markdownOverride = !currentlyOn;
@@ -414,7 +494,20 @@ export class UIManager {
             });
             iconsDiv.appendChild(btnEdit);
 
-            // View Prompt (Only for latest assistant message)
+            // View Token Usage (if available)
+            if (role === 'assistant' && activeDraft.usage) {
+                const btnUsage = document.createElement('span');
+                btnUsage.textContent = '📊';
+                btnUsage.title = "Token Usage";
+                btnUsage.addEventListener('click', () => {
+                    document.getElementById('usage-prompt').textContent = activeDraft.usage.prompt_tokens || 0;
+                    document.getElementById('usage-completion').textContent = activeDraft.usage.completion_tokens || 0;
+                    document.getElementById('usage-total').textContent = activeDraft.usage.total_tokens || 0;
+                    document.getElementById('usage-modal').classList.remove('hidden');
+                });
+                iconsDiv.appendChild(btnUsage);
+            }
+
             if (role === 'assistant' && isLatestMessage && this.state.lastRawPayload) {
                 const btnPrompt = document.createElement('span');
                 btnPrompt.textContent = '🔍';
@@ -432,7 +525,7 @@ export class UIManager {
             btnDelete.addEventListener('click', () => {
                 if (confirm("Delete this message?")) {
                     this.state.deleteTurn(index);
-                    this.state.buildPromptPayload(); // Refresh boundaries
+                    this.state.buildPromptPayload(); 
                     this.renderAll();
                     this.autoSave();
                 }
@@ -453,7 +546,6 @@ export class UIManager {
         spanReason.id = `reasoning-${index}`;
         spanReason.textContent = reasoning || '';
         reasoningDiv.appendChild(spanReason);
-        
         bubble.appendChild(reasoningDiv);
 
         // --- CONTENT BLOCK ---
@@ -476,66 +568,9 @@ export class UIManager {
         bubble.appendChild(contentDiv);
         wrapper.appendChild(bubble);
 
-        // --- BATCH SWITCHER (Appended below bubble if isBatch) ---
+        // Inject Bottom Switcher if needed
         if (msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
-            const switcher = document.createElement('div');
-            switcher.className = 'draft-switcher';
-            switcher.id = `switcher-${index}`;
-            
-            const controlsRow = document.createElement('div');
-            controlsRow.className = 'switcher-controls';
-
-            const btnPrev = document.createElement('button');
-            btnPrev.textContent = '◀';
-            btnPrev.onclick = () => this.switchDraft(index, -1);
-            
-            const select = document.createElement('select');
-            select.id = `draft-select-${index}`;
-            // Pre-populate with current model names for accurate UI during stream
-            msg.drafts.forEach((d, i) => {
-                const opt = document.createElement('option');
-                opt.value = i;
-                
-                // Read the model from the job array if streaming, otherwise from draft
-                let modelStr = d.model;
-                if (isStreaming && this.activeBatch && this.activeBatch.jobs[i]) {
-                    modelStr = this.activeBatch.jobs[i].model;
-                }
-                
-                opt.textContent = `V${i+1} | ${modelStr ? modelStr.split('/').pop() : 'Unknown'}`;
-                if (i === msg.activeDraftIndex) opt.selected = true;
-                select.appendChild(opt);
-            });
-            select.onchange = (e) => this.switchDraftExplicit(index, parseInt(e.target.value));
-
-            const btnNext = document.createElement('button');
-            btnNext.textContent = '▶';
-            btnNext.onclick = () => this.switchDraft(index, 1);
-
-            controlsRow.appendChild(btnPrev);
-            controlsRow.appendChild(select);
-            controlsRow.appendChild(btnNext);
-
-            const statusRow = document.createElement('div');
-            statusRow.className = 'switcher-status';
-            
-            msg.drafts.forEach((d, i) => {
-                const span = document.createElement('span');
-                span.id = `draft-icon-${index}-${i}`;
-                span.textContent = d.status === 'done' ? '✔️' : (d.status === 'error' ? '❌' : '🕒');
-                if (i === msg.activeDraftIndex) span.classList.add('active-icon');
-                statusRow.appendChild(span);
-            });
-
-            const timerSpan = document.createElement('span');
-            timerSpan.id = `batch-timer-${index}`;
-            if (!isStreaming) timerSpan.textContent = `(${activeDraft.duration}s)`;
-
-            statusRow.appendChild(timerSpan);
-
-            switcher.appendChild(controlsRow);
-            switcher.appendChild(statusRow);
-            wrapper.appendChild(switcher);
+            wrapper.appendChild(this.buildSwitcherDOM(index, false, msg, isStreaming));
         }
 
         this.container.appendChild(wrapper);
@@ -557,35 +592,34 @@ export class UIManager {
         
         const msg = this.state.history[msgIndex];
         const activeDraft = msg.drafts[draftIdx];
-        const newText = activeDraft.content;
-        const newReasoning = activeDraft.reasoning;
 
-        if (contentNode) this.setNodeContent(contentNode, newText, activeDraft);
-        if (reasonNode) reasonNode.textContent = newReasoning;
+        if (contentNode) this.setNodeContent(contentNode, activeDraft.content, activeDraft);
+        if (reasonNode) reasonNode.textContent = activeDraft.reasoning;
         
         if (reasonDiv) {
-            if (newReasoning) reasonDiv.classList.remove('hidden');
+            if (activeDraft.reasoning) reasonDiv.classList.remove('hidden');
             else reasonDiv.classList.add('hidden');
         }
 
-        const select = document.getElementById(`draft-select-${msgIndex}`);
-        if (select) select.value = draftIdx;
+        ['top', 'bottom'].forEach(pos => {
+            const select = document.getElementById(`draft-select-${pos}-${msgIndex}`);
+            if (select) select.value = draftIdx;
 
-        msg.drafts.forEach((_, i) => {
-            const icon = document.getElementById(`draft-icon-${msgIndex}-${i}`);
-            if (icon) {
-                if (i === draftIdx) icon.classList.add('active-icon');
-                else icon.classList.remove('active-icon');
-            }
+            msg.drafts.forEach((_, i) => {
+                const icon = document.getElementById(`draft-icon-${pos}-${msgIndex}-${i}`);
+                if (icon) {
+                    if (i === draftIdx) icon.classList.add('active-icon');
+                    else icon.classList.remove('active-icon');
+                }
+            });
         });
 
-        const timer = document.getElementById(`batch-timer-${msgIndex}`);
-        if (timer && !this.activeBatch) {
-            timer.textContent = `(${msg.drafts[draftIdx].duration}s)`;
+        const topSwitcher = document.getElementById(`switcher-top-${msgIndex}`);
+        if (topSwitcher) {
+            topSwitcher.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
 
-    // --- QUICK REPLIES ---
     openQuickReplies() {
         const container = document.getElementById('qr-button-container');
         container.innerHTML = '';
@@ -605,6 +639,8 @@ export class UIManager {
             btn.addEventListener('click', () => {
                 this.input.value = content;
                 document.getElementById('quick-replies-modal').classList.add('hidden');
+                this.input.style.height = 'auto';
+                this.input.style.height = (this.input.scrollHeight) + 'px';
                 this.input.focus();
             });
             container.appendChild(btn);
@@ -613,7 +649,6 @@ export class UIManager {
         document.getElementById('quick-replies-modal').classList.remove('hidden');
     }
 
-    // --- APPLY EDITS ---
     openApplyEdits() {
         if (this.state.history.length === 0) return alert("No messages available.");
         const lastMsg = this.state.history[this.state.history.length - 1];
@@ -623,8 +658,6 @@ export class UIManager {
         selectFilter.innerHTML = '<option value="All">All Drafts</option>';
 
         this.extractedEdits = [];
-
-        // Scan the drafts
         const draftsToScan = lastMsg.isBatch ? lastMsg.drafts : [lastMsg.drafts[lastMsg.activeDraftIndex]];
 
         draftsToScan.forEach((draft, idx) => {
@@ -660,7 +693,6 @@ export class UIManager {
     }
 
     evaluateEditsStatus() {
-        // Validation & Scoring (Scan last 10 messages)
         const scanHistory = this.state.history.slice(-11, -1); 
         const startIndexOffset = Math.max(0, this.state.history.length - 11);
 
@@ -668,28 +700,26 @@ export class UIManager {
             edit.status = 'invalid';
             edit.targetMessageIdx = -1;
 
-            // Search backwards so more recent matches get processed
             for (let i = scanHistory.length - 1; i >= 0; i--) {
                 const content = this.state.getContent(startIndexOffset + i);
                 
-                // Check if already applied
-                if (content.includes(edit.newText)) {
-                    edit.status = 'applied';
-                    edit.score = i * 100000 + content.indexOf(edit.newText); // Sort older to top
-                    break;
-                }
+                const oldInMsg = content.includes(edit.oldText);
+                const newInMsg = content.includes(edit.newText);
+                const newIsSubOfOld = edit.oldText.includes(edit.newText);
                 
-                // Check if applicable
-                if (content.includes(edit.oldText)) {
+                if (oldInMsg) {
                     edit.status = 'apply';
                     edit.targetMessageIdx = startIndexOffset + i;
                     edit.score = i * 100000 + content.indexOf(edit.oldText);
+                    break;
+                } else if (newInMsg && !newIsSubOfOld) {
+                    edit.status = 'applied';
+                    edit.score = i * 100000 + content.indexOf(edit.newText);
                     break;
                 }
             }
         });
 
-        // Sort by score ascending
         this.extractedEdits.sort((a, b) => a.score - b.score);
     }
 
@@ -730,17 +760,14 @@ export class UIManager {
 
             if (edit.status === 'apply') {
                 card.querySelector('.apply-btn').addEventListener('click', () => {
-                    // Apply the edit
                     const targetContent = this.state.getContent(edit.targetMessageIdx);
                     const updatedContent = targetContent.replace(edit.oldText, edit.newText);
                     this.state.editTurn(edit.targetMessageIdx, updatedContent);
                     
-                    // Re-render chat background
-                    this.state.buildPromptPayload(); // refresh boundaries
+                    this.state.buildPromptPayload(); 
                     this.renderAll();
                     this.autoSave();
                     
-                    // Re-evaluate list dynamically instead of closing modal
                     this.evaluateEditsStatus();
                     this.renderApplyEditsList();
                 });
@@ -749,10 +776,9 @@ export class UIManager {
             container.appendChild(card);
         });
         
-        container.scrollTop = st; // Restore scroll position after internal layout wipe
+        container.scrollTop = st; 
     }
 
-    // --- AUTOSUMMARIZE ---
     updateSummaryMeter() {
         const container = document.getElementById('summary-meter-container');
         if (!settings.trackSummary) {
@@ -761,26 +787,25 @@ export class UIManager {
         }
         container.classList.remove('hidden');
 
-        // Estimate costs
+        const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
         const sysAnoteStr = settings.systemPrompt.trim() + "\n" + settings.anoteContent.trim();
         const maxResp = parseInt(settings.maxTokens);
         
         let sumCost = 0;
         if (this.state.summary.trim()) {
-            sumCost = Math.ceil((this.state.summary.trim().length + 20) / 4);
+            sumCost = Math.ceil((this.state.summary.trim().length + 20) / charsRatio);
         }
 
         const maxContext = parseInt(settings.contextLength);
-        const unchanging = Math.ceil(sysAnoteStr.length / 4) + maxResp + sumCost;
+        const unchanging = Math.ceil(sysAnoteStr.length / charsRatio) + maxResp + sumCost;
         let budget = maxContext - unchanging;
 
         let summedCost = 0;
         let unsummedCost = 0;
 
-        // Walk back history to find boundary
         for (let i = this.state.history.length - 1; i >= 0; i--) {
             const msgContent = this.state.getContent(i);
-            const T = Math.ceil(msgContent.length / 4);
+            const T = Math.ceil(msgContent.length / charsRatio);
             if (budget - T >= 0) {
                 budget -= T;
                 if (this.state.history[i].wasSummarized) summedCost += T;
@@ -801,27 +826,27 @@ export class UIManager {
         fill.style.width = `${pct}%`;
         text.textContent = `${pct}%`;
 
-        // Update colors based on urgency
-        if (pct >= 90) fill.style.background = 'rgba(239, 68, 68, 0.6)'; // red
-        else if (pct >= 60) fill.style.background = 'rgba(234, 179, 8, 0.6)'; // yellow
-        else fill.style.background = 'rgba(59, 130, 246, 0.4)'; // blue
+        if (pct >= 90) fill.style.background = 'rgba(239, 68, 68, 0.6)'; 
+        else if (pct >= 60) fill.style.background = 'rgba(234, 179, 8, 0.6)'; 
+        else fill.style.background = 'rgba(59, 130, 246, 0.4)'; 
     }
 
     updateSummaryMeterDetails() {
-        const memCost = Math.ceil(settings.systemPrompt.trim().length / 4);
-        const anCost = Math.ceil(settings.anoteContent.trim().length / 4);
-        let sumCost = this.state.summary.trim() ? Math.ceil((this.state.summary.trim().length + 20) / 4) : 0;
+        const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
+        const memCost = Math.ceil(settings.systemPrompt.trim().length / charsRatio);
+        const anCost = Math.ceil(settings.anoteContent.trim().length / charsRatio);
+        let sumCost = this.state.summary.trim() ? Math.ceil((this.state.summary.trim().length + 20) / charsRatio) : 0;
         const maxResp = parseInt(settings.maxTokens);
         const maxContext = parseInt(settings.contextLength);
         const sysAnoteStr = settings.systemPrompt.trim() + "\n" + settings.anoteContent.trim();
-        const unchanging = Math.ceil(sysAnoteStr.length / 4) + maxResp + sumCost;
+        const unchanging = Math.ceil(sysAnoteStr.length / charsRatio) + maxResp + sumCost;
         
         let budget = maxContext - unchanging;
         let summedCost = 0;
         let unsummedCost = 0;
 
         for (let i = this.state.history.length - 1; i >= 0; i--) {
-            const T = Math.ceil(this.state.getContent(i).length / 4);
+            const T = Math.ceil(this.state.getContent(i).length / charsRatio);
             if (budget - T >= 0) {
                 budget -= T;
                 if (this.state.history[i].wasSummarized) summedCost += T;
@@ -842,7 +867,6 @@ export class UIManager {
     openAutoSumPromptSelector() {
         const container = document.getElementById('sum-prompt-btn-container');
         container.innerHTML = '';
-        
         const raw = settings.autoSummarizePrompts || "";
         const parts = raw.split('::').filter(p => p.trim() !== '');
         
@@ -854,7 +878,6 @@ export class UIManager {
             const btn = document.createElement('button');
             btn.className = 'secondary';
             if (this.state.selectedAutoSumPromptTitle === title) btn.classList.add('primary');
-            
             btn.textContent = title;
             btn.title = content;
             btn.addEventListener('click', () => {
@@ -866,13 +889,12 @@ export class UIManager {
             });
             container.appendChild(btn);
         });
-
         document.getElementById('autosum-prompt-modal').classList.remove('hidden');
     }
 
     async startAutosummarize() {
         const payloadObj = this.state.buildPromptPayload(true, this.state.selectedAutoSumPromptText);
-        this.sumTargetIndices = payloadObj.includedIndices; // Track which messages were actually sent
+        this.sumTargetIndices = payloadObj.includedIndices; 
 
         document.getElementById('autosum-stream-title').textContent = "Generating Summary...";
         document.getElementById('btn-close-autosum-stream').classList.remove('hidden');
@@ -882,10 +904,7 @@ export class UIManager {
         outputArea.value = "";
         document.getElementById('autosum-stream-modal').classList.remove('hidden');
 
-        // Get model override
-        let model = settings.model;
-        if (settings.summarizeModel) model = settings.summarizeModel;
-
+        let model = settings.summarizeModel || settings.model;
         this.activeSumJob = new GenerationJob(model);
         
         try {
@@ -907,7 +926,7 @@ export class UIManager {
                 this.state.history[idx].wasSummarized = true;
             }
         });
-        if (window.settingsUI) window.settingsUI.populateUI(); // Refresh summary textbox if modal is open
+        if (window.settingsUI) window.settingsUI.populateUI();
         this.updateSummaryMeter();
         this.autoSave();
     }
@@ -916,21 +935,18 @@ export class UIManager {
         const oldSummary = this.state.summary.trim();
         const container = document.getElementById('merge-list-container');
         container.innerHTML = '';
-        
-        // Use DP diffLines to find overlap
         const diffs = diffLines(oldSummary, newSummary);
-
         this.mergeLines = [];
 
         diffs.forEach(diff => {
-            if (!diff.value.trim()) return; // skip empty lines
+            if (!diff.value.trim()) return; 
 
             const label = document.createElement('label');
             label.className = `merge-line`;
             
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
-            checkbox.checked = true; // By default everything is ON
+            checkbox.checked = true;
 
             if (diff.type === 'delete') {
                 label.classList.add('merge-old');
@@ -945,17 +961,13 @@ export class UIManager {
 
             const span = document.createElement('span');
             span.textContent = diff.value;
-
             checkbox.addEventListener('change', () => this.updateMergePreview());
-            
             label.appendChild(checkbox);
             label.appendChild(span);
             container.appendChild(label);
-
             this.mergeLines.push({ checkbox, text: diff.value });
         });
 
-        // Ensure we default to the first tab visually
         const mergeModal = document.getElementById('autosum-merge-modal');
         mergeModal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
         document.getElementById('merge-tab-edit').classList.add('active');
@@ -966,10 +978,7 @@ export class UIManager {
     }
 
     updateMergePreview() {
-        const out = this.mergeLines
-            .filter(l => l.checkbox.checked)
-            .map(l => l.text)
-            .join('\n');
+        const out = this.mergeLines.filter(l => l.checkbox.checked).map(l => l.text).join('\n');
         document.getElementById('merge-preview-textarea').value = out;
     }
 
@@ -995,7 +1004,7 @@ export class UIManager {
         } else {
             this.state.clear(); 
         }
-        this.state.buildPromptPayload(); // setup initial context limits correctly
+        this.state.buildPromptPayload();
         this.renderAll();
     }
 }

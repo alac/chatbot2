@@ -27,7 +27,7 @@ export class StoryState {
             isBatch: false, 
             activeDraftIndex: 0,
             wasSummarized: false,
-            drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0, markdownOverride: null }]
+            drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0, markdownOverride: null, usage: null }]
         });
         this.redoStack = []; 
         this.trimOldDrafts();
@@ -36,7 +36,7 @@ export class StoryState {
     addBatchTurn(count) {
         const drafts = [];
         for(let i=0; i<count; i++) {
-            drafts.push({ model: '', content: '', reasoning: '', status: 'streaming', duration: 0, markdownOverride: null });
+            drafts.push({ model: '', content: '', reasoning: '', status: 'streaming', duration: 0, markdownOverride: null, usage: null });
         }
         this.history.push({
             role: 'assistant',
@@ -49,7 +49,6 @@ export class StoryState {
         this.trimOldDrafts();
     }
 
-    // --- UNDO / REDO ---
     undo() {
         if (this.history.length > 0) {
             this.redoStack.push(this.history.pop());
@@ -118,30 +117,27 @@ export class StoryState {
         }
     }
 
-    // Pass custom params for summarizing (which skips A/N and reserves tokens for prompt)
     buildPromptPayload(isSummarizing = false, summarizePromptText = "") {
         const messages = [];
+        const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
         
         let sysAnoteString = settings.systemPrompt.trim();
         
-        // Only inject Author's Note if we are NOT running an autosummarize
         if (!isSummarizing && settings.anoteUnit === "message" && settings.anoteContent.trim()) {
             sysAnoteString += "\n" + settings.anoteTemplate.replace('<|>', settings.anoteContent.trim());
         }
 
-        // Summary calculation
         let sumLength = 0;
         if (this.summary.trim()) {
-            sumLength = Math.ceil((this.summary.trim().length + 20) / 4); // +20 for tags
+            sumLength = Math.ceil((this.summary.trim().length + 20) / charsRatio);
         }
 
-        // Add additional cost of the summarization prompt itself
         let summarizerPromptTokens = 0;
         if (isSummarizing) {
-            summarizerPromptTokens = Math.ceil(summarizePromptText.length / 4);
+            summarizerPromptTokens = Math.ceil(summarizePromptText.length / charsRatio);
         }
 
-        let unchangingTokens = Math.ceil(sysAnoteString.length / 4) + parseInt(settings.maxTokens) + sumLength + summarizerPromptTokens;
+        let unchangingTokens = Math.ceil(sysAnoteString.length / charsRatio) + parseInt(settings.maxTokens) + sumLength + summarizerPromptTokens;
         let budget = parseInt(settings.contextLength) - unchangingTokens;
 
         this.contextBoundaryIndex = -1;
@@ -152,7 +148,7 @@ export class StoryState {
             let msgContent = this.getContent(i);
             msgContent = settings.applyRegexes(msgContent, 'outgoing');
             
-            let T = Math.ceil(msgContent.length / 4); 
+            let T = Math.ceil(msgContent.length / charsRatio); 
             if (budget - T >= 0) {
                 budget -= T;
                 includedHistoryMsgs.unshift({ role: this.history[i].role, content: msgContent });
@@ -163,7 +159,6 @@ export class StoryState {
             }
         }
 
-        // Build Final Array
         if (settings.systemPrompt.trim() !== "") {
             messages.push({ role: "system", content: settings.systemPrompt.trim() });
         }
@@ -172,10 +167,8 @@ export class StoryState {
             messages.push({ role: "system", content: `<summary>\n${this.summary.trim()}\n</summary>` });
         }
 
-        // Include selected history
         includedHistoryMsgs.forEach(m => messages.push(m));
 
-        // Author's Note Injection (Sentence mode) - Skipped if summarizing
         if (!isSummarizing) {
             const anote = settings.anoteContent.trim();
             if (anote !== "") {
@@ -204,7 +197,6 @@ export class StoryState {
             }
         }
 
-        // If summarizing, push the prompt at the end as user request
         if (isSummarizing) {
             messages.push({ role: "user", content: summarizePromptText });
         } else {
@@ -218,12 +210,9 @@ export class StoryState {
 
     loadFromData(data) {
         this.history = data.history || [];
-        // Ensure wasSummarized exists on loaded history
         this.history.forEach(m => { if(m.wasSummarized === undefined) m.wasSummarized = false; });
-        
         this.redoStack = data.redoStack || [];
         this.contextBoundaryIndex = data.contextBoundaryIndex !== undefined ? data.contextBoundaryIndex : -1;
-        
         this.summary = data.summary || "";
         this.selectedAutoSumPromptTitle = data.selectedAutoSumPromptTitle || "Event Log";
         this.selectedAutoSumPromptText = data.selectedAutoSumPromptText || "Summarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.";
