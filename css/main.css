@@ -1,5 +1,4 @@
 :root {
-    /* DEFAULT "KOBOLD" THEME */
     --bg-main: #0f172a;
     --bg-panel: #1e293b;
     --bg-input: #334155;
@@ -48,6 +47,11 @@ button.danger { background: var(--danger); border-color: var(--danger); color: w
 button.secondary { border-color: var(--text-muted); }
 hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 
+.btn-group { display: flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+.btn-group button { border: none; border-radius: 0; background: var(--bg-input); }
+.btn-group button:not(:last-child) { border-right: 1px solid var(--border); }
+.btn-group button:hover { background: var(--border); }
+
 .fab { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); border-radius: 50%; width: 40px; height: 40px; font-size: 20px; background: var(--bg-panel); border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 50; transition: opacity 0.3s; display: flex; justify-content: center; align-items: center; padding: 0; cursor: pointer;}
 .fab:hover { background: var(--border); }
 .fab.hidden { opacity: 0; pointer-events: none; }
@@ -73,9 +77,16 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .chat-mode .turn { max-width: 95%; }
 .chat-mode .turn.user { align-self: flex-end; }
 .chat-mode .turn.assistant { align-self: flex-start; width: 100%;}
+.chat-mode .turn.choices { align-self: center; width: 100%; max-width: 600px; }
 .chat-mode .turn-bubble { padding: 10px 12px; border-radius: 8px; width: fit-content; max-width: 100%; display: flex; flex-direction: column;}
 .chat-mode .turn.user .turn-bubble { background: var(--user-bubble); margin-left: auto; }
 .chat-mode .turn.assistant .turn-bubble { background: var(--ai-bubble); border: 1px solid var(--border); }
+
+/* Choices Specific Styles */
+.turn.choices .turn-bubble { background: var(--bg-panel); border: 1px solid var(--border); width: 100%; align-items: stretch; box-shadow: 0 4px 10px rgba(0,0,0,0.15); border-radius: 12px;}
+.choices-header { font-weight: bold; text-align: center; margin-bottom: 12px; color: var(--text-muted); display: flex; justify-content: center; align-items: center; gap: 8px;}
+.choice-btn { background: var(--bg-main); border: 1px solid var(--border); color: var(--text-main); text-align: left; padding: 12px; border-radius: 6px; margin-bottom: 8px; font-size: 0.95em; line-height: 1.4; transition: all 0.2s;}
+.choice-btn:hover { background: var(--accent); color: white; border-color: var(--accent); transform: translateX(4px);}
 
 .story-mode .turn { max-width: 900px; margin: 0 auto; width: 100%; display: flex; flex-direction: column;}
 .story-mode .turn.user .turn-content { color: var(--text-muted); font-style: italic; }

@@ -27,22 +27,24 @@ export class StoryState {
             isBatch: false, 
             activeDraftIndex: 0,
             wasSummarized: false,
+            extractedChoices: null,
             drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0, markdownOverride: null, usage: null }]
         });
         this.redoStack = []; 
         this.trimOldDrafts();
     }
 
-    addBatchTurn(count) {
+    addBatchTurn(count, roleOverride = 'assistant') {
         const drafts = [];
         for(let i=0; i<count; i++) {
             drafts.push({ model: '', content: '', reasoning: '', status: 'streaming', duration: 0, markdownOverride: null, usage: null });
         }
         this.history.push({
-            role: 'assistant',
+            role: roleOverride,
             isBatch: true,
             activeDraftIndex: 0,
             wasSummarized: false,
+            extractedChoices: null,
             drafts: drafts
         });
         this.redoStack = []; 
@@ -144,7 +146,10 @@ export class StoryState {
         let includedHistoryMsgs = [];
         let includedIndices = [];
 
+        // Exclude choices from prompt context
         for (let i = this.history.length - 1; i >= 0; i--) {
+            if (this.history[i].role === 'choices') continue;
+
             let msgContent = this.getContent(i);
             msgContent = settings.applyRegexes(msgContent, 'outgoing');
             

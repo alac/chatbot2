@@ -35,6 +35,10 @@
             <button id="btn-undo" title="Undo">↩️</button>
             <button id="btn-redo" title="Redo">↪️</button>
             <button id="btn-open-quick-replies">💬 Quick Replies</button>
+            <div class="btn-group">
+                <button id="btn-generate-choices" title="Generate branching choices">🔀 Choices</button>
+                <button id="btn-choices-settings" title="Choices Settings" style="padding-left: 8px; padding-right: 8px;">⚙️</button>
+            </div>
             <button id="btn-open-apply-edits">✨ Apply Edits</button>
         </div>
         
@@ -53,6 +57,56 @@
         </div>
     </footer>
 
+    <!-- Choices Settings Modal -->
+    <div id="choices-settings-modal" class="modal hidden">
+        <div class="modal-content" style="max-height: 90vh; width: 700px;">
+            <div class="modal-header">
+                <select id="choices-page-selector" class="page-select">
+                    <option value="tab-choices-prompt">1. Choice Prompts</option>
+                    <option value="tab-choices-models">2. Parallel Models</option>
+                </select>
+                <button id="btn-close-choices-settings" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column;">
+                
+                <!-- 1. Prompts Tab -->
+                <div id="tab-choices-prompt" class="tab-pane active" style="flex:1;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span style="font-weight:bold;">Active Prompt: <span id="lbl-active-choice-prompt" style="color:var(--accent); font-weight:normal;">Plain</span></span>
+                        <button id="btn-edit-choices-toggle" class="secondary">Edit Definitions</button>
+                    </div>
+                    
+                    <div id="choices-prompt-btn-container" style="display:flex; flex-direction:column; gap: 8px; overflow-y:auto; flex:1;"></div>
+                    
+                    <div id="choices-prompt-edit-container" class="hidden" style="flex:1; display:flex; flex-direction:column; gap: 8px; height: 100%;">
+                        <p style="font-size: 0.85em; color: var(--text-muted);">Format: <code>::Prompt Title\nInstructions for the AI...\n\n::Next Prompt...</code><br><b>Note:</b> You must instruct the AI to wrap options in <code>&lt;choice&gt;...&lt;/choice&gt;</code> tags.</p>
+                        <textarea id="choices-prompt-edit-textarea" style="flex:1; min-height: 300px; font-family: monospace;"></textarea>
+                        <button id="btn-save-choices-prompts" class="primary">Save Choice Prompts</button>
+                    </div>
+                </div>
+
+                <!-- 2. Parallel Models Tab -->
+                <div id="tab-choices-models" class="tab-pane" style="flex:1;">
+                    <p style="font-size:0.85em; color:var(--text-muted); margin-bottom: 8px;">Run choices through multiple models to get a wider variety of options.</p>
+                    <div class="setting-row">
+                        <span class="label-text">Enable Parallel Choices</span>
+                        <input type="checkbox" id="set-choice-parallel-enabled">
+                    </div>
+                    <div class="setting-row" id="choice-parallel-count-row">
+                        <span class="label-text">Number of Drafts</span>
+                        <select id="set-choice-parallel-count" style="width: 80px;">
+                            <option value="2">2</option><option value="3">3</option>
+                            <option value="4">4</option><option value="5">5</option>
+                        </select>
+                    </div>
+                    <hr>
+                    <div id="choice-parallel-rows-container"></div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
     <!-- Chat Settings Modal -->
     <div id="chat-settings-modal" class="modal hidden">
         <div class="modal-content">
@@ -67,7 +121,6 @@
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column;">
                 
-                <!-- 1. Memory Tab -->
                 <div id="tab-memory" class="tab-pane active" style="flex: 1;">
                     <div class="setting-row column" style="height: 100%;">
                         <span class="label-text">Memory (System Prompt)</span>
@@ -75,7 +128,6 @@
                     </div>
                 </div>
 
-                <!-- 2. Author's Note Tab (FIXED inline styles here) -->
                 <div id="tab-anote" class="tab-pane" style="flex: 1;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <h3>Author's Note</h3>
@@ -106,7 +158,6 @@
                     </div>
                 </div>
 
-                <!-- 3. Summary Tab -->
                 <div id="tab-summary" class="tab-pane" style="flex: 1;">
                     <div class="setting-row column" style="height: 100%;">
                         <span class="label-text">Current Summary</span>
@@ -114,7 +165,6 @@
                     </div>
                 </div>
 
-                <!-- 4. Autosummarize Settings Tab -->
                 <div id="tab-autosummarize" class="tab-pane">
                     <h3>Autosummarize Settings</h3>
                     <div class="setting-row">
@@ -156,7 +206,6 @@
             </div>
             <div class="modal-body">
                 
-                <!-- 1. Connection Tab -->
                 <div id="tab-connection" class="tab-pane active">
                     <div class="setting-row column">
                         <span class="label-text">API Base URL</span>
@@ -188,7 +237,6 @@
                     </div>
                 </div>
 
-                <!-- 2. Batch / Parallel Tab -->
                 <div id="tab-batch" class="tab-pane">
                     <div class="setting-row">
                         <span class="label-text">Enable Parallel Requests</span>
@@ -205,7 +253,6 @@
                     <div id="parallel-rows-container"></div>
                 </div>
 
-                <!-- 3. Samplers Tab -->
                 <div id="tab-samplers" class="tab-pane">
                     <button id="btn-neutralize-samplers" class="secondary">Reset to Neutral</button>
                     <div class="setting-row" style="margin-top: 8px;">
@@ -230,7 +277,6 @@
                     <div class="setting-row sampler-row"><span class="label-text">Rep. Penalty</span><input type="range" id="slide-rep-pen" min="1" max="2" step="0.01"><input type="number" id="num-rep-pen" step="0.01"></div>
                 </div>
 
-                <!-- 4. Save/Load Tab -->
                 <div id="tab-saveload" class="tab-pane">
                     <h3>Save Slots</h3>
                     <div id="slot-list" class="slot-list"></div>
@@ -253,7 +299,6 @@
                     </div>
                 </div>
 
-                <!-- 5. UX & Display Tab -->
                 <div id="tab-ux" class="tab-pane">
                     <div class="setting-row">
                         <span class="label-text">Display Mode</span>

@@ -81,6 +81,7 @@ export class UIManager {
             if (this.state.redo()) { this.renderAll(); this.autoSave(); }
         });
 
+        // Quick Replies
         document.getElementById('btn-open-quick-replies').addEventListener('click', () => this.openQuickReplies());
         document.getElementById('btn-close-qr').addEventListener('click', () => document.getElementById('quick-replies-modal').classList.add('hidden'));
         document.getElementById('btn-edit-qr-toggle').addEventListener('click', () => {
@@ -100,6 +101,13 @@ export class UIManager {
             document.getElementById('qr-edit-container').classList.add('hidden');
             document.getElementById('qr-button-container').classList.remove('hidden');
             this.openQuickReplies(); 
+        });
+
+        // Choices
+        document.getElementById('btn-generate-choices').addEventListener('click', () => this.startChoicesGeneration());
+        document.getElementById('btn-choices-settings').addEventListener('click', () => {
+            if (window.settingsUI) window.settingsUI.populateChoicesUI();
+            document.getElementById('choices-settings-modal').classList.remove('hidden');
         });
 
         document.getElementById('btn-open-apply-edits').addEventListener('click', () => this.openApplyEdits());
@@ -205,14 +213,15 @@ export class UIManager {
     }
 
     async handleSend(isRetry = false) {
+        if (this.activeBatch) return;
+
         const text = this.input.value.trim();
-        
         if (!isRetry) {
             if (!text && this.state.history.length === 0) return;
             if (text) {
                 this.state.addTurn('user', text);
                 this.input.value = '';
-                this.input.style.height = 'auto'; // Reset size
+                this.input.style.height = 'auto';
                 this.renderAll(); 
             }
         }
@@ -232,7 +241,7 @@ export class UIManager {
         this.activeBatch = new ParallelGenerationBatch(payloadObj.messages, count, settings.parallelOverrides);
         
         const newIdx = this.state.history.length;
-        this.state.addBatchTurn(count);
+        this.state.addBatchTurn(count, 'assistant');
         this.appendTurnToDOM('assistant', newIdx);
         
         if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
@@ -244,7 +253,6 @@ export class UIManager {
             }
             const elapsed = ((Date.now() - this.batchStartTime)/1000).toFixed(1);
             
-            // Only update clocks for jobs that are still streaming
             this.activeBatch.jobs.forEach((job, i) => {
                 if (job.status === 'streaming') {
                     const tTop = document.getElementById(`batch-timer-top-${newIdx}-${i}`);
@@ -307,6 +315,90 @@ export class UIManager {
             this.appendTurnToDOM('assistant', newIdx);
             this.updateSummaryMeter();
 
+            if (!this.isUserScrolledUp) this.scrollToBottom();
+            this.autoSave();
+        }
+    }
+
+    async startChoicesGeneration() {
+        if (this.activeBatch) return;
+
+        document.getElementById('quick-menu').classList.add('hidden');
+        document.getElementById('btn-send').classList.add('hidden');
+        document.getElementById('btn-retry').classList.add('hidden');
+        document.getElementById('btn-abort').classList.remove('hidden');
+        this.isUserScrolledUp = false;
+
+        const payloadObj = this.state.buildPromptPayload();
+        payloadObj.messages.push({ role: 'user', content: settings.activeChoicePromptText });
+
+        const count = settings.choiceParallelEnabled ? parseInt(settings.choiceParallelCount) : 1;
+        this.activeBatch = new ParallelGenerationBatch(payloadObj.messages, count, settings.choiceParallelOverrides);
+        
+        const newIdx = this.state.history.length;
+        this.state.addBatchTurn(count, 'choices');
+        this.appendTurnToDOM('choices', newIdx);
+
+        if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
+        this.batchStartTime = Date.now();
+        this.batchTimerInterval = setInterval(() => {
+            if (!this.activeBatch || this.activeBatch.isFinished) {
+                clearInterval(this.batchTimerInterval);
+                return;
+            }
+            const elapsed = ((Date.now() - this.batchStartTime)/1000).toFixed(1);
+            this.activeBatch.jobs.forEach((job, i) => {
+                if (job.status === 'streaming') {
+                    const timerEl = document.getElementById(`choice-timer-${newIdx}-${i}`);
+                    if (timerEl) timerEl.textContent = `(${elapsed}s)`;
+                }
+            });
+        }, 100);
+
+        try {
+            await this.activeBatch.startAll((draftIdx, data) => {
+                this.state.updateBatchDraft(newIdx, draftIdx, data);
+                
+                const iconMap = { 'done':'✔️', 'error':'❌', 'streaming':'🕒' };
+                const iconEl = document.getElementById(`choice-icon-${newIdx}-${draftIdx}`);
+                if (iconEl) iconEl.textContent = iconMap[data.status] || '';
+                
+                if (data.status !== 'streaming') {
+                    const timerEl = document.getElementById(`choice-timer-${newIdx}-${draftIdx}`);
+                    if (timerEl) timerEl.textContent = `(${data.duration}s)`;
+                }
+                if (!this.isUserScrolledUp) this.scrollToBottom();
+            });
+        } finally {
+            if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
+            this.activeBatch = null;
+
+            // Extract choices across all drafts
+            const msg = this.state.history[newIdx];
+            const choicesPool = [];
+            const regex = /<choice>([\s\S]*?)<\/choice>/gi;
+            
+            msg.drafts.forEach(draft => {
+                let match;
+                while ((match = regex.exec(draft.content)) !== null) {
+                    if (match[1].trim()) choicesPool.push(match[1].trim());
+                }
+            });
+
+            if (choicesPool.length === 0) {
+                msg.extractedChoices = ["Error: No <choice> tags found in AI response. Try editing the Choice Prompt to explicitly request <choice> tags."];
+            } else {
+                msg.extractedChoices = [...new Set(choicesPool)];
+            }
+
+            document.getElementById('btn-abort').classList.add('hidden');
+            document.getElementById('btn-send').classList.remove('hidden');
+            document.getElementById('btn-retry').classList.remove('hidden');
+            
+            const oldWrapper = document.getElementById(`turn-wrapper-${newIdx}`);
+            if (oldWrapper) oldWrapper.remove();
+            
+            this.appendTurnToDOM('choices', newIdx);
             if (!this.isUserScrolledUp) this.scrollToBottom();
             this.autoSave();
         }
@@ -418,158 +510,235 @@ export class UIManager {
         const isLatestMessage = index === this.state.history.length - 1;
         const isOutOfContext = index <= this.state.contextBoundaryIndex;
         
-        const activeDraft = msg.drafts[msg.activeDraftIndex];
-        const content = activeDraft.content;
-        const reasoning = activeDraft.reasoning;
-        
         const wrapper = document.createElement('div');
         wrapper.className = `turn ${role}`;
         if (isOutOfContext) wrapper.classList.add('out-of-context');
         wrapper.id = `turn-wrapper-${index}`;
 
-        // Inject Top Switcher if needed
-        if (msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
-            wrapper.appendChild(this.buildSwitcherDOM(index, true, msg, isStreaming));
-        }
-
         const bubble = document.createElement('div');
         bubble.className = 'turn-bubble';
 
-        // --- ACTION BAR ---
-        if (!isStreaming) {
-            const actionBar = document.createElement('div');
-            actionBar.className = 'action-bar';
-            
-            const metaSpan = document.createElement('span');
-            if (activeDraft.model) {
-                const shortModel = activeDraft.model.split('/').pop();
-                metaSpan.textContent = `${shortModel} • ${activeDraft.duration}s`;
-            }
-            actionBar.appendChild(metaSpan);
+        if (role === 'choices') {
+            if (msg.extractedChoices === null) {
+                // Streaming visual for choices
+                const header = document.createElement('div');
+                header.className = 'choices-header';
+                header.innerHTML = `<span>Scrying possible futures...</span> <span class="streaming-indicator"></span>`;
+                bubble.appendChild(header);
 
-            const iconsDiv = document.createElement('div');
-            iconsDiv.className = 'action-icons';
-
-            if (reasoning) {
-                const btnThink = document.createElement('span');
-                btnThink.textContent = '🧠';
-                btnThink.className = 'think-toggle';
-                btnThink.title = "Toggle Thinking";
-                btnThink.addEventListener('click', () => {
-                    const rDiv = document.getElementById(`reasoning-block-${index}`);
-                    if (rDiv) {
-                        rDiv.classList.toggle('hidden');
-                        btnThink.classList.toggle('active');
-                    }
+                const statusRow = document.createElement('div');
+                statusRow.className = 'switcher-status';
+                statusRow.style.justifyContent = 'center';
+                
+                msg.drafts.forEach((d, i) => {
+                    const spanGroup = document.createElement('span');
+                    const icon = document.createElement('span');
+                    icon.id = `choice-icon-${index}-${i}`;
+                    icon.textContent = '🕒';
+                    const timer = document.createElement('span');
+                    timer.id = `choice-timer-${index}-${i}`;
+                    timer.style.marginLeft = '4px';
+                    timer.textContent = '(0.0s)';
+                    spanGroup.appendChild(icon);
+                    spanGroup.appendChild(timer);
+                    statusRow.appendChild(spanGroup);
                 });
-                iconsDiv.appendChild(btnThink);
-            }
+                bubble.appendChild(statusRow);
+            } else {
+                // Render finished choices
+                const header = document.createElement('div');
+                header.className = 'choices-header';
+                header.textContent = `Select a Path (${settings.activeChoicePromptTitle})`;
+                bubble.appendChild(header);
 
-            const btnMd = document.createElement('span');
-            btnMd.textContent = 'Ⓜ️';
-            btnMd.className = 'md-toggle';
-            btnMd.title = "Toggle Markdown";
-            if (this.shouldUseMarkdown(content || '', activeDraft.markdownOverride)) btnMd.classList.add('active');
-            btnMd.addEventListener('click', () => {
-                const currentlyOn = this.shouldUseMarkdown(activeDraft.content, activeDraft.markdownOverride);
-                activeDraft.markdownOverride = !currentlyOn;
-                this.renderAll();
-                this.autoSave();
-            });
-            iconsDiv.appendChild(btnMd);
-
-            const btnCopy = document.createElement('span');
-            btnCopy.textContent = '📋';
-            btnCopy.title = "Copy";
-            btnCopy.addEventListener('click', () => navigator.clipboard.writeText(this.state.getContent(index)));
-            iconsDiv.appendChild(btnCopy);
-
-            const btnEdit = document.createElement('span');
-            btnEdit.textContent = '✏️';
-            btnEdit.title = "Edit";
-            btnEdit.addEventListener('click', () => {
-                document.getElementById('edit-message-content').value = this.state.getContent(index);
-                document.getElementById('btn-edit-save').dataset.idx = index;
-                document.getElementById('edit-modal').classList.remove('hidden');
-            });
-            iconsDiv.appendChild(btnEdit);
-
-            // View Token Usage (if available)
-            if (role === 'assistant' && activeDraft.usage) {
-                const btnUsage = document.createElement('span');
-                btnUsage.textContent = '📊';
-                btnUsage.title = "Token Usage";
-                btnUsage.addEventListener('click', () => {
-                    document.getElementById('usage-prompt').textContent = activeDraft.usage.prompt_tokens || 0;
-                    document.getElementById('usage-completion').textContent = activeDraft.usage.completion_tokens || 0;
-                    document.getElementById('usage-total').textContent = activeDraft.usage.total_tokens || 0;
-                    document.getElementById('usage-modal').classList.remove('hidden');
+                msg.extractedChoices.forEach(choiceText => {
+                    const btn = document.createElement('button');
+                    btn.className = 'choice-btn';
+                    
+                    // Simple markdown parsing for bold/italic in buttons if desired, otherwise just text
+                    const visuallyApplied = settings.applyRegexes(choiceText, 'visually');
+                    btn.innerHTML = marked.parseInline(visuallyApplied);
+                    
+                    btn.addEventListener('click', () => {
+                        this.input.value = choiceText;
+                        this.input.style.height = 'auto';
+                        this.input.style.height = (this.input.scrollHeight) + 'px';
+                        this.handleSend();
+                    });
+                    bubble.appendChild(btn);
                 });
-                iconsDiv.appendChild(btnUsage);
-            }
 
-            if (role === 'assistant' && isLatestMessage && this.state.lastRawPayload) {
-                const btnPrompt = document.createElement('span');
-                btnPrompt.textContent = '🔍';
-                btnPrompt.title = "View Prompt Payload";
-                btnPrompt.addEventListener('click', () => {
-                    document.getElementById('prompt-payload-content').textContent = JSON.stringify(this.state.lastRawPayload, null, 2);
-                    document.getElementById('prompt-modal').classList.remove('hidden');
-                });
-                iconsDiv.appendChild(btnPrompt);
-            }
+                const hr = document.createElement('hr');
+                hr.style.margin = '8px 0';
+                bubble.appendChild(hr);
 
-            const btnDelete = document.createElement('span');
-            btnDelete.textContent = '🗑️';
-            btnDelete.title = "Delete";
-            btnDelete.addEventListener('click', () => {
-                if (confirm("Delete this message?")) {
+                const footerGrid = document.createElement('div');
+                footerGrid.className = 'action-grid';
+                
+                const btnReroll = document.createElement('button');
+                btnReroll.className = 'secondary';
+                btnReroll.textContent = '🔄 Reroll';
+                btnReroll.addEventListener('click', () => {
                     this.state.deleteTurn(index);
-                    this.state.buildPromptPayload(); 
+                    this.startChoicesGeneration();
+                });
+                
+                const btnDel = document.createElement('button');
+                btnDel.className = 'danger';
+                btnDel.textContent = '🗑️ Delete';
+                btnDel.addEventListener('click', () => {
+                    this.state.deleteTurn(index);
                     this.renderAll();
                     this.autoSave();
+                });
+
+                footerGrid.appendChild(btnReroll);
+                footerGrid.appendChild(btnDel);
+                bubble.appendChild(footerGrid);
+            }
+        } else {
+            // Normal Assistant/User behavior
+            const activeDraft = msg.drafts[msg.activeDraftIndex];
+            const content = activeDraft.content;
+            const reasoning = activeDraft.reasoning;
+
+            if (msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
+                wrapper.appendChild(this.buildSwitcherDOM(index, true, msg, isStreaming));
+            }
+
+            if (!isStreaming) {
+                const actionBar = document.createElement('div');
+                actionBar.className = 'action-bar';
+                
+                const metaSpan = document.createElement('span');
+                if (activeDraft.model) {
+                    const shortModel = activeDraft.model.split('/').pop();
+                    metaSpan.textContent = `${shortModel} • ${activeDraft.duration}s`;
                 }
-            });
-            iconsDiv.appendChild(btnDelete);
+                actionBar.appendChild(metaSpan);
 
-            actionBar.appendChild(iconsDiv);
-            bubble.appendChild(actionBar);
+                const iconsDiv = document.createElement('div');
+                iconsDiv.className = 'action-icons';
+
+                if (reasoning) {
+                    const btnThink = document.createElement('span');
+                    btnThink.textContent = '🧠';
+                    btnThink.className = 'think-toggle';
+                    btnThink.title = "Toggle Thinking";
+                    btnThink.addEventListener('click', () => {
+                        const rDiv = document.getElementById(`reasoning-block-${index}`);
+                        if (rDiv) {
+                            rDiv.classList.toggle('hidden');
+                            btnThink.classList.toggle('active');
+                        }
+                    });
+                    iconsDiv.appendChild(btnThink);
+                }
+
+                const btnMd = document.createElement('span');
+                btnMd.textContent = 'Ⓜ️';
+                btnMd.className = 'md-toggle';
+                btnMd.title = "Toggle Markdown";
+                if (this.shouldUseMarkdown(content || '', activeDraft.markdownOverride)) btnMd.classList.add('active');
+                btnMd.addEventListener('click', () => {
+                    const currentlyOn = this.shouldUseMarkdown(activeDraft.content, activeDraft.markdownOverride);
+                    activeDraft.markdownOverride = !currentlyOn;
+                    this.renderAll();
+                    this.autoSave();
+                });
+                iconsDiv.appendChild(btnMd);
+
+                const btnCopy = document.createElement('span');
+                btnCopy.textContent = '📋';
+                btnCopy.title = "Copy";
+                btnCopy.addEventListener('click', () => navigator.clipboard.writeText(this.state.getContent(index)));
+                iconsDiv.appendChild(btnCopy);
+
+                const btnEdit = document.createElement('span');
+                btnEdit.textContent = '✏️';
+                btnEdit.title = "Edit";
+                btnEdit.addEventListener('click', () => {
+                    document.getElementById('edit-message-content').value = this.state.getContent(index);
+                    document.getElementById('btn-edit-save').dataset.idx = index;
+                    document.getElementById('edit-modal').classList.remove('hidden');
+                });
+                iconsDiv.appendChild(btnEdit);
+
+                if (role === 'assistant' && activeDraft.usage) {
+                    const btnUsage = document.createElement('span');
+                    btnUsage.textContent = '📊';
+                    btnUsage.title = "Token Usage";
+                    btnUsage.addEventListener('click', () => {
+                        document.getElementById('usage-prompt').textContent = activeDraft.usage.prompt_tokens || 0;
+                        document.getElementById('usage-completion').textContent = activeDraft.usage.completion_tokens || 0;
+                        document.getElementById('usage-total').textContent = activeDraft.usage.total_tokens || 0;
+                        document.getElementById('usage-modal').classList.remove('hidden');
+                    });
+                    iconsDiv.appendChild(btnUsage);
+                }
+
+                if (role === 'assistant' && isLatestMessage && this.state.lastRawPayload) {
+                    const btnPrompt = document.createElement('span');
+                    btnPrompt.textContent = '🔍';
+                    btnPrompt.title = "View Prompt Payload";
+                    btnPrompt.addEventListener('click', () => {
+                        document.getElementById('prompt-payload-content').textContent = JSON.stringify(this.state.lastRawPayload, null, 2);
+                        document.getElementById('prompt-modal').classList.remove('hidden');
+                    });
+                    iconsDiv.appendChild(btnPrompt);
+                }
+
+                const btnDelete = document.createElement('span');
+                btnDelete.textContent = '🗑️';
+                btnDelete.title = "Delete";
+                btnDelete.addEventListener('click', () => {
+                    if (confirm("Delete this message?")) {
+                        this.state.deleteTurn(index);
+                        this.state.buildPromptPayload(); 
+                        this.renderAll();
+                        this.autoSave();
+                    }
+                });
+                iconsDiv.appendChild(btnDelete);
+
+                actionBar.appendChild(iconsDiv);
+                bubble.appendChild(actionBar);
+            }
+
+            const reasoningDiv = document.createElement('div');
+            reasoningDiv.className = 'thinking-block';
+            reasoningDiv.id = `reasoning-block-${index}`;
+            if (!reasoning || (!isStreaming && role === 'assistant')) reasoningDiv.classList.add('hidden');
+            
+            const spanReason = document.createElement('span');
+            spanReason.id = `reasoning-${index}`;
+            spanReason.textContent = reasoning || '';
+            reasoningDiv.appendChild(spanReason);
+            bubble.appendChild(reasoningDiv);
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'turn-content';
+            
+            const spanContent = document.createElement('div');
+            spanContent.style.display = "inline";
+            spanContent.id = `content-${index}`;
+            this.setNodeContent(spanContent, content || '', activeDraft);
+            contentDiv.appendChild(spanContent);
+            
+            if (isStreaming) {
+                const cursor = document.createElement('span');
+                cursor.className = 'streaming-indicator';
+                cursor.id = `cursor-${index}`;
+                contentDiv.appendChild(cursor);
+            }
+
+            bubble.appendChild(contentDiv);
         }
 
-        // --- REASONING BLOCK ---
-        const reasoningDiv = document.createElement('div');
-        reasoningDiv.className = 'thinking-block';
-        reasoningDiv.id = `reasoning-block-${index}`;
-        if (!reasoning || (!isStreaming && role === 'assistant')) reasoningDiv.classList.add('hidden');
-        
-        const spanReason = document.createElement('span');
-        spanReason.id = `reasoning-${index}`;
-        spanReason.textContent = reasoning || '';
-        reasoningDiv.appendChild(spanReason);
-        bubble.appendChild(reasoningDiv);
-
-        // --- CONTENT BLOCK ---
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'turn-content';
-        
-        const spanContent = document.createElement('div');
-        spanContent.style.display = "inline";
-        spanContent.id = `content-${index}`;
-        this.setNodeContent(spanContent, content || '', activeDraft);
-        contentDiv.appendChild(spanContent);
-        
-        if (isStreaming) {
-            const cursor = document.createElement('span');
-            cursor.className = 'streaming-indicator';
-            cursor.id = `cursor-${index}`;
-            contentDiv.appendChild(cursor);
-        }
-
-        bubble.appendChild(contentDiv);
         wrapper.appendChild(bubble);
 
-        // Inject Bottom Switcher if needed
-        if (msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
+        // Inject Bottom Switcher if normal assistant batch
+        if (role === 'assistant' && msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
             wrapper.appendChild(this.buildSwitcherDOM(index, false, msg, isStreaming));
         }
 
@@ -804,6 +973,8 @@ export class UIManager {
         let unsummedCost = 0;
 
         for (let i = this.state.history.length - 1; i >= 0; i--) {
+            if (this.state.history[i].role === 'choices') continue;
+
             const msgContent = this.state.getContent(i);
             const T = Math.ceil(msgContent.length / charsRatio);
             if (budget - T >= 0) {
@@ -846,6 +1017,8 @@ export class UIManager {
         let unsummedCost = 0;
 
         for (let i = this.state.history.length - 1; i >= 0; i--) {
+            if (this.state.history[i].role === 'choices') continue;
+
             const T = Math.ceil(this.state.getContent(i).length / charsRatio);
             if (budget - T >= 0) {
                 budget -= T;

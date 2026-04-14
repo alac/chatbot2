@@ -6,12 +6,12 @@ export class SettingsMenu {
         this.uiManager = uiManager;
         this.globalModal = document.getElementById('settings-modal');
         this.chatModal = document.getElementById('chat-settings-modal');
+        this.choicesModal = document.getElementById('choices-settings-modal');
         this.bindEvents();
         this.populateUI();
     }
 
     bindEvents() {
-        // Modals Toggles
         document.getElementById('btn-settings').addEventListener('click', () => {
             this.globalModal.classList.remove('hidden');
             this.refreshSlotList(); 
@@ -35,8 +35,13 @@ export class SettingsMenu {
             this.chatModal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
             document.getElementById(e.target.value).classList.add('active');
         });
+        document.getElementById('choices-page-selector').addEventListener('change', (e) => {
+            this.choicesModal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById(e.target.value).classList.add('active');
+        });
 
         document.getElementById('set-parallel-count').addEventListener('change', () => this.renderBatchRows());
+        document.getElementById('set-choice-parallel-count').addEventListener('change', () => this.renderChoiceBatchRows());
         document.getElementById('set-regex-count').addEventListener('change', () => this.renderRegexRows());
 
         document.getElementById('btn-fetch-models').addEventListener('click', () => this.handleFetchModels());
@@ -45,7 +50,6 @@ export class SettingsMenu {
             this.renderFavoritesList();
         });
         
-        // A/N History toggle
         document.getElementById('btn-toggle-anote-history').addEventListener('click', () => {
             const container = document.getElementById('anote-history-container');
             container.classList.toggle('hidden');
@@ -60,6 +64,29 @@ export class SettingsMenu {
 
         document.getElementById('select-summarize-model').addEventListener('change', (e) => {
             document.getElementById('set-summarize-model-txt').value = e.target.value;
+        });
+
+        // Choices Modal Logic
+        document.getElementById('btn-close-choices-settings').addEventListener('click', () => {
+            this.closeAndSaveChoicesSettings();
+        });
+        document.getElementById('btn-edit-choices-toggle').addEventListener('click', () => {
+            const isEditing = !document.getElementById('choices-prompt-edit-container').classList.contains('hidden');
+            if (isEditing) {
+                document.getElementById('choices-prompt-edit-container').classList.add('hidden');
+                document.getElementById('choices-prompt-btn-container').classList.remove('hidden');
+            } else {
+                document.getElementById('choices-prompt-edit-textarea').value = settings.choicesPrompts;
+                document.getElementById('choices-prompt-edit-container').classList.remove('hidden');
+                document.getElementById('choices-prompt-btn-container').classList.add('hidden');
+            }
+        });
+        document.getElementById('btn-save-choices-prompts').addEventListener('click', () => {
+            settings.choicesPrompts = document.getElementById('choices-prompt-edit-textarea').value;
+            settings.save();
+            document.getElementById('choices-prompt-edit-container').classList.add('hidden');
+            document.getElementById('choices-prompt-btn-container').classList.remove('hidden');
+            this.renderChoicesPromptsList(); 
         });
 
         this.bindSamplerPair('slide-context', 'num-context');
@@ -156,11 +183,8 @@ export class SettingsMenu {
             const favs = list.filter(m => settings.favoriteModels.includes(m)).sort();
             const others = list.filter(m => !settings.favoriteModels.includes(m)).sort();
 
-            if (includeEmptyOverride) {
-                selectEl.innerHTML = '<option value="">(Use Default Model)</option>';
-            } else {
-                selectEl.innerHTML = '<option value="" disabled selected>Select a model...</option>';
-            }
+            if (includeEmptyOverride) selectEl.innerHTML = '<option value="">(Use Default Model)</option>';
+            else selectEl.innerHTML = '<option value="" disabled selected>Select a model...</option>';
 
             favs.forEach(m => { 
                 const opt = document.createElement('option'); 
@@ -179,10 +203,15 @@ export class SettingsMenu {
         createOptions(document.getElementById('select-model'), document.getElementById('set-model').value);
         createOptions(document.getElementById('select-summarize-model'), document.getElementById('set-summarize-model-txt').value, true);
         createOptions(document.getElementById('batch-model-select-primary'), document.getElementById('set-model').value);
+        
         for (let i = 0; i < 4; i++) {
-            const txtField = document.getElementById(`batch-model-txt-${i}`);
-            const currentVal = txtField ? txtField.value : settings.parallelOverrides[i].model;
+            let txtField = document.getElementById(`batch-model-txt-${i}`);
+            let currentVal = txtField ? txtField.value : settings.parallelOverrides[i].model;
             createOptions(document.getElementById(`batch-model-select-${i}`), currentVal);
+            
+            let choiceTxtField = document.getElementById(`choice-batch-model-txt-${i}`);
+            let choiceCurrentVal = choiceTxtField ? choiceTxtField.value : settings.choiceParallelOverrides[i].model;
+            createOptions(document.getElementById(`choice-batch-model-select-${i}`), choiceCurrentVal);
         }
     }
 
@@ -257,6 +286,89 @@ export class SettingsMenu {
         }
         
         this.updateAllModelDropdowns();
+    }
+
+    renderChoiceBatchRows() {
+        const container = document.getElementById('choice-parallel-rows-container');
+        container.innerHTML = '';
+        const count = parseInt(document.getElementById('set-choice-parallel-count').value);
+
+        for (let i = 0; i < count; i++) {
+            const ov = settings.choiceParallelOverrides[i] || { enabled: false, model: '' };
+            const row = document.createElement('div');
+            row.className = 'batch-row-container';
+            
+            row.innerHTML = `
+                <div class="batch-row-top">
+                    <span>Model ${i+1} ${i === 0 ? "(Required)" : ""}</span>
+                    <label style="flex-direction:row; align-items:center; ${i === 0 ? 'visibility:hidden;' : ''}">
+                        <input type="checkbox" id="choice-batch-override-chk-${i}" ${ov.enabled || i === 0 ? 'checked' : ''}> Enable
+                    </label>
+                </div>
+                <div class="batch-row-bottom">
+                    <select id="choice-batch-model-select-${i}"><option value="" disabled>Select model...</option></select>
+                    <input type="text" id="choice-batch-model-txt-${i}" value="${ov.model}" placeholder="Leave blank for Default Model">
+                </div>
+            `;
+            container.appendChild(row);
+
+            document.getElementById(`choice-batch-model-select-${i}`).addEventListener('change', (e) => {
+                document.getElementById(`choice-batch-model-txt-${i}`).value = e.target.value;
+            });
+        }
+        
+        this.updateAllModelDropdowns();
+    }
+
+    renderChoicesPromptsList() {
+        const container = document.getElementById('choices-prompt-btn-container');
+        container.innerHTML = '';
+        
+        const raw = settings.choicesPrompts || "";
+        const parts = raw.split('::').filter(p => p.trim() !== '');
+        
+        parts.forEach(p => {
+            const lines = p.trim().split('\n');
+            const title = lines.shift().trim();
+            const content = lines.join('\n').trim();
+            
+            const btn = document.createElement('button');
+            btn.className = 'secondary';
+            if (settings.activeChoicePromptTitle === title) btn.classList.add('primary');
+            
+            btn.textContent = title;
+            btn.title = content;
+            btn.addEventListener('click', () => {
+                settings.activeChoicePromptTitle = title;
+                settings.activeChoicePromptText = content;
+                settings.save();
+                this.renderChoicesPromptsList();
+                document.getElementById('lbl-active-choice-prompt').textContent = title;
+            });
+            container.appendChild(btn);
+        });
+        document.getElementById('lbl-active-choice-prompt').textContent = settings.activeChoicePromptTitle;
+    }
+
+    populateChoicesUI() {
+        this.renderChoicesPromptsList();
+        document.getElementById('set-choice-parallel-enabled').checked = settings.choiceParallelEnabled;
+        document.getElementById('set-choice-parallel-count').value = settings.choiceParallelCount;
+        this.renderChoiceBatchRows();
+    }
+
+    closeAndSaveChoicesSettings() {
+        settings.choiceParallelEnabled = document.getElementById('set-choice-parallel-enabled').checked;
+        settings.choiceParallelCount = parseInt(document.getElementById('set-choice-parallel-count').value);
+        for (let i = 0; i < settings.choiceParallelCount; i++) {
+            const chk = document.getElementById(`choice-batch-override-chk-${i}`);
+            const txt = document.getElementById(`choice-batch-model-txt-${i}`);
+            if (chk && txt) {
+                settings.choiceParallelOverrides[i] = { enabled: chk.checked, model: txt.value.trim() };
+            }
+        }
+        settings.save();
+        this.choicesModal.classList.add('hidden');
     }
 
     renderRegexRows() {

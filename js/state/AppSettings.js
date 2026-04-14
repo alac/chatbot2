@@ -10,10 +10,16 @@ export class AppSettings {
         this.parallelEnabled = false;
         this.parallelCount = 2;
         this.parallelOverrides = [
-            { enabled: false, model: '' },
-            { enabled: false, model: '' },
-            { enabled: false, model: '' },
-            { enabled: false, model: '' }
+            { enabled: false, model: '' }, { enabled: false, model: '' },
+            { enabled: false, model: '' }, { enabled: false, model: '' }
+        ];
+
+        // Choices Parallel Settings
+        this.choiceParallelEnabled = false;
+        this.choiceParallelCount = 2;
+        this.choiceParallelOverrides = [
+            { enabled: false, model: '' }, { enabled: false, model: '' },
+            { enabled: false, model: '' }, { enabled: false, model: '' }
         ];
 
         // Format & A/N
@@ -26,8 +32,12 @@ export class AppSettings {
         this.anoteDepth = 0;
         this.anoteHistory = [];
         
-        // Quick Replies
+        // Quick Replies & Choices
         this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
+        
+        this.choicesPrompts = "::Plain\nSuggest 5 possible actions the user character could take next. Wrap each option in <choice> and </choice> tags.\n\n::Character Driven\nSuggest 5 possible actions the user character could take next based on their current state of mind and emotions. Wrap each option in <choice> and </choice> tags.\n\n::Context Driven\nSuggest 5 possible actions the user character could take next based on their various abilities, and what is afforded by the situation/location they are in. Wrap each option in <choice> and </choice> tags.\n\n::Dialogue Focused\nSuggest 5 different things the user character could say next, ranging from friendly to hostile. Wrap each option in <choice> and </choice> tags.\n\n::Unexpected Events\nSuggest 3 surprising, impulsive, or chaotic actions the user character could take to completely derail the current situation. Wrap each option in <choice> and </choice> tags.";
+        this.activeChoicePromptTitle = "Plain";
+        this.activeChoicePromptText = "Suggest 5 possible actions the user character could take next. Wrap each option in <choice> and </choice> tags.";
 
         // Summary Settings
         this.trackSummary = true;
@@ -63,12 +73,19 @@ export class AppSettings {
             Object.assign(this, JSON.parse(saved));
             if (!Array.isArray(this.favoriteModels)) this.favoriteModels = [];
             if (!Array.isArray(this.parallelOverrides)) this.parallelOverrides = [{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''}];
+            if (!Array.isArray(this.choiceParallelOverrides)) this.choiceParallelOverrides = [{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''}];
             if (!this.anoteTemplate) this.anoteTemplate = "[Author's note: <|>]";
             if (!this.quickReplies) this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
             if (!Array.isArray(this.regexes)) this.regexes = [];
             if (!Array.isArray(this.anoteHistory)) this.anoteHistory = [];
             if (!this.charsPerToken) this.charsPerToken = 4.0;
             if (!this.autoSummarizePrompts) this.autoSummarizePrompts = "::Event Log\nSummarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.\n\n::Story Synopsis\nWrite a prose summary of the recent events, continuing smoothly from the previous summary.";
+            
+            if (!this.choicesPrompts) {
+                this.choicesPrompts = "::Plain\nSuggest 5 possible actions the user character could take next. Wrap each option in <choice> and </choice> tags.\n\n::Character Driven\nSuggest 5 possible actions the user character could take next based on their current state of mind and emotions. Wrap each option in <choice> and </choice> tags.\n\n::Context Driven\nSuggest 5 possible actions the user character could take next based on their various abilities, and what is afforded by the situation/location they are in. Wrap each option in <choice> and </choice> tags.\n\n::Dialogue Focused\nSuggest 5 different things the user character could say next, ranging from friendly to hostile. Wrap each option in <choice> and </choice> tags.\n\n::Unexpected Events\nSuggest 3 surprising, impulsive, or chaotic actions the user character could take to completely derail the current situation. Wrap each option in <choice> and </choice> tags.";
+                this.activeChoicePromptTitle = "Plain";
+                this.activeChoicePromptText = "Suggest 5 possible actions the user character could take next. Wrap each option in <choice> and </choice> tags.";
+            }
         }
     }
 
