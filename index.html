@@ -75,8 +75,8 @@
                     </div>
                 </div>
 
-                <!-- 2. Author's Note Tab -->
-                <div id="tab-anote" class="tab-pane" style="flex: 1; display: none; flex-direction: column;">
+                <!-- 2. Author's Note Tab (FIXED inline styles here) -->
+                <div id="tab-anote" class="tab-pane" style="flex: 1;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <h3>Author's Note</h3>
                         <button id="btn-toggle-anote-history" class="secondary" style="font-size:0.85em;">History 🕒</button>
@@ -231,7 +231,6 @@
                 </div>
 
                 <!-- 4. Save/Load Tab -->
-                <!-- Same as before... -->
                 <div id="tab-saveload" class="tab-pane">
                     <h3>Save Slots</h3>
                     <div id="slot-list" class="slot-list"></div>
@@ -324,7 +323,6 @@
         </div>
     </div>
 
-    <!-- Autosummarize Modals (Skipped for brevity as they are unchanged structurally, but included in full) -->
     <!-- Autosummarize Prompt Selector Modal -->
     <div id="autosum-prompt-modal" class="modal hidden">
         <div class="modal-content" style="max-height: 90vh; width: 700px;">
