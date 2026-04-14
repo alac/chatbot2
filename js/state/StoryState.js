@@ -7,18 +7,35 @@ export class StoryState {
         this.lastRawPayload = null; 
         this.contextBoundaryIndex = -1;
 
+        // Slot-Specific Memory & Story Settings
+        this.systemPrompt = "You are a helpful AI assistant.";
+        this.anoteTemplate = "[Author's note: <|>]";
+        this.anoteContent = "";
+        this.anoteUnit = "message"; 
+        this.anoteDepth = 0;
+        this.anoteHistory = [];
+
         // Summary State
         this.summary = "";
         this.selectedAutoSumPromptTitle = "Event Log";
         this.selectedAutoSumPromptText = "Summarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.";
     }
 
-    clear() {
+    clear(resetSettings = false) {
         this.history = [];
         this.redoStack = [];
         this.lastRawPayload = null;
         this.contextBoundaryIndex = -1;
         this.summary = "";
+
+        if (resetSettings) {
+            this.systemPrompt = "You are a helpful AI assistant.";
+            this.anoteTemplate = "[Author's note: <|>]";
+            this.anoteContent = "";
+            this.anoteUnit = "message"; 
+            this.anoteDepth = 0;
+            this.anoteHistory = [];
+        }
     }
 
     addTurn(role, content, reasoning = '', meta = {}) {
@@ -123,10 +140,10 @@ export class StoryState {
         const messages = [];
         const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
         
-        let sysAnoteString = settings.systemPrompt.trim();
+        let sysAnoteString = this.systemPrompt.trim();
         
-        if (!isSummarizing && settings.anoteUnit === "message" && settings.anoteContent.trim()) {
-            sysAnoteString += "\n" + settings.anoteTemplate.replace('<|>', settings.anoteContent.trim());
+        if (!isSummarizing && this.anoteUnit === "message" && this.anoteContent.trim()) {
+            sysAnoteString += "\n" + this.anoteTemplate.replace('<|>', this.anoteContent.trim());
         }
 
         let sumLength = 0;
@@ -164,8 +181,8 @@ export class StoryState {
             }
         }
 
-        if (settings.systemPrompt.trim() !== "") {
-            messages.push({ role: "system", content: settings.systemPrompt.trim() });
+        if (this.systemPrompt.trim() !== "") {
+            messages.push({ role: "system", content: this.systemPrompt.trim() });
         }
 
         if (this.summary.trim()) {
@@ -175,16 +192,16 @@ export class StoryState {
         includedHistoryMsgs.forEach(m => messages.push(m));
 
         if (!isSummarizing) {
-            const anote = settings.anoteContent.trim();
+            const anote = this.anoteContent.trim();
             if (anote !== "") {
-                const formattedAnote = settings.anoteTemplate.replace('<|>', anote);
-                const depth = parseInt(settings.anoteDepth, 10);
+                const formattedAnote = this.anoteTemplate.replace('<|>', anote);
+                const depth = parseInt(this.anoteDepth, 10);
 
-                if (settings.anoteUnit === "message") {
+                if (this.anoteUnit === "message") {
                     const insertIndex = Math.max((this.summary.trim() ? 2 : 1), messages.length - depth);
                     messages.splice(insertIndex, 0, { role: "system", content: formattedAnote });
                 } 
-                else if (settings.anoteUnit === "sentence") {
+                else if (this.anoteUnit === "sentence") {
                     for (let i = messages.length - 1; i >= 0; i--) {
                         if (messages[i].role === 'user') {
                             let text = messages[i].content;
@@ -218,9 +235,17 @@ export class StoryState {
         this.history.forEach(m => { if(m.wasSummarized === undefined) m.wasSummarized = false; });
         this.redoStack = data.redoStack || [];
         this.contextBoundaryIndex = data.contextBoundaryIndex !== undefined ? data.contextBoundaryIndex : -1;
+        
         this.summary = data.summary || "";
         this.selectedAutoSumPromptTitle = data.selectedAutoSumPromptTitle || "Event Log";
         this.selectedAutoSumPromptText = data.selectedAutoSumPromptText || "Summarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.";
+
+        this.systemPrompt = data.systemPrompt !== undefined ? data.systemPrompt : "You are a helpful AI assistant.";
+        this.anoteTemplate = data.anoteTemplate !== undefined ? data.anoteTemplate : "[Author's note: <|>]";
+        this.anoteContent = data.anoteContent !== undefined ? data.anoteContent : "";
+        this.anoteUnit = data.anoteUnit !== undefined ? data.anoteUnit : "message";
+        this.anoteDepth = data.anoteDepth !== undefined ? data.anoteDepth : 0;
+        this.anoteHistory = data.anoteHistory || [];
     }
 
     exportData() {
@@ -230,7 +255,13 @@ export class StoryState {
             contextBoundaryIndex: this.contextBoundaryIndex,
             summary: this.summary,
             selectedAutoSumPromptTitle: this.selectedAutoSumPromptTitle,
-            selectedAutoSumPromptText: this.selectedAutoSumPromptText
+            selectedAutoSumPromptText: this.selectedAutoSumPromptText,
+            systemPrompt: this.systemPrompt,
+            anoteTemplate: this.anoteTemplate,
+            anoteContent: this.anoteContent,
+            anoteUnit: this.anoteUnit,
+            anoteDepth: this.anoteDepth,
+            anoteHistory: this.anoteHistory
         };
     }
 }

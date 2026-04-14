@@ -273,7 +273,10 @@ export class UIManager {
                     
                     if (data.reasoning) {
                         if (reasonNode) reasonNode.textContent = data.reasoning;
-                        if (reasonDiv) reasonDiv.classList.remove('hidden');
+                        if (reasonDiv) {
+                            reasonDiv.classList.remove('hidden');
+                            if (data.status === 'streaming') reasonDiv.scrollTop = reasonDiv.scrollHeight;
+                        }
                     }
                     if (contentNode) {
                         const draftObj = this.state.history[newIdx].drafts[draftIdx];
@@ -957,7 +960,7 @@ export class UIManager {
         container.classList.remove('hidden');
 
         const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
-        const sysAnoteStr = settings.systemPrompt.trim() + "\n" + settings.anoteContent.trim();
+        const sysAnoteStr = this.state.systemPrompt.trim() + "\n" + this.state.anoteContent.trim();
         const maxResp = parseInt(settings.maxTokens);
         
         let sumCost = 0;
@@ -1004,12 +1007,12 @@ export class UIManager {
 
     updateSummaryMeterDetails() {
         const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
-        const memCost = Math.ceil(settings.systemPrompt.trim().length / charsRatio);
-        const anCost = Math.ceil(settings.anoteContent.trim().length / charsRatio);
+        const memCost = Math.ceil(this.state.systemPrompt.trim().length / charsRatio);
+        const anCost = Math.ceil(this.state.anoteContent.trim().length / charsRatio);
         let sumCost = this.state.summary.trim() ? Math.ceil((this.state.summary.trim().length + 20) / charsRatio) : 0;
         const maxResp = parseInt(settings.maxTokens);
         const maxContext = parseInt(settings.contextLength);
-        const sysAnoteStr = settings.systemPrompt.trim() + "\n" + settings.anoteContent.trim();
+        const sysAnoteStr = this.state.systemPrompt.trim() + "\n" + this.state.anoteContent.trim();
         const unchanging = Math.ceil(sysAnoteStr.length / charsRatio) + maxResp + sumCost;
         
         let budget = maxContext - unchanging;
@@ -1167,6 +1170,9 @@ export class UIManager {
     }
 
     async loadStateFromSlot(id) {
+        this.activeSlot = id;
+        localStorage.setItem('last_active_slot', id);
+        
         const slot = await this.storage.loadSlot(id);
         if (slot && slot.data) {
             this.state.loadFromData(slot.data);
@@ -1175,7 +1181,7 @@ export class UIManager {
                 document.getElementById('lbl-active-sum-prompt').textContent = this.state.selectedAutoSumPromptTitle;
             }
         } else {
-            this.state.clear(); 
+            this.state.clear(true); 
         }
         this.state.buildPromptPayload();
         this.renderAll();

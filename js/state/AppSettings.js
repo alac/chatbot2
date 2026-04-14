@@ -22,15 +22,8 @@ export class AppSettings {
             { enabled: false, model: '' }, { enabled: false, model: '' }
         ];
 
-        // Format & A/N
-        this.systemPrompt = "You are a helpful AI assistant.";
+        // Formats
         this.forceThink = false;
-        
-        this.anoteTemplate = "[Author's note: <|>]";
-        this.anoteContent = "";
-        this.anoteUnit = "message"; 
-        this.anoteDepth = 0;
-        this.anoteHistory = [];
         
         // Quick Replies & Choices
         this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
@@ -74,10 +67,8 @@ export class AppSettings {
             if (!Array.isArray(this.favoriteModels)) this.favoriteModels = [];
             if (!Array.isArray(this.parallelOverrides)) this.parallelOverrides = [{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''}];
             if (!Array.isArray(this.choiceParallelOverrides)) this.choiceParallelOverrides = [{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''}];
-            if (!this.anoteTemplate) this.anoteTemplate = "[Author's note: <|>]";
             if (!this.quickReplies) this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
             if (!Array.isArray(this.regexes)) this.regexes = [];
-            if (!Array.isArray(this.anoteHistory)) this.anoteHistory = [];
             if (!this.charsPerToken) this.charsPerToken = 4.0;
             if (!this.autoSummarizePrompts) this.autoSummarizePrompts = "::Event Log\nSummarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.\n\n::Story Synopsis\nWrite a prose summary of the recent events, continuing smoothly from the previous summary.";
             

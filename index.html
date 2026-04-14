@@ -20,8 +20,8 @@
         </div>
 
         <div class="nav-controls">
-            <button id="btn-chat-settings">📝 Chat Settings</button>
-            <button id="btn-settings">⚙️ Settings</button>
+            <button id="btn-chat-settings" title="Chat Settings">📝 Chat</button>
+            <button id="btn-settings" title="App Settings">⚙️ App</button>
         </div>
     </header>
 
@@ -32,26 +32,30 @@
     <footer id="input-area">
         <!-- Quick Menu (Toggled via More button) -->
         <div id="quick-menu" class="hidden">
-            <button id="btn-undo" class="quick-btn" title="Undo">
-                <span class="icon">↩️</span><span>Undo</span>
-            </button>
-            <button id="btn-redo" class="quick-btn" title="Redo">
-                <span class="icon">↪️</span><span>Redo</span>
-            </button>
-            <button id="btn-open-quick-replies" class="quick-btn">
-                <span class="icon">💬</span><span>Replies</span>
-            </button>
+            <div class="btn-group">
+                <button id="btn-undo" class="quick-btn" title="Undo">
+                    <span class="icon">↩️</span><span>Undo</span>
+                </button>
+                <button id="btn-redo" class="quick-btn" title="Redo">
+                    <span class="icon">↪️</span><span>Redo</span>
+                </button>
+            </div>
             
+            <div class="btn-group">
+                <button id="btn-open-quick-replies" class="quick-btn" title="Quick Replies">
+                    <span class="icon">💬</span><span>Replies</span>
+                </button>
+                <button id="btn-open-apply-edits" class="quick-btn" title="Apply AI Edits">
+                    <span class="icon">✨</span><span>Edits</span>
+                </button>
+            </div>
+
             <div class="btn-group">
                 <button id="btn-generate-choices" class="quick-btn" title="Generate branching choices">
                     <span class="icon">🔀</span><span>Choices</span>
                 </button>
                 <button id="btn-choices-settings" title="Choices Settings" style="padding: 0 8px;">⚙️</button>
             </div>
-            
-            <button id="btn-open-apply-edits" class="quick-btn">
-                <span class="icon">✨</span><span>Edits</span>
-            </button>
         </div>
         
         <div class="input-row">
@@ -293,7 +297,10 @@
                     <h3>Save Slots</h3>
                     <div id="slot-list" class="slot-list"></div>
                     <div id="slot-actions" class="slot-actions hidden">
-                        <p id="selected-slot-label" style="font-weight: bold; margin-bottom: 8px;">Selected: None</p>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span id="selected-slot-label" style="font-weight: bold;">Selected: None</span>
+                            <button id="btn-new-chat" class="secondary" style="padding: 4px 8px; font-size: 0.85em;">➕ New Chat</button>
+                        </div>
                         <div class="action-grid">
                             <button id="btn-slot-save" class="primary">💾 Save</button>
                             <button id="btn-slot-load" class="primary">📂 Load</button>

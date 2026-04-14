@@ -99,7 +99,24 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .action-icons .md-toggle { opacity: 0.5; }
 .action-icons .md-toggle.active { opacity: 1; }
 
-.thinking-block { background: var(--think-bg); border-left: 3px solid var(--text-muted); padding: 8px 12px; font-style: italic; color: var(--text-muted); font-size: 0.9em; border-radius: 4px; white-space: pre-wrap; word-break: break-word; margin-bottom: 8px;}
+.thinking-block { 
+    background: var(--think-bg); 
+    border-left: 3px solid var(--text-muted); 
+    padding: 8px 12px; 
+    font-style: italic; 
+    color: var(--text-muted); 
+    font-size: 0.9em; 
+    border-radius: 4px; 
+    white-space: pre-wrap; 
+    word-break: break-word; 
+    margin-bottom: 8px;
+    max-height: 15em;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+.thinking-block::-webkit-scrollbar { width: 6px; }
+.thinking-block::-webkit-scrollbar-track { background: transparent; }
+.thinking-block::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 .draft-switcher { display: flex; flex-direction: column; gap: 4px; background: var(--bg-panel); padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.85em; width: fit-content; }
 .draft-switcher.top { align-self: flex-start; margin-bottom: 4px; }

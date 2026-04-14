@@ -106,7 +106,26 @@ export class SettingsMenu {
         });
 
         // Save Slots
-        document.getElementById('btn-slot-save').addEventListener('click', () => this.uiManager.autoSave());
+        document.getElementById('btn-new-chat').addEventListener('click', async () => {
+            if (confirm("Start a new chat in this slot? This will clear the current history but keep your settings.")) {
+                this.uiManager.state.clear(false); 
+                this.uiManager.activeSlot = this.selectedSlotId;
+                await this.uiManager.autoSave();
+                this.refreshSlotList();
+                this.uiManager.renderAll();
+                this.closeAndSave();
+            }
+        });
+
+        document.getElementById('btn-slot-save').addEventListener('click', async () => {
+            if (this.selectedSlotId !== this.uiManager.activeSlot) {
+                if (!confirm(`Overwrite Slot ${this.selectedSlotId} with your current story?`)) return;
+            }
+            this.uiManager.activeSlot = this.selectedSlotId;
+            await this.uiManager.autoSave();
+            this.refreshSlotList();
+        });
+
         document.getElementById('btn-slot-load').addEventListener('click', async () => {
             await this.uiManager.loadStateFromSlot(this.selectedSlotId);
             this.closeAndSave();
@@ -133,7 +152,7 @@ export class SettingsMenu {
             if (confirm("Delete this save slot?")) {
                 await this.uiManager.storage.deleteSlot(this.selectedSlotId);
                 if (this.uiManager.activeSlot === this.selectedSlotId) {
-                    this.uiManager.state.clear();
+                    this.uiManager.state.clear(true);
                 }
                 this.refreshSlotList();
                 this.uiManager.renderAll();
@@ -402,12 +421,12 @@ export class SettingsMenu {
     renderAnoteHistory() {
         const tbody = document.getElementById('anote-history-tbody');
         tbody.innerHTML = '';
-        if (settings.anoteHistory.length === 0) {
+        if (this.uiManager.state.anoteHistory.length === 0) {
             tbody.innerHTML = '<tr><td style="color:var(--text-muted); text-align:center;">History is empty</td></tr>';
             return;
         }
 
-        settings.anoteHistory.forEach(note => {
+        this.uiManager.state.anoteHistory.forEach(note => {
             const tr = document.createElement('tr');
             const td = document.createElement('td');
             td.textContent = note.length > 80 ? note.substring(0, 80) + '...' : note;
@@ -502,11 +521,11 @@ export class SettingsMenu {
         document.getElementById('set-force-think').checked = settings.forceThink;
         document.getElementById('set-stop-seqs').value = settings.stopSequences;
         
-        document.getElementById('set-system-prompt').value = settings.systemPrompt;
-        document.getElementById('set-anote-template').value = settings.anoteTemplate;
-        document.getElementById('set-anote-content').value = settings.anoteContent;
-        document.getElementById('set-anote-unit').value = settings.anoteUnit;
-        document.getElementById('set-anote-depth').value = settings.anoteDepth;
+        document.getElementById('set-system-prompt').value = this.uiManager.state.systemPrompt;
+        document.getElementById('set-anote-template').value = this.uiManager.state.anoteTemplate;
+        document.getElementById('set-anote-content').value = this.uiManager.state.anoteContent;
+        document.getElementById('set-anote-unit').value = this.uiManager.state.anoteUnit;
+        document.getElementById('set-anote-depth').value = this.uiManager.state.anoteDepth;
         
         document.getElementById('set-summary-content').value = this.uiManager.state.summary;
         document.getElementById('set-track-summary').checked = settings.trackSummary;
@@ -594,17 +613,17 @@ export class SettingsMenu {
     }
 
     closeAndSaveChatSettings() {
-        settings.systemPrompt = document.getElementById('set-system-prompt').value;
-        settings.anoteTemplate = document.getElementById('set-anote-template').value;
-        settings.anoteContent = document.getElementById('set-anote-content').value;
-        settings.anoteUnit = document.getElementById('set-anote-unit').value;
-        settings.anoteDepth = parseInt(document.getElementById('set-anote-depth').value);
+        this.uiManager.state.systemPrompt = document.getElementById('set-system-prompt').value;
+        this.uiManager.state.anoteTemplate = document.getElementById('set-anote-template').value;
+        this.uiManager.state.anoteContent = document.getElementById('set-anote-content').value;
+        this.uiManager.state.anoteUnit = document.getElementById('set-anote-unit').value;
+        this.uiManager.state.anoteDepth = parseInt(document.getElementById('set-anote-depth').value);
 
-        const currentAnote = settings.anoteContent.trim();
+        const currentAnote = this.uiManager.state.anoteContent.trim();
         if (currentAnote) {
-            if (settings.anoteHistory[0] !== currentAnote) {
-                settings.anoteHistory.unshift(currentAnote);
-                if (settings.anoteHistory.length > 10) settings.anoteHistory.length = 10;
+            if (this.uiManager.state.anoteHistory[0] !== currentAnote) {
+                this.uiManager.state.anoteHistory.unshift(currentAnote);
+                if (this.uiManager.state.anoteHistory.length > 10) this.uiManager.state.anoteHistory.length = 10;
             }
         }
 
