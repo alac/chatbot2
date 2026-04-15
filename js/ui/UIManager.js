@@ -418,13 +418,31 @@ export class UIManager {
 
     setNodeContent(node, content, draft) {
         const visuallyApplied = settings.applyRegexes(content, 'visually');
+        
+        let htmlBlocks = [];
+        let processed = visuallyApplied.replace(/<html>([\s\S]*?)<\/html>/gi, (m, inner) => {
+            // Failsafe if DOMPurify failed to load over CDN
+            const clean = window.DOMPurify ? window.DOMPurify.sanitize(inner) : inner;
+            htmlBlocks.push(clean);
+            return `%%HTML_BLOCK_${htmlBlocks.length - 1}%%`;
+        });
+
+        // Escape any remaining <tag> format to text (excluding our placeholders)
+        processed = processed.replace(/<(\/?)([a-zA-Z][^>]*)>/g, '&lt;$1$2&gt;');
+
         if (this.shouldUseMarkdown(content, draft.markdownOverride)) {
-            node.innerHTML = marked.parse(visuallyApplied);
+            processed = marked.parse(processed);
             node.classList.add('markdown-body');
         } else {
-            node.textContent = visuallyApplied;
+            processed = processed.replace(/\n/g, '<br>');
             node.classList.remove('markdown-body');
         }
+
+        htmlBlocks.forEach((block, i) => {
+            processed = processed.replace(`%%HTML_BLOCK_${i}%%`, block);
+        });
+
+        node.innerHTML = processed;
     }
 
     renderAll() {
@@ -555,20 +573,44 @@ export class UIManager {
                 bubble.appendChild(header);
 
                 msg.extractedChoices.forEach(choiceText => {
-                    const btn = document.createElement('button');
-                    btn.className = 'choice-btn';
+                    const card = document.createElement('div');
+                    card.className = 'choice-card';
                     
-                    // Simple markdown parsing for bold/italic in buttons if desired, otherwise just text
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'choice-card-content';
                     const visuallyApplied = settings.applyRegexes(choiceText, 'visually');
-                    btn.innerHTML = marked.parseInline(visuallyApplied);
+                    contentDiv.innerHTML = marked.parseInline(visuallyApplied);
                     
-                    btn.addEventListener('click', () => {
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'choice-card-actions';
+
+                    const btnInsert = document.createElement('button');
+                    btnInsert.innerHTML = '📝';
+                    btnInsert.title = 'Insert to input';
+                    btnInsert.addEventListener('click', () => {
+                        const currentVal = this.input.value;
+                        this.input.value = currentVal ? currentVal + ' ' + choiceText : choiceText;
+                        this.input.style.height = 'auto';
+                        this.input.style.height = (this.input.scrollHeight) + 'px';
+                        this.input.focus();
+                    });
+
+                    const btnSend = document.createElement('button');
+                    btnSend.innerHTML = '🚀';
+                    btnSend.title = 'Send instantly';
+                    btnSend.addEventListener('click', () => {
                         this.input.value = choiceText;
                         this.input.style.height = 'auto';
                         this.input.style.height = (this.input.scrollHeight) + 'px';
                         this.handleSend();
                     });
-                    bubble.appendChild(btn);
+
+                    actionsDiv.appendChild(btnInsert);
+                    actionsDiv.appendChild(btnSend);
+
+                    card.appendChild(contentDiv);
+                    card.appendChild(actionsDiv);
+                    bubble.appendChild(card);
                 });
 
                 const hr = document.createElement('hr');

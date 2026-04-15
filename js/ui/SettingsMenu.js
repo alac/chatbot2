@@ -184,6 +184,43 @@ export class SettingsMenu {
         try {
             const models = await OpenAIClient.fetchModels();
             this.cachedFetchedModels = models.map(m => m.id || m.name);
+            
+            // Validate existing settings against fetched models
+            let missing = [];
+            
+            if (settings.model && !this.cachedFetchedModels.includes(settings.model)) {
+                missing.push(`Default: ${settings.model}`);
+                settings.model = this.cachedFetchedModels[0] || '';
+            }
+            if (settings.summarizeModel && !this.cachedFetchedModels.includes(settings.summarizeModel)) {
+                missing.push(`Summarize: ${settings.summarizeModel}`);
+                settings.summarizeModel = '';
+            }
+            settings.parallelOverrides.forEach((ov, i) => {
+                if (ov.model && !this.cachedFetchedModels.includes(ov.model)) {
+                    missing.push(`Parallel Draft ${i+2}: ${ov.model}`);
+                    ov.model = '';
+                }
+            });
+            settings.choiceParallelOverrides.forEach((ov, i) => {
+                if (ov.model && !this.cachedFetchedModels.includes(ov.model)) {
+                    missing.push(`Choice Model ${i+1}: ${ov.model}`);
+                    ov.model = '';
+                }
+            });
+            
+            const oldFavCount = settings.favoriteModels.length;
+            settings.favoriteModels = settings.favoriteModels.filter(m => this.cachedFetchedModels.includes(m));
+            if (oldFavCount > settings.favoriteModels.length) {
+                missing.push(`${oldFavCount - settings.favoriteModels.length} Favorited Model(s)`);
+            }
+
+            if (missing.length > 0) {
+                alert("The following models are no longer available and were reset:\n\n" + missing.join("\n"));
+                settings.save();
+                this.populateUI(); // Refresh settings UI text fields
+            }
+
             this.updateAllModelDropdowns();
             this.renderFavoritesList();
             btn.textContent = "Success!";

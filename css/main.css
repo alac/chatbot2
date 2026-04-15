@@ -69,6 +69,11 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .markdown-body li { margin-bottom: 0.25em; }
 .markdown-body ul:last-child, .markdown-body ol:last-child { margin-bottom: 0; }
 
+/* Markdown Table Overrides */
+.markdown-body table { display: block; width: 100%; overflow-x: auto; white-space: nowrap; border-collapse: collapse; margin-bottom: 1em; }
+.markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 6px 12px; }
+.markdown-body tr:nth-child(even) { background-color: rgba(255,255,255,0.05); }
+
 .context-divider { display: flex; align-items: center; text-align: center; color: var(--danger); font-weight: bold; font-size: 0.8em; margin: 10px 0; opacity: 0.8;}
 .context-divider::before, .context-divider::after { content: ''; flex: 1; border-bottom: 2px dashed var(--danger); margin: 0 10px; }
 .turn.out-of-context { opacity: 0.65; }
@@ -85,8 +90,11 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 /* Choices Specific Styles */
 .turn.choices .turn-bubble { background: var(--bg-panel); border: 1px solid var(--border); width: 100%; align-items: stretch; box-shadow: 0 4px 10px rgba(0,0,0,0.15); border-radius: 12px;}
 .choices-header { font-weight: bold; text-align: center; margin-bottom: 12px; color: var(--text-muted); display: flex; justify-content: center; align-items: center; gap: 8px;}
-.choice-btn { background: var(--bg-main); border: 1px solid var(--border); color: var(--text-main); text-align: left; padding: 12px; border-radius: 6px; margin-bottom: 8px; font-size: 0.95em; line-height: 1.4; transition: all 0.2s;}
-.choice-btn:hover { background: var(--accent); color: white; border-color: var(--accent); transform: translateX(4px);}
+.choice-card { background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.choice-card-content { font-size: 0.95em; line-height: 1.4; white-space: pre-wrap; word-break: break-word;}
+.choice-card-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.choice-card-actions button { padding: 4px 12px; font-size: 1.1em; border-radius: 4px; background: var(--bg-panel); border: 1px solid var(--border); cursor: pointer; transition: background 0.2s; }
+.choice-card-actions button:hover { background: var(--border); }
 
 .story-mode .turn { max-width: 900px; margin: 0 auto; width: 100%; display: flex; flex-direction: column;}
 .story-mode .turn.user .turn-content { color: var(--text-muted); font-style: italic; }
