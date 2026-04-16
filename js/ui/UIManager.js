@@ -1131,10 +1131,7 @@ export class UIManager {
             </div>
             <div class="ae-diff-container">
                 <div class="ae-diff-col">${preCtx}${diffs.oldHtml}${postCtx}</div>
-                <div class="ae-diff-col">
-                    <button class="ae-edit-btn" title="Edit suggestion">✎</button>
-                    ${preCtx}${diffs.newHtml}${postCtx}
-                </div>
+                <div class="ae-diff-col"><button class="ae-edit-btn" title="Edit suggestion">✎</button>${preCtx}${diffs.newHtml}${postCtx}</div>
             </div>
             <div class="ae-footer">
                 <span style="font-size:0.75em; color:var(--text-muted);">${edit.sourceDraftLabel}</span>
