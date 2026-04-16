@@ -911,11 +911,17 @@ export class UIManager {
             const regex = /(<edit>\s*<old>([\s\S]*?)<\/old>\s*<new>([\s\S]*?)<\/new>\s*<reasoning>([\s\S]*?)<\/reasoning>\s*<\/edit>)/gi;
             let match;
             while ((match = regex.exec(draft.content)) !== null) {
+                const oldText = match[2].trim();
+                const newText = match[3].trim();
+
+                // FIX: Exclude pairs where NEW == OLD
+                if (oldText === newText) continue;
+
                 this.extractedEdits.push({
                     id: editIdCounter++,
                     rawMatch: match[1],
-                    oldText: match[2].trim(),
-                    newText: match[3].trim(),
+                    oldText: oldText,
+                    newText: newText,
                     reasoning: match[4].trim(),
                     sourceDraftIndex: idx,
                     sourceDraftLabel: draftLabel,
@@ -929,7 +935,7 @@ export class UIManager {
             }
         });
 
-        if (this.extractedEdits.length === 0) return alert("No <edit> tags found in the latest message.");
+        if (this.extractedEdits.length === 0) return alert("No valid <edit> tags found in the latest message.");
 
         this.evaluateEditsStatus();
         this.buildEditGroups();
