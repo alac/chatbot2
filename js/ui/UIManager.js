@@ -1114,7 +1114,7 @@ export class UIManager {
         const diffs = diffWords(edit.oldText, edit.newText);
         
         let statusHtml = '';
-        let buttonsHtml = `<button class="secondary modify-btn" style="padding: 4px 8px; font-size: 0.85em;">✎ Modify</button>`;
+        let buttonsHtml = `<button class="secondary modify-btn" style="padding: 4px 8px; margin-right: 4px; font-size: 0.85em;">✎ Modify</button>`;
 
         if (edit.status === 'applied') {
             statusHtml = `<span class="ae-status applied">Already Applied</span>`;
