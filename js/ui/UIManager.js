@@ -1117,36 +1117,39 @@ export class UIManager {
         if (edit.status === 'applied') {
             actionHtml = `<span class="ae-status applied">Already Applied</span>`;
         } else if (edit.status === 'invalid') {
-            actionHtml = `<span class="ae-status invalid">Text Not Found (Conflict)</span>`;
+            actionHtml = `<span class="ae-status invalid">Not Found</span>`;
         } else {
-            actionHtml = `<button class="primary apply-btn">Apply Edit</button>`;
+            actionHtml = `<button class="primary apply-btn" style="padding: 4px 8px; font-size: 0.85em;">Apply</button>`;
         }
 
         edit.isCollapsed = edit.isCollapsed !== undefined ? edit.isCollapsed : this.aeSettings.collapseReasoning;
         
         card.innerHTML = `
-            <div class="ae-reasoning-header">Reasoning: ${edit.isCollapsed ? '[+]' : '[-]'}</div>
-            <div class="ae-reasoning ${edit.isCollapsed ? 'hidden' : ''}">${edit.reasoning.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+            <div class="ae-reasoning-block">
+                <span class="ae-reasoning-label">Reasoning ${edit.isCollapsed ? '[+]' : '[-]'}:</span>
+                <span class="ae-reasoning-content ${edit.isCollapsed ? 'hidden' : ''}">${edit.reasoning.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
+            </div>
             <div class="ae-diff-container">
+                <div class="ae-diff-col">${preCtx}${diffs.oldHtml}${postCtx}</div>
                 <div class="ae-diff-col">
-                    ${preCtx}${diffs.oldHtml}${postCtx}
-                </div>
-                <div class="ae-diff-col">
-                    <button class="ae-edit-btn" title="Edit this suggestion">✎</button>
+                    <button class="ae-edit-btn" title="Edit suggestion">✎</button>
                     ${preCtx}${diffs.newHtml}${postCtx}
                 </div>
             </div>
             <div class="ae-footer">
-                <span style="font-size:0.8em; color:var(--text-muted);">${edit.sourceDraftLabel}</span>
+                <span style="font-size:0.75em; color:var(--text-muted);">${edit.sourceDraftLabel}</span>
                 ${actionHtml}
             </div>
         `;
 
-        card.querySelector('.ae-reasoning-header').addEventListener('click', (e) => {
-            const body = card.querySelector('.ae-reasoning');
-            body.classList.toggle('hidden');
-            edit.isCollapsed = body.classList.contains('hidden');
-            e.target.textContent = `Reasoning: ${edit.isCollapsed ? '[+]' : '[-]'}`;
+        // Reasoning Toggle Logic
+        card.querySelector('.ae-reasoning-block').addEventListener('click', () => {
+            edit.isCollapsed = !edit.isCollapsed;
+            const label = card.querySelector('.ae-reasoning-label');
+            const content = card.querySelector('.ae-reasoning-content');
+            label.textContent = `Reasoning ${edit.isCollapsed ? '[+]' : '[-]'}:`;
+            if (edit.isCollapsed) content.classList.add('hidden');
+            else content.classList.remove('hidden');
         });
 
         card.querySelector('.ae-edit-btn').addEventListener('click', () => {
@@ -1158,11 +1161,9 @@ export class UIManager {
                 const targetContent = this.state.getContent(edit.targetMessageIdx);
                 const updatedContent = targetContent.substring(0, edit.startIndex) + edit.newText + targetContent.substring(edit.endIndex);
                 this.state.editTurn(edit.targetMessageIdx, updatedContent);
-                
                 this.state.buildPromptPayload(); 
                 this.renderAll();
                 this.autoSave();
-                
                 this.evaluateEditsStatus();
                 this.renderApplyEditsList();
             });

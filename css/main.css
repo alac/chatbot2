@@ -252,27 +252,46 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 }
 
 /* Apply Edits Modal */
-.ae-controls-bar { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; align-items: center; justify-content: space-between; font-size: 0.9em; margin-bottom: 8px; }
-.ae-controls-group { display: flex; align-items: center; gap: 8px; }
-.ae-controls-group input[type="number"] { width: 50px; text-align: center; padding: 4px; }
-.ae-controls-group button { padding: 2px 8px; font-weight: bold; }
+.ae-controls-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; align-items: center; justify-content: space-between; font-size: 0.85em; margin-bottom: 8px; }
+.ae-controls-group { display: flex; align-items: center; gap: 6px; }
+.ae-controls-group input[type="number"] { width: 45px; text-align: center; padding: 2px; }
 
-.ae-group-wrapper { background: rgba(0,0,0,0.15); border: 2px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-.ae-group-header { font-weight: bold; color: var(--text-muted); font-size: 0.9em; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.ae-group-wrapper { background: rgba(0,0,0,0.15); border: 2px solid var(--border); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.ae-group-header { font-weight: bold; color: var(--text-muted); font-size: 0.85em; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
 
-.ae-card { background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px; position: relative; }
-.ae-reasoning-header { cursor: pointer; user-select: none; padding: 6px; background: rgba(255,255,255,0.05); border-radius: 4px; font-weight: bold; font-size: 0.9em; color: var(--text-muted); }
-.ae-reasoning { font-style: italic; color: var(--text-muted); font-size: 0.9em; white-space: pre-wrap; padding: 0 6px; }
+.ae-card { background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+
+/* Combined Reasoning Block */
+.ae-reasoning-block { cursor: pointer; user-select: none; padding: 4px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; font-size: 0.9em; line-height: 1.4; color: var(--text-main); }
+.ae-reasoning-label { font-weight: bold; color: var(--text-muted); margin-right: 4px; }
+.ae-reasoning-content { font-style: italic; color: var(--text-muted); }
+
 .ae-context { color: var(--text-muted); font-style: italic; opacity: 0.6; font-size: 0.9em; }
 
-.ae-diff-container { display: flex; flex-direction: row; align-items: stretch; gap: 8px; font-family: monospace; font-size: 0.85em; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word;}
-.ae-diff-col { flex: 1; min-width: 0; background: var(--bg-panel); padding: 8px; border-radius: 4px; border: 1px solid var(--border); position: relative; }
-.ae-edit-btn { position: absolute; top: 4px; right: 4px; background: var(--bg-main); border: 1px solid var(--border); border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 5; font-size: 1.1em; padding:0; box-shadow: 0 2px 4px rgba(0,0,0,0.2);}
+.ae-diff-container { display: flex; flex-direction: row; align-items: stretch; gap: 4px; font-family: monospace; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; }
+.ae-diff-col { flex: 1; min-width: 0; background: var(--bg-panel); padding: 4px; border-radius: 4px; border: 1px solid var(--border); overflow: hidden; }
+
+/* Floated Edit Button to "eat" into text space */
+.ae-edit-btn { 
+    float: right; 
+    margin-left: 6px; 
+    margin-bottom: 2px;
+    background: var(--bg-main); 
+    border: 1px solid var(--border); 
+    border-radius: 4px; 
+    width: 24px; 
+    height: 24px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    cursor: pointer; 
+    font-size: 1em; 
+    padding: 0; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
 .ae-edit-btn:hover { background: var(--border); }
 
-.ae-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-.ae-status { font-weight: bold; font-size: 0.9em; }
-.ae-status.applied { color: var(--text-muted); }
-.ae-status.invalid { color: var(--danger); }
-ins { background: var(--diff-ins-bg); color: var(--diff-ins-txt); text-decoration: none; border-radius: 2px; padding: 0 2px; }
-del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoration: line-through; border-radius: 2px; padding: 0 2px; }
+.ae-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.ae-status { font-weight: bold; font-size: 0.85em; }
+ins { background: var(--diff-ins-bg); color: var(--diff-ins-txt); text-decoration: none; padding: 0 1px; }
+del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoration: line-through; padding: 0 1px; }
