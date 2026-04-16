@@ -271,27 +271,8 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .ae-diff-container { display: flex; flex-direction: row; align-items: stretch; gap: 4px; font-family: monospace; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; }
 .ae-diff-col { flex: 1; min-width: 0; background: var(--bg-panel); padding: 4px; border-radius: 4px; border: 1px solid var(--border); overflow: hidden; }
 
-/* Floated Edit Button to "eat" into text space */
-.ae-edit-btn { 
-    float: right; 
-    margin-left: 6px; 
-    margin-bottom: 2px;
-    background: var(--bg-main); 
-    border: 1px solid var(--border); 
-    border-radius: 4px; 
-    width: 24px; 
-    height: 24px; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    cursor: pointer; 
-    font-size: 1em; 
-    padding: 0; 
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-}
-.ae-edit-btn:hover { background: var(--border); }
-
 .ae-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
-.ae-status { font-weight: bold; font-size: 0.85em; }
+.ae-status { font-weight: bold; font-size: 0.85em; margin-right: 8px; }
+.ae-footer-actions { display: flex; align-items: center; gap: 6px; }
 ins { background: var(--diff-ins-bg); color: var(--diff-ins-txt); text-decoration: none; padding: 0 1px; }
 del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoration: line-through; padding: 0 1px; }

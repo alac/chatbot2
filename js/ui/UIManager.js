@@ -1113,13 +1113,15 @@ export class UIManager {
 
         const diffs = diffWords(edit.oldText, edit.newText);
         
-        let actionHtml = '';
+        let statusHtml = '';
+        let buttonsHtml = `<button class="secondary modify-btn" style="padding: 4px 8px; font-size: 0.85em;">✎ Modify</button>`;
+
         if (edit.status === 'applied') {
-            actionHtml = `<span class="ae-status applied">Already Applied</span>`;
+            statusHtml = `<span class="ae-status applied">Already Applied</span>`;
         } else if (edit.status === 'invalid') {
-            actionHtml = `<span class="ae-status invalid">Not Found</span>`;
+            statusHtml = `<span class="ae-status invalid">Not Found</span>`;
         } else {
-            actionHtml = `<button class="primary apply-btn" style="padding: 4px 8px; font-size: 0.85em;">Apply</button>`;
+            buttonsHtml += `<button class="primary apply-btn" style="padding: 4px 8px; font-size: 0.85em;">✔️ Apply</button>`;
         }
 
         edit.isCollapsed = edit.isCollapsed !== undefined ? edit.isCollapsed : this.aeSettings.collapseReasoning;
@@ -1131,11 +1133,14 @@ export class UIManager {
             </div>
             <div class="ae-diff-container">
                 <div class="ae-diff-col">${preCtx}${diffs.oldHtml}${postCtx}</div>
-                <div class="ae-diff-col"><button class="ae-edit-btn" title="Edit suggestion">✎</button>${preCtx}${diffs.newHtml}${postCtx}</div>
+                <div class="ae-diff-col">${preCtx}${diffs.newHtml}${postCtx}</div>
             </div>
             <div class="ae-footer">
                 <span style="font-size:0.75em; color:var(--text-muted);">${edit.sourceDraftLabel}</span>
-                ${actionHtml}
+                <div class="ae-footer-actions">
+                    ${statusHtml}
+                    ${buttonsHtml}
+                </div>
             </div>
         `;
 
@@ -1149,7 +1154,8 @@ export class UIManager {
             else content.classList.remove('hidden');
         });
 
-        card.querySelector('.ae-edit-btn').addEventListener('click', () => {
+        // Always allow modifying, even if applied/invalid (user might want to tweak and fix the missing context)
+        card.querySelector('.modify-btn').addEventListener('click', () => {
             this.openEditEditModal(edit, preCtx, postCtx);
         });
 
