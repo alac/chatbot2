@@ -1114,13 +1114,14 @@ export class UIManager {
         const diffs = diffWords(edit.oldText, edit.newText);
         
         let statusHtml = '';
-        let buttonsHtml = `<button class="secondary modify-btn" style="padding: 4px 8px; margin-right: 4px; font-size: 0.85em;">✎ Modify</button>`;
+        let buttonsHtml = '';
 
         if (edit.status === 'applied') {
             statusHtml = `<span class="ae-status applied">Already Applied</span>`;
         } else if (edit.status === 'invalid') {
             statusHtml = `<span class="ae-status invalid">Not Found</span>`;
         } else {
+            buttonsHtml += `<button class="secondary modify-btn" style="padding: 4px 8px; margin-right: 4px; font-size: 0.85em;">✎ Modify</button>`;
             buttonsHtml += `<button class="primary apply-btn" style="padding: 4px 8px; font-size: 0.85em;">✔️ Apply</button>`;
         }
 
@@ -1154,12 +1155,10 @@ export class UIManager {
             else content.classList.remove('hidden');
         });
 
-        // Always allow modifying, even if applied/invalid (user might want to tweak and fix the missing context)
-        card.querySelector('.modify-btn').addEventListener('click', () => {
-            this.openEditEditModal(edit, preCtx, postCtx);
-        });
-
         if (edit.status === 'apply') {
+            card.querySelector('.modify-btn').addEventListener('click', () => {
+                this.openEditEditModal(edit, preCtx, postCtx);
+            });
             card.querySelector('.apply-btn').addEventListener('click', () => {
                 const targetContent = this.state.getContent(edit.targetMessageIdx);
                 const updatedContent = targetContent.substring(0, edit.startIndex) + edit.newText + targetContent.substring(edit.endIndex);
