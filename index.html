@@ -487,10 +487,35 @@
                 <select id="ae-filter-draft" style="max-width: 150px; margin-left: 10px;">
                     <option value="All">All Drafts</option>
                 </select>
+                <button id="btn-ae-top" class="secondary" style="margin-left:auto; margin-right: 12px; font-size: 0.85em; padding: 4px 8px;">⬆️ Top</button>
                 <button id="btn-close-ae" class="close-btn">&times;</button>
             </div>
-            <div class="modal-body" id="ae-list-container" style="display:flex; flex-direction:column; gap: 16px;">
+            <div class="modal-body" id="ae-list-container" style="display:flex; flex-direction:column; gap: 16px; scroll-behavior: smooth;">
                 <!-- Edits injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Edit Fullscreen Modal -->
+    <div id="edit-edit-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="width: 100vw; height: 100vh; height: 100dvh; max-width: none; max-height: none; border-radius: 0;">
+            <div class="modal-header">
+                <h2>Edit AI Suggestion</h2>
+                <button id="btn-close-edit-edit" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 12px;">
+                <h3 style="font-size: 1em; color: var(--text-muted);">Preview (Old -> New)</h3>
+                <div class="ae-diff-container">
+                    <div id="edit-edit-old-preview" class="ae-diff-col" style="max-height: 300px; overflow-y:auto;"></div>
+                    <div id="edit-edit-new-preview" class="ae-diff-col" style="max-height: 300px; overflow-y:auto;"></div>
+                </div>
+                <hr style="margin: 4px 0;">
+                <h3 style="font-size: 1em; color: var(--text-muted);">Modify Suggestion</h3>
+                <textarea id="edit-edit-textarea" style="flex:1; width: 100%; min-height: 150px; font-family: monospace; resize: none; overflow-y:hidden; padding: 12px; font-size: 1em;"></textarea>
+            </div>
+            <div style="padding: 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:flex-end; gap: 12px;">
+                <button id="btn-edit-edit-cancel" class="danger">Cancel</button>
+                <button id="btn-edit-edit-save" class="primary">Save Edit</button>
             </div>
         </div>
     </div>
