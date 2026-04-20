@@ -1,12 +1,61 @@
 console.log("Service worker is active - should enable PWA functionality");
 
-const cacheName = 'chtbt2-7a5fc5e4'; // Change value to force update
+const cacheName = 'chtbt2-57eb5851'; // Change this to force an update
+
+// Files to cache for offline use
+const filesToCache = [
+    './',
+    './index.html',
+    './css/main.css',
+    './js/main.js',
+    './js/api/OpenAIClient.js',
+    './js/state/AppSettings.js',
+    './js/state/StoryState.js',
+    './js/storage/StorageManager.js',
+    './js/ui/SettingsMenu.js',
+    './js/ui/UIManager.js',
+    './js/utils/diff.js',
+    './manifest.json'
+];
 
 self.addEventListener("install", event => {
-	// Kick out the old service worker
-	self.skipWaiting();
+    self.skipWaiting(); // Take over immediately
+    event.waitUntil(
+        caches.open(cacheName).then(cache => {
+            return cache.addAll(filesToCache);
+        })
+    );
 });
 
-self.addEventListener("fetch", function (event) {
-	return;
-})
+self.addEventListener("activate", event => {
+    // When the cacheName changes, delete all older caches
+    event.waitUntil(
+        caches.keys().then(keyList => {
+            return Promise.all(keyList.map(key => {
+                if (key !== cacheName) {
+                    console.log('[ServiceWorker] Removing old cache', key);
+                    return caches.delete(key);
+                }
+            }));
+        })
+    );
+    self.clients.claim(); // Take control of all open pages
+});
+
+self.addEventListener("fetch", event => {
+    // Network-first strategy
+    event.respondWith(
+        fetch(event.request)
+            .then(response => {
+                // If network fetch succeeds, update the cache and return the response
+                return caches.open(cacheName).then(cache => {
+                    cache.put(event.request, response.clone());
+                    return response;
+                });
+            })
+            .catch(() => {
+                // If network fails (offline), return from cache
+                return caches.match(event.request);
+            })
+    );
+});
