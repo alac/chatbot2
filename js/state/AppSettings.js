@@ -55,6 +55,7 @@ export class AppSettings {
         this.displayMode = 'chat';
         this.theme = 'kobold';
         this.renderMarkdown = true;
+        this.visibleOutOfContext = 5;
         this.regexes = []; 
         
         this.load();
@@ -70,6 +71,7 @@ export class AppSettings {
             if (!this.quickReplies) this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
             if (!Array.isArray(this.regexes)) this.regexes = [];
             if (!this.charsPerToken) this.charsPerToken = 4.0;
+            if (this.visibleOutOfContext === undefined) this.visibleOutOfContext = 5;
             if (!this.autoSummarizePrompts) this.autoSummarizePrompts = "::Event Log\nSummarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.\n\n::Story Synopsis\nWrite a prose summary of the recent events, continuing smoothly from the previous summary.";
             
             if (!this.choicesPrompts) {
@@ -110,9 +112,7 @@ export class AppSettings {
                             r = new RegExp(rx.pattern, 'g');
                         }
                         res = res.replace(r, rx.replacement);
-                    } catch (e) {
-                        // ignore broken regexes
-                    }
+                    } catch (e) {}
                 }
             }
         });

@@ -10,8 +10,11 @@ export class UIManager {
         this.storage = new StorageManager();
         this.activeBatch = null;
         this.activeSlot = 1;
+        this.activeSlotName = `Slot 1`;
+        this.activeSlotDesc = ``;
         this.batchTimerInterval = null;
         this.batchStartTime = 0;
+        this.historyOffset = 0;
         
         this.container = document.getElementById('output-container');
         this.input = document.getElementById('user-input');
@@ -21,7 +24,6 @@ export class UIManager {
         this.activeSumJob = null;
         this.sumTargetIndices = [];
 
-        // Apply Edits Settings
         this.aeSettings = {
             groupEdits: true,
             collapseReasoning: true,
@@ -37,8 +39,7 @@ export class UIManager {
     async initApp() {
         await this.storage.init();
         const lastSlot = localStorage.getItem('last_active_slot') || 1;
-        this.activeSlot = parseInt(lastSlot);
-        await this.loadStateFromSlot(this.activeSlot);
+        await this.loadStateFromSlot(parseInt(lastSlot));
         
         const fab = document.getElementById('btn-jump-bottom');
         this.container.addEventListener('scroll', () => {
@@ -60,7 +61,10 @@ export class UIManager {
         document.getElementById('btn-abort').addEventListener('click', () => this.handleAbort());
         
         this.input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.handleSend(); }
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { 
+                e.preventDefault(); 
+                this.handleSend(); 
+            }
         });
 
         this.input.addEventListener('input', () => {
@@ -69,6 +73,10 @@ export class UIManager {
         });
 
         document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.activeBatch) {
+                this.handleAbort();
+                return;
+            }
             if (e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
                 if (this.state.history.length === 0) return;
                 const lastIdx = this.state.history.length - 1;
@@ -246,10 +254,8 @@ export class UIManager {
             }
         }
 
-        const oldTop = document.getElementById(`switcher-top-${this.state.history.length - 1}`);
-        const oldBot = document.getElementById(`switcher-bottom-${this.state.history.length - 1}`);
-        if (oldTop) oldTop.remove();
-        if (oldBot) oldBot.remove();
+        const oldSwitcher = document.getElementById(`switcher-${this.state.history.length - 1}`);
+        if (oldSwitcher) oldSwitcher.remove();
 
         document.getElementById('btn-send').classList.add('hidden');
         document.getElementById('btn-retry').classList.add('hidden');
@@ -275,10 +281,8 @@ export class UIManager {
             
             this.activeBatch.jobs.forEach((job, i) => {
                 if (job.status === 'streaming') {
-                    const tTop = document.getElementById(`batch-timer-top-${newIdx}-${i}`);
-                    const tBot = document.getElementById(`batch-timer-bottom-${newIdx}-${i}`);
-                    if (tTop) tTop.textContent = `(${elapsed}s)`;
-                    if (tBot) tBot.textContent = `(${elapsed}s)`;
+                    const timerEl = document.getElementById(`batch-timer-${newIdx}-${i}`);
+                    if (timerEl) timerEl.textContent = `(${elapsed}s)`;
                 }
             });
         }, 100);
@@ -307,16 +311,12 @@ export class UIManager {
                 }
 
                 const iconMap = { 'done':'✔️', 'error':'❌', 'streaming':'🕒' };
-                const iTop = document.getElementById(`draft-icon-top-${newIdx}-${draftIdx}`);
-                const iBot = document.getElementById(`draft-icon-bottom-${newIdx}-${draftIdx}`);
-                if (iTop) iTop.textContent = iconMap[data.status] || '';
-                if (iBot) iBot.textContent = iconMap[data.status] || '';
+                const iconEl = document.getElementById(`draft-icon-${newIdx}-${draftIdx}`);
+                if (iconEl) iconEl.textContent = iconMap[data.status] || '';
                 
                 if (data.status !== 'streaming') {
-                    const tTop = document.getElementById(`batch-timer-top-${newIdx}-${draftIdx}`);
-                    const tBot = document.getElementById(`batch-timer-bottom-${newIdx}-${draftIdx}`);
-                    if (tTop) tTop.textContent = `(${data.duration}s)`;
-                    if (tBot) tBot.textContent = `(${data.duration}s)`;
+                    const timerEl = document.getElementById(`batch-timer-${newIdx}-${draftIdx}`);
+                    if (timerEl) timerEl.textContent = `(${data.duration}s)`;
                 }
             });
         } finally {
@@ -329,7 +329,6 @@ export class UIManager {
             document.getElementById('btn-abort').classList.add('hidden');
             document.getElementById('btn-send').classList.remove('hidden');
             document.getElementById('btn-retry').classList.remove('hidden');
-            this.input.focus();
             
             const oldWrapper = document.getElementById(`turn-wrapper-${newIdx}`);
             if (oldWrapper) oldWrapper.remove();
@@ -396,7 +395,6 @@ export class UIManager {
             if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
             this.activeBatch = null;
 
-            // Extract choices across all drafts
             const msg = this.state.history[newIdx];
             const choicesPool = [];
             const regex = /<choice>([\s\S]*?)<\/choice>/gi;
@@ -441,13 +439,11 @@ export class UIManager {
         
         let htmlBlocks = [];
         let processed = visuallyApplied.replace(/<html>([\s\S]*?)<\/html>/gi, (m, inner) => {
-            // Failsafe if DOMPurify failed to load over CDN
             const clean = window.DOMPurify ? window.DOMPurify.sanitize(inner) : inner;
             htmlBlocks.push(clean);
             return `%%HTML_BLOCK_${htmlBlocks.length - 1}%%`;
         });
 
-        // Escape any remaining <tag> format to text (excluding our placeholders)
         processed = processed.replace(/<(\/?)([a-zA-Z][^>]*)>/g, '&lt;$1$2&gt;');
 
         if (this.shouldUseMarkdown(content, draft.markdownOverride)) {
@@ -466,10 +462,32 @@ export class UIManager {
     }
 
     renderAll() {
+        const oldScrollHeight = this.container.scrollHeight;
+        const oldScrollTop = this.container.scrollTop;
+
         this.container.innerHTML = '';
         this.container.className = `${settings.displayMode}-mode`;
+
+        let startIndex = 0;
+        if (settings.visibleOutOfContext !== -1) {
+            startIndex = Math.max(0, this.state.contextBoundaryIndex - settings.visibleOutOfContext - this.historyOffset);
+        }
+
+        if (startIndex > 0) {
+            const btn = document.createElement('div');
+            btn.className = 'load-older-btn';
+            btn.textContent = `▲ Load Older Messages (${startIndex} hidden)`;
+            btn.onclick = () => {
+                this.historyOffset += 10;
+                this.renderAll();
+            };
+            this.container.appendChild(btn);
+        }
+
         this.state.history.forEach((turn, idx) => {
-            if (idx === this.state.contextBoundaryIndex + 1) {
+            if (idx < startIndex) return; 
+
+            if (idx === this.state.contextBoundaryIndex + 1 && this.state.contextBoundaryIndex >= 0) {
                 const divider = document.createElement('div');
                 divider.className = 'context-divider';
                 divider.textContent = 'Context Boundary';
@@ -477,14 +495,22 @@ export class UIManager {
             }
             this.appendTurnToDOM(turn.role, idx);
         });
-        if (!this.isUserScrolledUp) this.scrollToBottom();
+
+        // Scroll Anchoring
+        if (startIndex > 0 && this.historyOffset > 0 && oldScrollHeight > 0) {
+            const newScrollHeight = this.container.scrollHeight;
+            this.container.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
+        } else if (!this.isUserScrolledUp) {
+            this.scrollToBottom();
+        }
+
         this.updateSummaryMeter();
     }
 
-    buildSwitcherDOM(index, isTop, msg, isStreaming) {
+    buildSwitcherDOM(index, msg, isStreaming) {
         const switcher = document.createElement('div');
-        switcher.className = `draft-switcher ${isTop ? 'top' : 'bottom'}`;
-        switcher.id = `switcher-${isTop ? 'top' : 'bottom'}-${index}`;
+        switcher.className = `draft-switcher top`;
+        switcher.id = `switcher-${index}`;
         
         const controlsRow = document.createElement('div');
         controlsRow.className = 'switcher-controls';
@@ -494,7 +520,7 @@ export class UIManager {
         btnPrev.onclick = () => this.switchDraft(index, -1);
         
         const select = document.createElement('select');
-        select.id = `draft-select-${isTop ? 'top' : 'bottom'}-${index}`;
+        select.id = `draft-select-${index}`;
         
         msg.drafts.forEach((d, i) => {
             const opt = document.createElement('option');
@@ -524,12 +550,12 @@ export class UIManager {
             const spanGroup = document.createElement('span');
             
             const icon = document.createElement('span');
-            icon.id = `draft-icon-${isTop ? 'top' : 'bottom'}-${index}-${i}`;
+            icon.id = `draft-icon-${index}-${i}`;
             icon.textContent = d.status === 'done' ? '✔️' : (d.status === 'error' ? '❌' : '🕒');
             if (i === msg.activeDraftIndex) icon.classList.add('active-icon');
             
             const timer = document.createElement('span');
-            timer.id = `batch-timer-${isTop ? 'top' : 'bottom'}-${index}-${i}`;
+            timer.id = `batch-timer-${index}-${i}`;
             timer.style.marginLeft = '2px';
             if (!isStreaming || d.status !== 'streaming') {
                 timer.textContent = `(${d.duration}s)`;
@@ -561,7 +587,6 @@ export class UIManager {
 
         if (role === 'choices') {
             if (msg.extractedChoices === null) {
-                // Streaming visual for choices
                 const header = document.createElement('div');
                 header.className = 'choices-header';
                 header.innerHTML = `<span>Scrying possible futures...</span> <span class="streaming-indicator"></span>`;
@@ -586,7 +611,6 @@ export class UIManager {
                 });
                 bubble.appendChild(statusRow);
             } else {
-                // Render finished choices
                 const header = document.createElement('div');
                 header.className = 'choices-header';
                 header.textContent = `Select a Path (${settings.activeChoicePromptTitle})`;
@@ -662,13 +686,12 @@ export class UIManager {
                 bubble.appendChild(footerGrid);
             }
         } else {
-            // Normal Assistant/User behavior
             const activeDraft = msg.drafts[msg.activeDraftIndex];
             const content = activeDraft.content;
             const reasoning = activeDraft.reasoning;
 
             if (msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
-                wrapper.appendChild(this.buildSwitcherDOM(index, true, msg, isStreaming));
+                wrapper.appendChild(this.buildSwitcherDOM(index, msg, isStreaming));
             }
 
             if (!isStreaming) {
@@ -801,12 +824,6 @@ export class UIManager {
         }
 
         wrapper.appendChild(bubble);
-
-        // Inject Bottom Switcher if normal assistant batch
-        if (role === 'assistant' && msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
-            wrapper.appendChild(this.buildSwitcherDOM(index, false, msg, isStreaming));
-        }
-
         this.container.appendChild(wrapper);
     }
 
@@ -835,37 +852,33 @@ export class UIManager {
             else reasonDiv.classList.add('hidden');
         }
 
-        ['top', 'bottom'].forEach(pos => {
-            const select = document.getElementById(`draft-select-${pos}-${msgIndex}`);
-            if (select) select.value = draftIdx;
+        const select = document.getElementById(`draft-select-${msgIndex}`);
+        if (select) select.value = draftIdx;
 
-            msg.drafts.forEach((_, i) => {
-                const icon = document.getElementById(`draft-icon-${pos}-${msgIndex}-${i}`);
-                if (icon) {
-                    if (i === draftIdx) icon.classList.add('active-icon');
-                    else icon.classList.remove('active-icon');
-                }
-            });
+        msg.drafts.forEach((_, i) => {
+            const icon = document.getElementById(`draft-icon-${msgIndex}-${i}`);
+            if (icon) {
+                if (i === draftIdx) icon.classList.add('active-icon');
+                else icon.classList.remove('active-icon');
+            }
         });
-
-        const topSwitcher = document.getElementById(`switcher-top-${msgIndex}`);
+        
+        const topSwitcher = document.getElementById(`switcher-${msgIndex}`);
         if (topSwitcher) {
             topSwitcher.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
 
+    // [Quick Replies logic stays exactly the same]
     openQuickReplies() {
         const container = document.getElementById('qr-button-container');
         container.innerHTML = '';
-        
         const raw = settings.quickReplies || "";
         const parts = raw.split('::').filter(p => p.trim() !== '');
-        
         parts.forEach(p => {
             const lines = p.trim().split('\n');
             const title = lines.shift().trim();
             const content = lines.join('\n').trim();
-            
             const btn = document.createElement('button');
             btn.className = 'primary';
             btn.textContent = title;
@@ -879,10 +892,10 @@ export class UIManager {
             });
             container.appendChild(btn);
         });
-
         document.getElementById('quick-replies-modal').classList.remove('hidden');
     }
 
+    // [Apply Edits methods stay exactly the same]
     openApplyEdits() {
         if (this.state.history.length === 0) return alert("No messages available.");
         const lastMsg = this.state.history[this.state.history.length - 1];
@@ -913,8 +926,6 @@ export class UIManager {
             while ((match = regex.exec(draft.content)) !== null) {
                 const oldText = match[2].trim();
                 const newText = match[3].trim();
-
-                // FIX: Exclude pairs where NEW == OLD
                 if (oldText === newText) continue;
 
                 this.extractedEdits.push({
@@ -985,7 +996,6 @@ export class UIManager {
         this.extractedEdits.forEach(e => e.groupId = null);
         let currentGroupId = 1;
 
-        // Group only 'apply' edits since they share a clear spatial index
         const validEdits = this.extractedEdits.filter(e => e.status === 'apply').sort((a,b) => {
             if (a.targetMessageIdx !== b.targetMessageIdx) return a.targetMessageIdx - b.targetMessageIdx;
             return a.startIndex - b.startIndex;
@@ -996,7 +1006,6 @@ export class UIManager {
             let placed = false;
             for (let g of groups) {
                 if (g.msgIdx === edit.targetMessageIdx) {
-                    // Check for overlap
                     if (Math.max(edit.startIndex, g.start) <= Math.min(edit.endIndex, g.end)) {
                         edit.groupId = g.id;
                         g.start = Math.min(g.start, edit.startIndex);
@@ -1013,7 +1022,6 @@ export class UIManager {
             }
         });
         
-        // Give independent groups to applied/invalid edits
         this.extractedEdits.forEach(e => {
             if (e.groupId === null) e.groupId = currentGroupId++;
         });
@@ -1026,7 +1034,6 @@ export class UIManager {
         
         const filter = document.getElementById('ae-filter-draft').value;
 
-        // --- Render Control Bar ---
         const controls = document.createElement('div');
         controls.className = 'ae-controls-bar';
         
@@ -1070,7 +1077,6 @@ export class UIManager {
         controls.appendChild(ctxDiv);
         container.appendChild(controls);
 
-        // --- Render Edits ---
         const activeEdits = this.extractedEdits.filter(edit => {
             if (filter !== 'All' && edit.sourceDraftLabel !== filter) return false;
             if (this.aeSettings.hideInvalid && edit.status === 'invalid') return false;
@@ -1151,7 +1157,6 @@ export class UIManager {
             </div>
         `;
 
-        // Reasoning Toggle Logic
         card.querySelector('.ae-reasoning-block').addEventListener('click', () => {
             edit.isCollapsed = !edit.isCollapsed;
             const label = card.querySelector('.ae-reasoning-label');
@@ -1202,28 +1207,23 @@ export class UIManager {
         const edit = this.currentEditEditing;
         const newText = document.getElementById('edit-edit-textarea').value;
         
-        // Build the updated XML block
         const newRawMatch = `<edit>\n<old>${edit.oldText}</old>\n<new>${newText}</new>\n<reasoning>${edit.reasoning}</reasoning>\n</edit>`;
         
-        // Find the specific draft in history to update its raw content
         const msgIdx = this.state.history.length - 1;
         const msg = this.state.history[msgIdx];
         if (msg && msg.drafts[edit.sourceDraftIndex]) {
             const draft = msg.drafts[edit.sourceDraftIndex];
             draft.content = draft.content.replace(edit.rawMatch, newRawMatch);
             
-            // Re-render chat container if it happens to be the active draft visually
             if (msg.activeDraftIndex === edit.sourceDraftIndex) {
                 const contentNode = document.getElementById(`content-${msgIdx}`);
                 if (contentNode) this.setNodeContent(contentNode, draft.content, draft);
             }
         }
         
-        // Update the extracted edit object
         edit.rawMatch = newRawMatch;
         edit.newText = newText;
         
-        // Re-eval statuses and refresh the list
         this.evaluateEditsStatus();
         this.renderApplyEditsList();
         this.autoSave();
@@ -1444,7 +1444,7 @@ export class UIManager {
     }
 
     async autoSave() {
-        await this.storage.saveSlot(this.activeSlot, `Slot ${this.activeSlot}`, `Auto-saved`, this.state.exportData());
+        await this.storage.saveSlot(this.activeSlot, this.activeSlotName, this.activeSlotDesc, this.state.exportData());
         localStorage.setItem('last_active_slot', this.activeSlot);
         if (window.settingsUI) window.settingsUI.refreshSlotList();
     }
@@ -1454,15 +1454,24 @@ export class UIManager {
         localStorage.setItem('last_active_slot', id);
         
         const slot = await this.storage.loadSlot(id);
-        if (slot && slot.data) {
-            this.state.loadFromData(slot.data);
-            document.getElementById('set-display-mode').value = settings.displayMode;
-            if (document.getElementById('lbl-active-sum-prompt')) {
-                document.getElementById('lbl-active-sum-prompt').textContent = this.state.selectedAutoSumPromptTitle;
+        if (slot) {
+            this.activeSlotName = slot.name || `Slot ${id}`;
+            this.activeSlotDesc = slot.description || ``;
+            if (slot.data) {
+                this.state.loadFromData(slot.data);
+                document.getElementById('set-display-mode').value = settings.displayMode;
+                if (document.getElementById('lbl-active-sum-prompt')) {
+                    document.getElementById('lbl-active-sum-prompt').textContent = this.state.selectedAutoSumPromptTitle;
+                }
+            } else {
+                this.state.clear(true);
             }
         } else {
+            this.activeSlotName = `Slot ${id}`;
+            this.activeSlotDesc = ``;
             this.state.clear(true); 
         }
+        this.historyOffset = 0;
         this.state.buildPromptPayload();
         this.renderAll();
     }

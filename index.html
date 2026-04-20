@@ -61,11 +61,11 @@
         </div>
         
         <div class="input-row">
-            <textarea id="user-input" placeholder="Type your message... (Shift+Enter for newline)"></textarea>
+            <textarea id="user-input" placeholder="Type your message... (Ctrl+Enter to send)"></textarea>
             <div class="input-controls">
                 <div class="top-btns">
                     <div class="send-btn-wrapper">
-                        <button id="btn-send" class="primary">Send</button>
+                        <button id="btn-send" class="primary" title="Send (Ctrl+Enter)">Send</button>
                         <button id="btn-abort" class="danger hidden">Stop</button>
                     </div>
                     <button id="btn-retry" title="Retry Last">🔄</button>
@@ -120,7 +120,6 @@
                     <hr>
                     <div id="choice-parallel-rows-container"></div>
                 </div>
-
             </div>
         </div>
     </div>
@@ -138,7 +137,6 @@
                 <button id="btn-close-chat-settings" class="close-btn">&times;</button>
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column;">
-                
                 <div id="tab-memory" class="tab-pane active" style="flex: 1;">
                     <div class="setting-row column" style="height: 100%;">
                         <span class="label-text">Memory (System Prompt)</span>
@@ -337,6 +335,10 @@
                             <option value="paper">Paper</option>
                             <option value="pastel">Pastel</option>
                         </select>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Visible Out of Context Msgs (-1 for all)</span>
+                        <input type="number" id="set-visible-ooc" min="-1" max="1000" style="width: 70px;">
                     </div>
                     <div class="setting-row">
                         <span class="label-text">Render Markdown (Global)</span>

@@ -135,6 +135,7 @@ export class SettingsMenu {
             const slot = await this.uiManager.storage.loadSlot(this.selectedSlotId);
             const newName = prompt("Enter slot name:", slot?.name || `Slot ${this.selectedSlotId}`);
             if (newName !== null) {
+                if (this.selectedSlotId === this.uiManager.activeSlot) this.uiManager.activeSlotName = newName;
                 await this.uiManager.storage.saveSlot(this.selectedSlotId, newName, slot?.description || "", slot?.data || this.uiManager.state.exportData());
                 this.refreshSlotList();
             }
@@ -143,6 +144,7 @@ export class SettingsMenu {
             const slot = await this.uiManager.storage.loadSlot(this.selectedSlotId);
             const newDesc = prompt("Enter slot description:", slot?.description || "");
             if (newDesc !== null) {
+                if (this.selectedSlotId === this.uiManager.activeSlot) this.uiManager.activeSlotDesc = newDesc;
                 await this.uiManager.storage.saveSlot(this.selectedSlotId, slot?.name || `Slot ${this.selectedSlotId}`, newDesc, slot?.data || this.uiManager.state.exportData());
                 this.refreshSlotList();
             }
@@ -587,6 +589,7 @@ export class SettingsMenu {
 
         document.getElementById('set-display-mode').value = settings.displayMode;
         document.getElementById('set-theme').value = settings.theme;
+        document.getElementById('set-visible-ooc').value = settings.visibleOutOfContext;
         document.getElementById('set-render-markdown').checked = settings.renderMarkdown;
         document.getElementById('set-regex-count').value = settings.regexes.length;
         this.renderRegexRows();
@@ -627,6 +630,7 @@ export class SettingsMenu {
 
         settings.displayMode = document.getElementById('set-display-mode').value;
         settings.theme = document.getElementById('set-theme').value;
+        settings.visibleOutOfContext = parseInt(document.getElementById('set-visible-ooc').value);
         settings.renderMarkdown = document.getElementById('set-render-markdown').checked;
         
         const rxCount = parseInt(document.getElementById('set-regex-count').value);
