@@ -417,7 +417,7 @@ export class SettingsMenu {
 
     closeAndSaveChoicesSettings() {
         settings.choiceParallelEnabled = document.getElementById('set-choice-parallel-enabled').checked;
-        settings.choiceParallelCount = parseInt(document.getElementById('set-choice-parallel-count').value);
+        settings.choiceParallelCount = parseInt(document.getElementById('set-choice-parallel-count').value) || 1;
         for (let i = 0; i < settings.choiceParallelCount; i++) {
             const chk = document.getElementById(`choice-batch-override-chk-${i}`);
             const txt = document.getElementById(`choice-batch-model-txt-${i}`);

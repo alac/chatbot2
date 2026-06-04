@@ -112,10 +112,7 @@
                     </div>
                     <div class="setting-row" id="choice-parallel-count-row">
                         <span class="label-text">Number of Drafts</span>
-                        <select id="set-choice-parallel-count" style="width: 80px;">
-                            <option value="2">2</option><option value="3">3</option>
-                            <option value="4">4</option><option value="5">5</option>
-                        </select>
+                        <input type="number" id="set-choice-parallel-count" min="1" max="10" value="2" style="width: 80px;">
                     </div>
                     <hr>
                     <div id="choice-parallel-rows-container"></div>
@@ -366,6 +363,74 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Brainstorm Modal -->
+    <div id="brainstorm-modal" class="modal hidden">
+        <div class="modal-content" style="max-height: 90vh; width: 650px;">
+            <div class="modal-header">
+                <h2>Brainstorm Ideas</h2>
+                <button id="btn-close-brainstorm" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 16px;">
+                
+                <!-- Preset -->
+                <div class="brainstorm-row">
+                    <button id="btn-bs-preset" class="primary bs-btn">Preset Choices</button>
+                    <span class="bs-desc">Uses your active choice prompt defined in settings.</span>
+                </div>
+                <hr style="margin: 0;">
+                
+                <!-- Mood -->
+                <div class="brainstorm-row column">
+                    <div style="display:flex; align-items:center; gap: 10px;">
+                        <button id="btn-bs-mood" class="primary bs-btn">Mood Choices</button>
+                        <span class="bs-desc">Generate ideas matching specific styles or genres.</span>
+                    </div>
+                    <div class="mood-box">
+                        <div id="mood-tags-container" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+                        <div style="display:flex; gap: 6px;">
+                            <input type="text" id="mood-input" placeholder="Type a mood and press Enter..." style="flex:1;">
+                            <button id="btn-mood-random" class="secondary" title="Add 3 random moods">🎲 Randomize</button>
+                        </div>
+                    </div>
+                </div>
+                <hr style="margin: 0;">
+                
+                <!-- Shift -->
+                <div class="brainstorm-row">
+                    <button id="btn-bs-shift" class="primary bs-btn">Shift Choices</button>
+                    <span class="bs-desc">Deliberately shift Tone, Emotion, Pace, or Agency.</span>
+                </div>
+                <hr style="margin: 0;">
+                
+                <!-- Tension -->
+                <div class="brainstorm-row">
+                    <button id="btn-bs-tension" class="primary bs-btn">Tension Choices</button>
+                    <span class="bs-desc">Raise tension, deepen character, or add a new element.</span>
+                </div>
+                <hr style="margin: 0;">
+                
+                <!-- Reversal -->
+                <div class="brainstorm-row column">
+                    <div style="display:flex; align-items:center; gap: 10px;">
+                        <button id="btn-bs-reversal" class="primary bs-btn">Reversal Choices</button>
+                        <span class="bs-desc">A character does the exact opposite of what's expected.</span>
+                    </div>
+                    <div style="display:flex; gap: 6px; margin-top: 8px;">
+                        <input type="text" id="reversal-char-input" placeholder="Target Character Name (Optional)" style="flex:1;">
+                    </div>
+                </div>
+                <hr style="margin: 0;">
+
+                <!-- Storm -->
+                <div class="brainstorm-row">
+                    <button id="btn-bs-storm" class="primary bs-btn">Storm Choices</button>
+                    <span class="bs-desc">Introduce a new overarching event or medium-term goal.</span>
+                </div>
+                
             </div>
         </div>
     </div>

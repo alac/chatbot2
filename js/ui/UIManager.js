@@ -31,6 +31,9 @@ export class UIManager {
             contextChars: 10
         };
         this.currentEditEditing = null;
+        
+        this.moodTags = [];
+        this.hardcodedMoods = ['Action-packed', 'Aggressive', 'Alien', 'Angsty', 'Bleak', 'Chaotic', 'Cheerful', 'Cinematic', 'Comedic', 'Cozy', 'Creepy', 'Cyberpunk', 'Dark', 'Desperate', 'Dramatic', 'Dreamy', 'Eerie', 'Epic', 'Euphoric', 'Fast-paced', 'Flirty', 'Gloomy', 'Gothic', 'Gritty', 'Heartwarming', 'Heroic', 'Hopeful', 'Horror', 'Intense', 'Lighthearted', 'Melancholic', 'Mysterious', 'Noir', 'Nostalgic', 'Ominous', 'Optimistic', 'Peaceful', 'Philosophical', 'Playful', 'Romantic', 'Sci-Fi', 'Sensual', 'Sexy', 'Serious', 'Slow-burn', 'Steampunk', 'Suspenseful', 'Tense', 'Tragic', 'Whimsical', 'Wholesome'];
 
         this.bindEvents();
         this.initApp();
@@ -120,11 +123,83 @@ export class UIManager {
             this.openQuickReplies(); 
         });
 
-        // Choices
-        document.getElementById('btn-generate-choices').addEventListener('click', () => this.startChoicesGeneration());
+        // Choices & Brainstorming
+        document.getElementById('btn-generate-choices').addEventListener('click', () => {
+            document.getElementById('quick-menu').classList.add('hidden');
+            document.getElementById('brainstorm-modal').classList.remove('hidden');
+        });
         document.getElementById('btn-choices-settings').addEventListener('click', () => {
             if (window.settingsUI) window.settingsUI.populateChoicesUI();
             document.getElementById('choices-settings-modal').classList.remove('hidden');
+        });
+
+        // Brainstorming Modal Bindings
+        document.getElementById('btn-close-brainstorm').addEventListener('click', () => document.getElementById('brainstorm-modal').classList.add('hidden'));
+        
+        document.getElementById('btn-bs-preset').addEventListener('click', () => {
+            document.getElementById('brainstorm-modal').classList.add('hidden');
+            this.startChoicesGeneration();
+        });
+
+        const moodInput = document.getElementById('mood-input');
+        moodInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                const val = moodInput.value.trim().replace(/,/g, '');
+                if (val && !this.moodTags.includes(val)) {
+                    this.moodTags.push(val);
+                    this.renderMoodTags();
+                }
+                moodInput.value = '';
+            }
+        });
+        document.getElementById('btn-mood-random').addEventListener('click', () => {
+            let available = this.hardcodedMoods.filter(m => !this.moodTags.includes(m));
+            for (let i = 0; i < 3; i++) {
+                if (available.length === 0) break;
+                const idx = Math.floor(Math.random() * available.length);
+                this.moodTags.push(available[idx]);
+                available.splice(idx, 1);
+            }
+            this.renderMoodTags();
+        });
+        document.getElementById('btn-bs-mood').addEventListener('click', () => {
+            if (moodInput.value.trim()) {
+                this.moodTags.push(moodInput.value.trim());
+                moodInput.value = '';
+                this.renderMoodTags();
+            }
+            if (this.moodTags.length === 0) {
+                document.getElementById('btn-mood-random').click();
+            }
+            const prompt = `Generate 5 ideas for what happens next matching the following styles: ${this.moodTags.join(', ')}.`;
+            document.getElementById('brainstorm-modal').classList.add('hidden');
+            this.startChoicesGeneration(prompt);
+        });
+
+        document.getElementById('btn-bs-shift').addEventListener('click', () => {
+            const prompt = `First, categorize the current scene along these axes: Mood/Tone, Emotional Charge, Narrative Pace/Tension, Agency/Power Balance.\nNow, choose **one** axis to deliberately shift to an adjacent category (e.g., Mood from Lighthearted to Eerie/Dramatic). Then generate 5 ideas for what happens next; for each briefly justify why that shift could naturally arise from the established story elements.`;
+            document.getElementById('brainstorm-modal').classList.add('hidden');
+            this.startChoicesGeneration(prompt);
+        });
+
+        document.getElementById('btn-bs-tension').addEventListener('click', () => {
+            const prompt = `Give me 3 options for what might happen next—one that raises tension, one that deepens character, and one that introduces a new element.`;
+            document.getElementById('brainstorm-modal').classList.add('hidden');
+            this.startChoicesGeneration(prompt);
+        });
+
+        document.getElementById('btn-bs-reversal').addEventListener('click', () => {
+            const char = document.getElementById('reversal-char-input').value.trim() || 'a character';
+            const prompt = `Give me 5 ideas for how ${char} could do the opposite of what they would normally do, while providing a justification for each one.`;
+            document.getElementById('brainstorm-modal').classList.add('hidden');
+            this.startChoicesGeneration(prompt);
+        });
+
+        document.getElementById('btn-bs-storm').addEventListener('click', () => {
+            const prompt = `Give me 5 ideas for an overarching event that we can introduce that would provide a medium term goal to the story.`;
+            document.getElementById('brainstorm-modal').classList.add('hidden');
+            this.startChoicesGeneration(prompt);
         });
 
         // Apply Edits Core Events
@@ -342,7 +417,27 @@ export class UIManager {
         }
     }
 
-    async startChoicesGeneration() {
+    renderMoodTags() {
+        const container = document.getElementById('mood-tags-container');
+        container.innerHTML = '';
+        this.moodTags.forEach(tag => {
+            const pill = document.createElement('div');
+            pill.className = 'mood-pill';
+            const text = document.createElement('span');
+            text.textContent = tag;
+            const btn = document.createElement('button');
+            btn.innerHTML = '&times;';
+            btn.onclick = () => {
+                this.moodTags = this.moodTags.filter(t => t !== tag);
+                this.renderMoodTags();
+            };
+            pill.appendChild(text);
+            pill.appendChild(btn);
+            container.appendChild(pill);
+        });
+    }
+
+    async startChoicesGeneration(promptOverride = null) {
         if (this.activeBatch) return;
 
         document.getElementById('quick-menu').classList.add('hidden');
@@ -352,7 +447,13 @@ export class UIManager {
         this.isUserScrolledUp = false;
 
         const payloadObj = this.state.buildPromptPayload();
-        payloadObj.messages.push({ role: 'user', content: settings.activeChoicePromptText });
+        
+        let finalPrompt = promptOverride || settings.activeChoicePromptText;
+        if (!finalPrompt.includes('<choice>')) {
+            finalPrompt += '\n\nWrap each option in <choice> and </choice> tags.';
+        }
+
+        payloadObj.messages.push({ role: 'user', content: finalPrompt });
 
         const count = settings.choiceParallelEnabled ? parseInt(settings.choiceParallelCount) : 1;
         this.activeBatch = new ParallelGenerationBatch(payloadObj.messages, count, settings.choiceParallelOverrides);

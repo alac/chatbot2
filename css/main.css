@@ -73,9 +73,38 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .markdown-body li { margin-bottom: 0.25em; }
 .markdown-body ul:last-child, .markdown-body ol:last-child { margin-bottom: 0; }
 
-.markdown-body table { display: block; width: 100%; overflow-x: auto; white-space: nowrap; border-collapse: collapse; margin-bottom: 1em; }
-.markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 6px 12px; }
+.markdown-body table { 
+    display: block; 
+    width: 100%; 
+    overflow-x: auto; 
+    white-space: nowrap; 
+    border-collapse: collapse; 
+    margin-bottom: 1em; 
+    /* Force the scrollbar to appear */
+    -webkit-overflow-scrolling: touch; 
+}
 .markdown-body tr:nth-child(even) { background-color: rgba(255,255,255,0.05); }
+.markdown-body th, .markdown-body td { 
+    border: 1px solid var(--border); 
+    padding: 8px 12px;
+    min-width: 120px; /* Ensures columns have enough room to breathe */
+    max-width: 300px; /* Limits cell width so the table isn't infinitely long */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal; /* Allows text to wrap within the cell width limit */
+}
+
+/* Make table scrollbar visible on mobile/desktop */
+.markdown-body table::-webkit-scrollbar {
+    height: 6px;
+}
+.markdown-body table::-webkit-scrollbar-track {
+    background: var(--bg-panel);
+}
+.markdown-body table::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
 
 .context-divider { display: flex; align-items: center; text-align: center; color: var(--danger); font-weight: bold; font-size: 0.8em; margin: 10px 0; opacity: 0.8;}
 .context-divider::before, .context-divider::after { content: ''; flex: 1; border-bottom: 2px dashed var(--danger); margin: 0 10px; }
@@ -236,3 +265,14 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .ae-footer-actions { display: flex; align-items: center; gap: 6px; }
 ins { background: var(--diff-ins-bg); color: var(--diff-ins-txt); text-decoration: none; padding: 0 1px; }
 del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoration: line-through; padding: 0 1px; }
+
+/* Brainstorm Modal */
+.brainstorm-row { display: flex; align-items: center; gap: 12px; width: 100%; }
+.brainstorm-row.column { flex-direction: column; align-items: stretch; }
+.bs-btn { min-width: 150px; text-align: left !important; display: flex; justify-content: center; }
+.bs-desc { font-size: 0.85em; color: var(--text-muted); flex: 1; }
+
+.mood-box { display:flex; flex-direction:column; gap: 8px; margin-top: 8px; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 6px; border: 1px solid var(--border); }
+.mood-pill { display: flex; align-items: center; gap: 6px; background: var(--accent); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em; font-weight: 500; }
+.mood-pill button { background: transparent; border: none; color: white; font-weight: bold; cursor: pointer; padding: 0 4px; border-radius: 50%; display:flex; align-items:center; justify-content:center; }
+.mood-pill button:hover { background: rgba(0,0,0,0.3); }
