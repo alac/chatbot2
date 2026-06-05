@@ -436,21 +436,51 @@
     </div>
 
     <!-- Quick Replies Modal -->
+    <!-- Quick Replies Modal -->
     <div id="quick-replies-modal" class="modal hidden">
         <div class="modal-content" style="max-height: 80vh;">
             <div class="modal-header">
                 <h2>Quick Replies</h2>
                 <div>
+                    <button id="btn-models-qr-toggle" class="secondary">Models</button>
                     <button id="btn-edit-qr-toggle" class="secondary">Edit</button>
                     <button id="btn-close-qr" class="close-btn">&times;</button>
                 </div>
             </div>
             <div class="modal-body" style="display:flex; flex-direction:column;">
                 <div id="qr-button-container" style="display:flex; flex-direction:column; gap: 8px; overflow-y:auto;"></div>
+                
                 <div id="qr-edit-container" class="hidden" style="flex:1; display:flex; flex-direction:column; gap: 8px; height: 100%;">
                     <p style="font-size: 0.85em; color: var(--text-muted);">Format: <code>::Button Name\nMessage Content\n\n::Next Button...</code></p>
                     <textarea id="qr-edit-textarea" style="flex:1; min-height: 200px; font-family: monospace;"></textarea>
                     <button id="btn-save-qr" class="primary">Save Quick Replies</button>
+                </div>
+
+                <div id="qr-models-container" class="hidden" style="flex:1; display:flex; flex-direction:column; gap: 8px; height: 100%;">
+                    <p style="font-size: 0.85em; color: var(--text-muted);">Override models when a Quick Reply is sent via the 🚀 button.</p>
+                    <div class="setting-row">
+                        <span class="label-text">Select Quick Reply</span>
+                        <select id="qr-model-select" style="flex:1; margin-left: 10px;"></select>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Enable Overrides for this Reply</span>
+                        <input type="checkbox" id="qr-model-enable">
+                    </div>
+                    <hr style="margin: 4px 0;">
+                    <div id="qr-model-config" class="hidden" style="display:flex; flex-direction:column; gap:8px;">
+                        <div class="setting-row">
+                            <span class="label-text">Number of Drafts</span>
+                            <input type="number" id="qr-model-count" min="1" max="5" value="1" style="width: 80px;">
+                        </div>
+                        <div class="batch-row-container">
+                            <div class="batch-row-top">Draft 1 (Primary Model)</div>
+                            <div class="batch-row-bottom">
+                                <input type="text" id="qr-model-txt-primary" placeholder="Leave blank to use default">
+                            </div>
+                        </div>
+                        <div id="qr-model-overrides-container"></div>
+                    </div>
+                    <button id="btn-save-qr-models" class="primary" style="margin-top:auto;">Save QR Models</button>
                 </div>
             </div>
         </div>

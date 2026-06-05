@@ -27,7 +27,8 @@ export class AppSettings {
         
         // Quick Replies & Choices
         this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
-        
+        this.qrModels = {};
+
         this.choicesPrompts = "::Plain\nSuggest 5 possible actions the user character could take next. Wrap each option in <choice> and </choice> tags.\n\n::Character Driven\nSuggest 5 possible actions the user character could take next based on their current state of mind and emotions. Wrap each option in <choice> and </choice> tags.\n\n::Context Driven\nSuggest 5 possible actions the user character could take next based on their various abilities, and what is afforded by the situation/location they are in. Wrap each option in <choice> and </choice> tags.\n\n::Dialogue Focused\nSuggest 5 different things the user character could say next, ranging from friendly to hostile. Wrap each option in <choice> and </choice> tags.\n\n::Unexpected Events\nSuggest 3 surprising, impulsive, or chaotic actions the user character could take to completely derail the current situation. Wrap each option in <choice> and </choice> tags.";
         this.activeChoicePromptTitle = "Plain";
         this.activeChoicePromptText = "Suggest 5 possible actions the user character could take next. Wrap each option in <choice> and </choice> tags.";
@@ -69,6 +70,7 @@ export class AppSettings {
             if (!Array.isArray(this.parallelOverrides)) this.parallelOverrides = [{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''}];
             if (!Array.isArray(this.choiceParallelOverrides)) this.choiceParallelOverrides = [{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''},{enabled:false, model:''}];
             if (!this.quickReplies) this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
+            if (!this.qrModels) this.qrModels = {};
             if (!Array.isArray(this.regexes)) this.regexes = [];
             if (!this.charsPerToken) this.charsPerToken = 4.0;
             if (this.visibleOutOfContext === undefined) this.visibleOutOfContext = 5;
