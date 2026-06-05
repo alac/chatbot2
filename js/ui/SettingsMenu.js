@@ -262,6 +262,9 @@ export class SettingsMenu {
         createOptions(document.getElementById('select-summarize-model'), document.getElementById('set-summarize-model-txt').value, true);
         createOptions(document.getElementById('batch-model-select-primary'), document.getElementById('set-model').value);
         
+        const qrPrimaryTxt = document.getElementById('qr-model-txt-primary');
+        if (qrPrimaryTxt) createOptions(document.getElementById('qr-model-select-primary'), qrPrimaryTxt.value, true);
+        
         for (let i = 0; i < 4; i++) {
             let txtField = document.getElementById(`batch-model-txt-${i}`);
             let currentVal = txtField ? txtField.value : settings.parallelOverrides[i].model;
@@ -270,6 +273,9 @@ export class SettingsMenu {
             let choiceTxtField = document.getElementById(`choice-batch-model-txt-${i}`);
             let choiceCurrentVal = choiceTxtField ? choiceTxtField.value : settings.choiceParallelOverrides[i].model;
             createOptions(document.getElementById(`choice-batch-model-select-${i}`), choiceCurrentVal);
+
+            let qrTxtField = document.getElementById(`qr-override-txt-${i}`);
+            if (qrTxtField) createOptions(document.getElementById(`qr-model-select-${i}`), qrTxtField.value, true);
         }
     }
 

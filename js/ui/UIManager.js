@@ -137,6 +137,10 @@ export class UIManager {
             showQRView('qr-button-container');
         });
         
+        document.getElementById('qr-model-select-primary').addEventListener('change', (e) => {
+            document.getElementById('qr-model-txt-primary').value = e.target.value;
+        });
+
         document.getElementById('qr-model-select').addEventListener('change', (e) => this.loadQRModelConfig(e.target.value));
         document.getElementById('qr-model-enable').addEventListener('change', (e) => {
             if (e.target.checked) document.getElementById('qr-model-config').classList.remove('hidden');
@@ -1164,11 +1168,18 @@ export class UIManager {
                     </label>
                 </div>
                 <div class="batch-row-bottom">
+                    <select id="qr-model-select-${i}"><option value="" disabled>Select model...</option></select>
                     <input type="text" id="qr-override-txt-${i}" value="${ov.model}" placeholder="Leave blank for default">
                 </div>
             `;
             container.appendChild(row);
+
+            document.getElementById(`qr-model-select-${i}`).addEventListener('change', (e) => {
+                document.getElementById(`qr-override-txt-${i}`).value = e.target.value;
+            });
         }
+        
+        if (window.settingsUI) window.settingsUI.updateAllModelDropdowns();
     }
 
     // [Apply Edits methods stay exactly the same]
