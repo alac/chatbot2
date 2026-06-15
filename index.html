@@ -1,3 +1,4 @@
+-- BEGIN FILE: index.html --
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,20 +8,16 @@
     <link rel="stylesheet" href="css/main.css">
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- DOMPurify for safe <html> tag rendering -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 </head>
 <body>
     <header id="top-nav">
         <div class="logo">AI Prototype</div>
-        
-        <!-- Summary Tracking Meter -->
         <div id="summary-meter-container" class="hidden" title="Click for details">
             <div id="summary-meter-fill"></div>
             <span id="summary-meter-text">0%</span>
             <button id="btn-quick-summarize" title="Autosummarize Now">✨</button>
         </div>
-
         <div class="nav-controls">
             <button id="btn-chat-settings" title="Chat Settings">📝 Chat</button>
             <button id="btn-settings" title="App Settings">⚙️ App</button>
@@ -32,7 +29,6 @@
     <button id="btn-jump-bottom" class="fab hidden">⬇️</button>
 
     <footer id="input-area">
-        <!-- Quick Menu (Toggled via More button) -->
         <div id="quick-menu" class="hidden">
             <div class="btn-group">
                 <button id="btn-undo" class="quick-btn" title="Undo">
@@ -58,6 +54,12 @@
                 </button>
                 <button id="btn-choices-settings" title="Choices Settings" style="padding: 0 8px;">⚙️</button>
             </div>
+
+            <div class="btn-group">
+                <button id="btn-open-tools" class="quick-btn" title="Tools & Utilities">
+                    <span class="icon">🛠️</span>
+                </button>
+            </div>
         </div>
         
         <div class="input-row">
@@ -74,6 +76,80 @@
             </div>
         </div>
     </footer>
+
+    <!-- Tools Modal -->
+    <div id="tools-modal" class="modal hidden">
+        <div class="modal-content" style="max-height: 90vh; width: 650px;">
+            <div class="modal-header">
+                <select id="tools-page-selector" class="page-select">
+                    <option value="tab-tool-dice">1. Dice Roll</option>
+                    <option value="tab-tool-names">2. Name Generator</option>
+                    <option value="tab-tool-aggregate">3. Draft Aggregator</option>
+                </select>
+                <button id="btn-close-tools" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 16px;">
+                
+                <!-- Dice Roll -->
+                <div id="tab-tool-dice" class="tab-pane active" style="flex:1;">
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Roll dice in XdY+Z format (e.g., 2d6 or 1d20+5).</p>
+                    <div class="setting-row">
+                        <span class="label-text">Dice Notation</span>
+                        <input type="text" id="tool-dice-notation" placeholder="1d20" style="width: 120px;">
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button class="secondary btn-dice-preset" data-val="1d6">1d6</button>
+                        <button class="secondary btn-dice-preset" data-val="2d6">2d6</button>
+                        <button class="secondary btn-dice-preset" data-val="1d10">1d10</button>
+                        <button class="secondary btn-dice-preset" data-val="1d20">1d20</button>
+                        <button class="secondary btn-dice-preset" data-val="1d100">1d100</button>
+                    </div>
+                    <hr>
+                    <button id="btn-tool-dice-roll" class="primary">Roll Dice & Inject</button>
+                </div>
+
+                <!-- Name Generator -->
+                <div id="tab-tool-names" class="tab-pane" style="flex:1;">
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Generate a random set of offline names.</p>
+                    <div class="setting-row">
+                        <span class="label-text">Theme</span>
+                        <select id="tool-names-theme" style="flex:1; max-width: 200px;">
+                            <option value="fantasy">Fantasy</option>
+                            <option value="english">English</option>
+                            <option value="japanese">Japanese</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Male Names</span>
+                        <input type="number" id="tool-names-male" min="0" max="10" value="3" style="width: 60px;">
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Female Names</span>
+                        <input type="number" id="tool-names-female" min="0" max="10" value="3" style="width: 60px;">
+                    </div>
+                    <hr>
+                    <button id="btn-tool-names-gen" class="primary">Generate Names & Inject</button>
+                </div>
+
+                <!-- Draft Aggregator -->
+                <div id="tab-tool-aggregate" class="tab-pane" style="flex:1; display:flex; flex-direction:column; height: 100%;">
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Combine the previous parallel drafts into a single cohesive response based on your instructions.</p>
+                    
+                    <div class="ae-group-wrapper" id="tool-agg-drafts-container" style="max-height: 150px; overflow-y:auto; margin-bottom: 12px;">
+                        <!-- Checkboxes populated by JS -->
+                    </div>
+
+                    <div style="flex:1; display:flex; flex-direction:column; min-height: 150px;">
+                        <span class="label-text" style="margin-bottom: 4px;">Aggregation Instructions</span>
+                        <textarea id="tool-agg-instructions" placeholder="e.g. Combine the descriptive elements of Draft 1 with the dialogue of Draft 3..." style="flex:1; resize:none; font-family: inherit; padding: 12px;"></textarea>
+                    </div>
+                    
+                    <hr style="margin: 12px 0;">
+                    <button id="btn-tool-agg-run" class="primary">Generate Aggregation</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Choices Settings Modal -->
     <div id="choices-settings-modal" class="modal hidden">

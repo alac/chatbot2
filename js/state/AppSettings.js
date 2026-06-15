@@ -14,7 +14,6 @@ export class AppSettings {
             { enabled: false, model: '' }, { enabled: false, model: '' }
         ];
 
-        // Choices Parallel Settings
         this.choiceParallelEnabled = false;
         this.choiceParallelCount = 2;
         this.choiceParallelOverrides = [
@@ -22,10 +21,7 @@ export class AppSettings {
             { enabled: false, model: '' }, { enabled: false, model: '' }
         ];
 
-        // Formats
         this.forceThink = false;
-        
-        // Quick Replies & Choices
         this.quickReplies = "::Continue\nContinue the story.\n\n::Describe\nDescribe the surroundings in more detail.";
         this.qrModels = {};
 
@@ -33,7 +29,6 @@ export class AppSettings {
         this.activeChoicePromptTitle = "Plain";
         this.activeChoicePromptText = "Suggest 5 possible actions the user character could take next. Wrap each option in <choice> and </choice> tags.";
 
-        // Summary Settings
         this.trackSummary = true;
         this.summarizeModel = '';
         this.autoSummarizePrompts = "::Event Log\nSummarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.\n\n::Story Synopsis\nWrite a prose summary of the recent events, continuing smoothly from the previous summary.";
@@ -59,6 +54,9 @@ export class AppSettings {
         this.visibleOutOfContext = 5;
         this.regexes = []; 
         
+        // Tools Menu Global Persistence
+        this.diceNotation = "1d20";
+
         this.load();
     }
 
@@ -81,6 +79,8 @@ export class AppSettings {
                 this.activeChoicePromptTitle = "Plain";
                 this.activeChoicePromptText = "Suggest 5 possible actions the user character could take next. Wrap each option in <choice> and </choice> tags.";
             }
+
+            if (!this.diceNotation) this.diceNotation = "1d20";
         }
     }
 

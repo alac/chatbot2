@@ -276,3 +276,40 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .mood-pill { display: flex; align-items: center; gap: 6px; background: var(--accent); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em; font-weight: 500; }
 .mood-pill button { background: transparent; border: none; color: white; font-weight: bold; cursor: pointer; padding: 0 4px; border-radius: 50%; display:flex; align-items:center; justify-content:center; }
 .mood-pill button:hover { background: rgba(0,0,0,0.3); }
+
+/* Tool / System Messages Styling (e.g., Dice Rolls, Name Generator outputs) */
+.turn.system .turn-bubble {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed var(--border);
+    align-self: center;
+    text-align: center;
+    font-style: italic;
+    color: var(--text-muted);
+    padding: 8px 16px;
+    margin: 8px 0;
+    max-width: 80%;
+    border-radius: 8px;
+}
+.chat-mode .turn.system .turn-bubble { margin-left: auto; margin-right: auto; }
+
+/* Aggregation Request Turn Styling */
+.turn.aggregation .turn-bubble {
+    background: var(--bg-panel);
+    border: 1px dashed var(--accent);
+    align-self: flex-end;
+    max-width: 90%;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    border-radius: 12px;
+}
+.aggregation-header {
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--border);
+    color: var(--accent);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+}

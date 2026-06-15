@@ -3,6 +3,7 @@ import { StoryState } from '../state/StoryState.js';
 import { ParallelGenerationBatch, GenerationJob } from '../api/OpenAIClient.js';
 import { StorageManager } from '../storage/StorageManager.js';
 import { diffWords, diffLines } from '../utils/diff.js';
+import { nameDatasets } from '../data/names.js';
 
 export class UIManager {
     constructor() {
@@ -183,7 +184,6 @@ export class UIManager {
             document.getElementById('choices-settings-modal').classList.remove('hidden');
         });
 
-        // Brainstorming Modal Bindings
         document.getElementById('btn-close-brainstorm').addEventListener('click', () => document.getElementById('brainstorm-modal').classList.add('hidden'));
         
         document.getElementById('btn-bs-preset').addEventListener('click', () => {
@@ -273,7 +273,6 @@ export class UIManager {
             const newContent = document.getElementById('edit-message-content').value;
             const currentContent = this.state.getContent(idx);
             
-            // Treat identically saved text as a Cancel so we don't wipe parallel drafts
             if (newContent === currentContent) {
                 document.getElementById('edit-modal').classList.add('hidden');
                 return;
@@ -362,6 +361,205 @@ export class UIManager {
             this.applySummarizeFlags();
             document.getElementById('autosum-merge-modal').classList.add('hidden');
         });
+
+        // =====================================
+        // Tools Menu & Modals Bindings
+        // =====================================
+        document.getElementById('btn-open-tools').addEventListener('click', () => this.openToolsMenu());
+        document.getElementById('btn-close-tools').addEventListener('click', () => document.getElementById('tools-modal').classList.add('hidden'));
+        
+        document.getElementById('tools-page-selector').addEventListener('change', (e) => {
+            document.getElementById('tools-modal').querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById(e.target.value).classList.add('active');
+            
+            if (e.target.value === 'tab-tool-aggregate') this.populateDraftAggregatorUI();
+        });
+
+        // 1. Dice Tool
+        document.querySelectorAll('.btn-dice-preset').forEach(btn => {
+            btn.addEventListener('click', (e) => document.getElementById('tool-dice-notation').value = e.target.dataset.val);
+        });
+        document.getElementById('btn-tool-dice-roll').addEventListener('click', () => this.executeDiceRoll());
+
+        // 2. Names Generator
+        document.getElementById('btn-tool-names-gen').addEventListener('click', () => this.executeNamesGeneration());
+        
+        // 3. Draft Aggregator
+        document.getElementById('btn-tool-agg-run').addEventListener('click', () => this.executeDraftAggregation());
+    }
+
+    openToolsMenu() {
+        document.getElementById('quick-menu').classList.add('hidden');
+        
+        // Load persist states
+        document.getElementById('tool-dice-notation').value = settings.diceNotation;
+        document.getElementById('tool-names-theme').value = this.state.nameTheme;
+        document.getElementById('tool-names-male').value = this.state.nameCountMale;
+        document.getElementById('tool-names-female').value = this.state.nameCountFemale;
+        
+        // If aggregate tab is active initially
+        if (document.getElementById('tools-page-selector').value === 'tab-tool-aggregate') {
+            this.populateDraftAggregatorUI();
+        }
+        
+        document.getElementById('tools-modal').classList.remove('hidden');
+    }
+
+    executeDiceRoll() {
+        let notation = document.getElementById('tool-dice-notation').value.trim();
+        if (!notation) notation = "1d20";
+        
+        settings.diceNotation = notation;
+        settings.save();
+        
+        // Parse Notation XdY+Z or XdY-Z
+        const match = notation.match(/^(\d+)d(\d+)(?:\s*([+-])\s*(\d+))?$/i);
+        if (!match) return alert("Invalid dice notation. Use format XdY or XdY+Z (e.g. 2d6 or 1d20+5)");
+        
+        const numDice = parseInt(match[1]);
+        const diceFaces = parseInt(match[2]);
+        const modifierSign = match[3] || '+';
+        const modifier = match[4] ? parseInt(match[4]) : 0;
+        
+        if (numDice <= 0 || diceFaces <= 1 || numDice > 100) return alert("Keep dice numbers within reasonable limits.");
+
+        let rolls = [];
+        let sum = 0;
+        for (let i=0; i<numDice; i++) {
+            const roll = Math.floor(Math.random() * diceFaces) + 1;
+            rolls.push(roll);
+            sum += roll;
+        }
+        
+        let finalMod = modifierSign === '-' ? -modifier : modifier;
+        let finalTotal = sum + finalMod;
+        
+        let msg = `🎲 Rolled **${notation}**\nResult: [${rolls.join(', ')}]`;
+        if (modifier > 0) msg += ` ${modifierSign} ${modifier}`;
+        msg += ` = **${finalTotal}**`;
+
+        this.state.addTurn('system', msg);
+        document.getElementById('tools-modal').classList.add('hidden');
+        this.renderAll();
+        this.autoSave();
+    }
+
+    executeNamesGeneration() {
+        const theme = document.getElementById('tool-names-theme').value;
+        const countMale = parseInt(document.getElementById('tool-names-male').value) || 0;
+        const countFemale = parseInt(document.getElementById('tool-names-female').value) || 0;
+
+        this.state.nameTheme = theme;
+        this.state.nameCountMale = countMale;
+        this.state.nameCountFemale = countFemale;
+        
+        const dataset = nameDatasets[theme];
+        if (!dataset) return alert(`Theme "${theme}" not found in dataset.`);
+
+        if (countMale > dataset.male_given.length) return alert(`Not enough male names in ${theme} dataset (Max: ${dataset.male_given.length}).`);
+        if (countFemale > dataset.female_given.length) return alert(`Not enough female names in ${theme} dataset (Max: ${dataset.female_given.length}).`);
+
+        const shuffle = (array) => [...array].sort(() => 0.5 - Math.random());
+        
+        const males = shuffle(dataset.male_given).slice(0, countMale);
+        const females = shuffle(dataset.female_given).slice(0, countFemale);
+        const surnames = shuffle(dataset.surnames);
+        
+        let output = `🏷️ **Generated Names (${theme})**\n\n`;
+        
+        if (countMale > 0) {
+            output += `**Male Names:**\n`;
+            males.forEach((m, i) => output += `- ${m} ${surnames[i % surnames.length]}\n`);
+            output += `\n`;
+        }
+        if (countFemale > 0) {
+            output += `**Female Names:**\n`;
+            females.forEach((f, i) => output += `- ${f} ${surnames[(countMale + i) % surnames.length]}\n`);
+        }
+
+        this.state.addTurn('system', output.trim());
+        document.getElementById('tools-modal').classList.add('hidden');
+        this.renderAll();
+        this.autoSave();
+    }
+
+    populateDraftAggregatorUI() {
+        const container = document.getElementById('tool-agg-drafts-container');
+        container.innerHTML = '';
+        
+        if (this.state.history.length === 0) {
+            container.innerHTML = `<span style="color:var(--text-muted);">No chat history.</span>`;
+            return;
+        }
+
+        const lastIdx = this.state.history.length - 1;
+        const lastMsg = this.state.history[lastIdx];
+
+        if (lastMsg.role !== 'assistant') {
+            container.innerHTML = `<span style="color:var(--text-muted);">The last message is not an assistant response.</span>`;
+            return;
+        }
+
+        const draftsToScan = lastMsg.isBatch ? lastMsg.drafts : [lastMsg.drafts[lastMsg.activeDraftIndex]];
+        
+        container.innerHTML = `<div class="ae-group-header">Available Drafts to Combine</div>`;
+        
+        draftsToScan.forEach((draft, i) => {
+            if (!draft.content) return;
+            const modelName = draft.model ? draft.model.split('/').pop() : 'Unknown';
+            const label = document.createElement('label');
+            label.style.display = 'flex';
+            label.style.alignItems = 'center';
+            label.style.gap = '8px';
+            label.style.marginTop = '6px';
+            label.style.cursor = 'pointer';
+            
+            label.innerHTML = `
+                <input type="checkbox" class="agg-draft-chk" data-idx="${i}" checked>
+                <span style="font-size:0.9em;">Draft ${i+1} (${modelName})</span>
+            `;
+            container.appendChild(label);
+        });
+        
+        container.dataset.msgIdx = lastIdx;
+    }
+
+    executeDraftAggregation() {
+        const container = document.getElementById('tool-agg-drafts-container');
+        const lastIdx = parseInt(container.dataset.msgIdx);
+        
+        if (isNaN(lastIdx)) return alert("Invalid message to aggregate.");
+        
+        const lastMsg = this.state.history[lastIdx];
+        const selectedIndices = Array.from(document.querySelectorAll('.agg-draft-chk:checked')).map(cb => parseInt(cb.dataset.idx));
+
+        if (selectedIndices.length === 0) return alert("Select at least one draft to aggregate.");
+
+        const instructions = document.getElementById('tool-agg-instructions').value.trim();
+        if (!instructions) return alert("Please provide aggregation instructions.");
+
+        // Build internal context payload text
+        let fullPayloadText = `These are variations of the same response. We want to aggregate them according to this request: ${instructions}\n\n`;
+        
+        selectedIndices.forEach(idx => {
+            fullPayloadText += `<response${idx+1}>\n${lastMsg.drafts[idx].content}\n</response${idx+1}>\n\n`;
+        });
+        
+        fullPayloadText += `Reminder, we want to aggregate the above responses according to request: ${instructions}`;
+
+        // Insert custom aggregation turn
+        this.state.addTurn('aggregation', fullPayloadText, '', { 
+            displayInput: instructions,
+            aggregatedMsgIndex: lastIdx
+        });
+        
+        document.getElementById('tools-modal').classList.add('hidden');
+        document.getElementById('tool-agg-instructions').value = '';
+        
+        // Generate LLM response naturally using the existing stream architecture
+        // By clearing input text, handleSend will just use the current history
+        this.input.value = '';
+        this.handleSend(); 
     }
 
     handleRetry() {
@@ -398,7 +596,6 @@ export class UIManager {
 
         const payloadObj = this.state.buildPromptPayload();
         
-        // We capture original state because QR Models may temporarily spoof global settings
         let originalModel = settings.model;
         let originalEnabled = settings.parallelEnabled;
         let originalCount = settings.parallelCount;
@@ -416,7 +613,6 @@ export class UIManager {
 
         this.activeBatch = new ParallelGenerationBatch(payloadObj.messages, count, settings.parallelOverrides);
         
-        // Restore settings immediately
         if (this.overrideNextSend) {
             settings.model = originalModel;
             settings.parallelEnabled = originalEnabled;
@@ -681,7 +877,6 @@ export class UIManager {
             this.appendTurnToDOM(turn.role, idx);
         });
 
-        // Scroll Anchoring
         if (startIndex > 0 && this.historyOffset > 0 && oldScrollHeight > 0) {
             const newScrollHeight = this.container.scrollHeight;
             this.container.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
@@ -770,7 +965,31 @@ export class UIManager {
         const bubble = document.createElement('div');
         bubble.className = 'turn-bubble';
 
-        if (role === 'choices') {
+        // System Role Rendering
+        if (role === 'system') {
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'turn-content';
+            const spanContent = document.createElement('div');
+            spanContent.id = `content-${index}`;
+            this.setNodeContent(spanContent, msg.drafts[0].content || '', msg.drafts[0]);
+            contentDiv.appendChild(spanContent);
+            bubble.appendChild(contentDiv);
+        }
+        // Aggregation Request Role Rendering
+        else if (role === 'aggregation') {
+            const header = document.createElement('div');
+            header.className = 'aggregation-header';
+            header.innerHTML = `<span>🛠️ Aggregation Request</span>`;
+            bubble.appendChild(header);
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'turn-content';
+            contentDiv.style.fontStyle = 'italic';
+            contentDiv.style.color = 'var(--text-muted)';
+            contentDiv.textContent = msg.meta.displayInput || '';
+            bubble.appendChild(contentDiv);
+        }
+        else if (role === 'choices') {
             if (msg.extractedChoices === null) {
                 const header = document.createElement('div');
                 header.className = 'choices-header';

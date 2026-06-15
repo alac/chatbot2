@@ -19,6 +19,11 @@ export class StoryState {
         this.summary = "";
         this.selectedAutoSumPromptTitle = "Event Log";
         this.selectedAutoSumPromptText = "Summarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.";
+
+        // Slot-Specific Tool Settings
+        this.nameTheme = "fantasy";
+        this.nameCountMale = 3;
+        this.nameCountFemale = 3;
     }
 
     clear(resetSettings = false) {
@@ -35,9 +40,14 @@ export class StoryState {
             this.anoteUnit = "message"; 
             this.anoteDepth = 0;
             this.anoteHistory = [];
+            
+            this.nameTheme = "fantasy";
+            this.nameCountMale = 3;
+            this.nameCountFemale = 3;
         }
     }
 
+    // Notice we now capture meta correctly in the history object at the turn level
     addTurn(role, content, reasoning = '', meta = {}) {
         this.history.push({ 
             role, 
@@ -45,6 +55,7 @@ export class StoryState {
             activeDraftIndex: 0,
             wasSummarized: false,
             extractedChoices: null,
+            meta: meta,
             drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0, markdownOverride: null, usage: null }]
         });
         this.redoStack = []; 
@@ -62,6 +73,7 @@ export class StoryState {
             activeDraftIndex: 0,
             wasSummarized: false,
             extractedChoices: null,
+            meta: {},
             drafts: drafts
         });
         this.redoStack = []; 
@@ -163,9 +175,18 @@ export class StoryState {
         let includedHistoryMsgs = [];
         let includedIndices = [];
 
-        // Exclude choices from prompt context
+        // Pre-scan: Identify any parallel drafts that should be hidden because they are being aggregated
+        let skipIndices = new Set();
+        for (let i = 0; i < this.history.length; i++) {
+            if (this.history[i].role === 'aggregation' && this.history[i].meta && this.history[i].meta.aggregatedMsgIndex !== undefined) {
+                skipIndices.add(this.history[i].meta.aggregatedMsgIndex);
+            }
+        }
+
+        // Gather valid history
         for (let i = this.history.length - 1; i >= 0; i--) {
-            if (this.history[i].role === 'choices') continue;
+            // Exclude specialized non-context roles and specifically skipped aggregation sources
+            if (this.history[i].role === 'choices' || skipIndices.has(i)) continue;
 
             let msgContent = this.getContent(i);
             msgContent = settings.applyRegexes(msgContent, 'outgoing');
@@ -173,7 +194,13 @@ export class StoryState {
             let T = Math.ceil(msgContent.length / charsRatio); 
             if (budget - T >= 0) {
                 budget -= T;
-                includedHistoryMsgs.unshift({ role: this.history[i].role, content: msgContent });
+                
+                // Map system/tool turns and custom aggregation turns to valid LLM API roles
+                let outputRole = this.history[i].role;
+                if (outputRole === 'aggregation') outputRole = 'user';
+                else if (outputRole === 'system') outputRole = 'user'; // Treat tool output as user-provided fact
+                
+                includedHistoryMsgs.unshift({ role: outputRole, content: msgContent });
                 includedIndices.unshift(i);
             } else {
                 this.contextBoundaryIndex = i; 
@@ -232,7 +259,10 @@ export class StoryState {
 
     loadFromData(data) {
         this.history = data.history || [];
-        this.history.forEach(m => { if(m.wasSummarized === undefined) m.wasSummarized = false; });
+        this.history.forEach(m => { 
+            if(m.wasSummarized === undefined) m.wasSummarized = false;
+            if(!m.meta) m.meta = {};
+        });
         this.redoStack = data.redoStack || [];
         this.contextBoundaryIndex = data.contextBoundaryIndex !== undefined ? data.contextBoundaryIndex : -1;
         
@@ -246,6 +276,10 @@ export class StoryState {
         this.anoteUnit = data.anoteUnit !== undefined ? data.anoteUnit : "message";
         this.anoteDepth = data.anoteDepth !== undefined ? data.anoteDepth : 0;
         this.anoteHistory = data.anoteHistory || [];
+
+        this.nameTheme = data.nameTheme !== undefined ? data.nameTheme : "fantasy";
+        this.nameCountMale = data.nameCountMale !== undefined ? data.nameCountMale : 3;
+        this.nameCountFemale = data.nameCountFemale !== undefined ? data.nameCountFemale : 3;
     }
 
     exportData() {
@@ -261,7 +295,10 @@ export class StoryState {
             anoteContent: this.anoteContent,
             anoteUnit: this.anoteUnit,
             anoteDepth: this.anoteDepth,
-            anoteHistory: this.anoteHistory
+            anoteHistory: this.anoteHistory,
+            nameTheme: this.nameTheme,
+            nameCountMale: this.nameCountMale,
+            nameCountFemale: this.nameCountFemale
         };
     }
 }
