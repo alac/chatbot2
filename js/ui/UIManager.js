@@ -4,6 +4,9 @@ import { ParallelGenerationBatch, GenerationJob } from '../api/OpenAIClient.js';
 import { StorageManager } from '../storage/StorageManager.js';
 import { diffWords, diffLines } from '../utils/diff.js';
 import { nameDatasets } from '../data/names.js';
+import { DiceRoller } from '../utils/DiceRoller.js';
+import { NameGenerator } from '../utils/NameGenerator.js';
+import { TokenCalculator } from '../utils/TokenCalculator.js';
 
 export class UIManager {
     constructor() {
@@ -439,42 +442,24 @@ export class UIManager {
     }
 
     executeDiceRoll() {
-        let notation = document.getElementById('tool-dice-notation').value.trim();
-        if (!notation) notation = "1d20";
+        const notationInput = document.getElementById('tool-dice-notation').value.trim();
         
-        settings.diceNotation = notation;
-        settings.save();
-        
-        // Parse Notation XdY+Z or XdY-Z
-        const match = notation.match(/^(\d+)d(\d+)(?:\s*([+-])\s*(\d+))?$/i);
-        if (!match) return alert("Invalid dice notation. Use format XdY or XdY+Z (e.g. 2d6 or 1d20+5)");
-        
-        const numDice = parseInt(match[1]);
-        const diceFaces = parseInt(match[2]);
-        const modifierSign = match[3] || '+';
-        const modifier = match[4] ? parseInt(match[4]) : 0;
-        
-        if (numDice <= 0 || diceFaces <= 1 || numDice > 100) return alert("Keep dice numbers within reasonable limits.");
-
-        let rolls = [];
-        let sum = 0;
-        for (let i=0; i<numDice; i++) {
-            const roll = Math.floor(Math.random() * diceFaces) + 1;
-            rolls.push(roll);
-            sum += roll;
+        try {
+            const result = DiceRoller.roll(notationInput);
+            
+            // Save settings after successful roll
+            settings.diceNotation = result.notation;
+            settings.save();
+            
+            // Update UI State
+            this.state.addTurn('system', result.message);
+            document.getElementById('tools-modal').classList.add('hidden');
+            this.renderAll();
+            this.autoSave();
+            
+        } catch (err) {
+            alert(err.message);
         }
-        
-        let finalMod = modifierSign === '-' ? -modifier : modifier;
-        let finalTotal = sum + finalMod;
-        
-        let msg = `🎲 Rolled **${notation}**\nResult: [${rolls.join(', ')}]`;
-        if (modifier > 0) msg += ` ${modifierSign} ${modifier}`;
-        msg += ` = **${finalTotal}**`;
-
-        this.state.addTurn('system', msg);
-        document.getElementById('tools-modal').classList.add('hidden');
-        this.renderAll();
-        this.autoSave();
     }
 
     executeNamesGeneration() {
@@ -482,38 +467,24 @@ export class UIManager {
         const countMale = parseInt(document.getElementById('tool-names-male').value) || 0;
         const countFemale = parseInt(document.getElementById('tool-names-female').value) || 0;
 
-        this.state.nameTheme = theme;
-        this.state.nameCountMale = countMale;
-        this.state.nameCountFemale = countFemale;
-        
-        const dataset = nameDatasets[theme];
-        if (!dataset) return alert(`Theme "${theme}" not found in dataset.`);
+        try {
+            const dataset = nameDatasets[theme];
+            const outputText = NameGenerator.generate(theme, countMale, countFemale, dataset);
+            
+            // Save state
+            this.state.nameTheme = theme;
+            this.state.nameCountMale = countMale;
+            this.state.nameCountFemale = countFemale;
 
-        if (countMale > dataset.male_given.length) return alert(`Not enough male names in ${theme} dataset (Max: ${dataset.male_given.length}).`);
-        if (countFemale > dataset.female_given.length) return alert(`Not enough female names in ${theme} dataset (Max: ${dataset.female_given.length}).`);
+            // Update UI State
+            this.state.addTurn('system', outputText);
+            document.getElementById('tools-modal').classList.add('hidden');
+            this.renderAll();
+            this.autoSave();
 
-        const shuffle = (array) => [...array].sort(() => 0.5 - Math.random());
-        
-        const males = shuffle(dataset.male_given).slice(0, countMale);
-        const females = shuffle(dataset.female_given).slice(0, countFemale);
-        const surnames = shuffle(dataset.surnames);
-        
-        let output = `🏷️ **Generated Names (${theme})**\n\n`;
-        
-        if (countMale > 0) {
-            output += `**Male Names:**\n`;
-            males.forEach((m, i) => output += `- ${m} ${surnames[i % surnames.length]}\n`);
-            output += `\n`;
+        } catch (err) {
+            alert(err.message);
         }
-        if (countFemale > 0) {
-            output += `**Female Names:**\n`;
-            females.forEach((f, i) => output += `- ${f} ${surnames[(countMale + i) % surnames.length]}\n`);
-        }
-
-        this.state.addTurn('system', output.trim());
-        document.getElementById('tools-modal').classList.add('hidden');
-        this.renderAll();
-        this.autoSave();
     }
 
     populateDraftAggregatorUI() {
@@ -1782,44 +1753,12 @@ export class UIManager {
         }
         container.classList.remove('hidden');
 
-        const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
-        const sysAnoteStr = this.state.systemPrompt.trim() + "\n" + this.state.anoteContent.trim();
-        const maxResp = parseInt(settings.maxTokens);
-        
-        let sumCost = 0;
-        if (this.state.summary.trim()) {
-            sumCost = Math.ceil((this.state.summary.trim().length + 20) / charsRatio);
-        }
-
-        const maxContext = parseInt(settings.contextLength);
-        const unchanging = Math.ceil(sysAnoteStr.length / charsRatio) + maxResp + sumCost;
-        let budget = maxContext - unchanging;
-
-        let summedCost = 0;
-        let unsummedCost = 0;
-
-        for (let i = this.state.history.length - 1; i >= 0; i--) {
-            if (this.state.history[i].role === 'choices') continue;
-
-            const msgContent = this.state.getContent(i);
-            const T = Math.ceil(msgContent.length / charsRatio);
-            if (budget - T >= 0) {
-                budget -= T;
-                if (this.state.history[i].wasSummarized) summedCost += T;
-                else unsummedCost += T;
-            } else {
-                break;
-            }
-        }
-
-        const availableBudget = maxContext - unchanging;
-        let pct = 0;
-        if (availableBudget > 0) {
-            pct = Math.min(100, Math.round((unsummedCost / availableBudget) * 100));
-        }
+        const stats = TokenCalculator.getUsageStats(this.state, settings);
+        const pct = stats.percentageUsed;
 
         const fill = document.getElementById('summary-meter-fill');
         const text = document.getElementById('summary-meter-text');
+        
         fill.style.width = `${pct}%`;
         text.textContent = `${pct}%`;
 
@@ -1829,38 +1768,16 @@ export class UIManager {
     }
 
     updateSummaryMeterDetails() {
-        const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
-        const memCost = Math.ceil(this.state.systemPrompt.trim().length / charsRatio);
-        const anCost = Math.ceil(this.state.anoteContent.trim().length / charsRatio);
-        let sumCost = this.state.summary.trim() ? Math.ceil((this.state.summary.trim().length + 20) / charsRatio) : 0;
-        const maxResp = parseInt(settings.maxTokens);
-        const maxContext = parseInt(settings.contextLength);
-        const sysAnoteStr = this.state.systemPrompt.trim() + "\n" + this.state.anoteContent.trim();
-        const unchanging = Math.ceil(sysAnoteStr.length / charsRatio) + maxResp + sumCost;
-        
-        let budget = maxContext - unchanging;
-        let summedCost = 0;
-        let unsummedCost = 0;
+        const stats = TokenCalculator.getUsageStats(this.state, settings);
 
-        for (let i = this.state.history.length - 1; i >= 0; i--) {
-            if (this.state.history[i].role === 'choices') continue;
-
-            const T = Math.ceil(this.state.getContent(i).length / charsRatio);
-            if (budget - T >= 0) {
-                budget -= T;
-                if (this.state.history[i].wasSummarized) summedCost += T;
-                else unsummedCost += T;
-            } else break;
-        }
-
-        document.getElementById('meter-stat-max').textContent = maxContext;
-        document.getElementById('meter-stat-resp').textContent = maxResp;
-        document.getElementById('meter-stat-mem').textContent = memCost;
-        document.getElementById('meter-stat-an').textContent = anCost;
-        document.getElementById('meter-stat-sum').textContent = sumCost;
-        document.getElementById('meter-stat-budget').textContent = maxContext - unchanging;
-        document.getElementById('meter-stat-summed').textContent = summedCost;
-        document.getElementById('meter-stat-unsummed').textContent = unsummedCost;
+        document.getElementById('meter-stat-max').textContent = stats.maxContext;
+        document.getElementById('meter-stat-resp').textContent = stats.maxResp;
+        document.getElementById('meter-stat-mem').textContent = stats.memCost;
+        document.getElementById('meter-stat-an').textContent = stats.anCost;
+        document.getElementById('meter-stat-sum').textContent = stats.sumCost;
+        document.getElementById('meter-stat-budget').textContent = stats.availableBudget;
+        document.getElementById('meter-stat-summed').textContent = stats.summedCost;
+        document.getElementById('meter-stat-unsummed').textContent = stats.unsummedCost;
     }
 
     openAutoSumPromptSelector() {
