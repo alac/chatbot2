@@ -24,6 +24,7 @@ export class StoryState {
         this.nameTheme = "fantasy";
         this.nameCountMale = 3;
         this.nameCountFemale = 3;
+        this.aggregationHistory = [];
     }
 
     clear(resetSettings = false) {
@@ -44,10 +45,10 @@ export class StoryState {
             this.nameTheme = "fantasy";
             this.nameCountMale = 3;
             this.nameCountFemale = 3;
+            this.aggregationHistory = [];
         }
     }
 
-    // Notice we now capture meta correctly in the history object at the turn level
     addTurn(role, content, reasoning = '', meta = {}) {
         this.history.push({ 
             role, 
@@ -175,7 +176,6 @@ export class StoryState {
         let includedHistoryMsgs = [];
         let includedIndices = [];
 
-        // Pre-scan: Identify any parallel drafts that should be hidden because they are being aggregated
         let skipIndices = new Set();
         for (let i = 0; i < this.history.length; i++) {
             if (this.history[i].role === 'aggregation' && this.history[i].meta && this.history[i].meta.aggregatedMsgIndex !== undefined) {
@@ -183,9 +183,7 @@ export class StoryState {
             }
         }
 
-        // Gather valid history
         for (let i = this.history.length - 1; i >= 0; i--) {
-            // Exclude specialized non-context roles and specifically skipped aggregation sources
             if (this.history[i].role === 'choices' || skipIndices.has(i)) continue;
 
             let msgContent = this.getContent(i);
@@ -195,10 +193,9 @@ export class StoryState {
             if (budget - T >= 0) {
                 budget -= T;
                 
-                // Map system/tool turns and custom aggregation turns to valid LLM API roles
                 let outputRole = this.history[i].role;
                 if (outputRole === 'aggregation') outputRole = 'user';
-                else if (outputRole === 'system') outputRole = 'user'; // Treat tool output as user-provided fact
+                else if (outputRole === 'system') outputRole = 'user'; 
                 
                 includedHistoryMsgs.unshift({ role: outputRole, content: msgContent });
                 includedIndices.unshift(i);
@@ -280,6 +277,7 @@ export class StoryState {
         this.nameTheme = data.nameTheme !== undefined ? data.nameTheme : "fantasy";
         this.nameCountMale = data.nameCountMale !== undefined ? data.nameCountMale : 3;
         this.nameCountFemale = data.nameCountFemale !== undefined ? data.nameCountFemale : 3;
+        this.aggregationHistory = data.aggregationHistory || [];
     }
 
     exportData() {
@@ -298,7 +296,8 @@ export class StoryState {
             anoteHistory: this.anoteHistory,
             nameTheme: this.nameTheme,
             nameCountMale: this.nameCountMale,
-            nameCountFemale: this.nameCountFemale
+            nameCountFemale: this.nameCountFemale,
+            aggregationHistory: this.aggregationHistory
         };
     }
 }

@@ -386,6 +386,39 @@ export class UIManager {
         
         // 3. Draft Aggregator
         document.getElementById('btn-tool-agg-run').addEventListener('click', () => this.executeDraftAggregation());
+
+        document.getElementById('btn-open-agg-history').addEventListener('click', () => {
+            this.renderAggHistory();
+            document.getElementById('agg-history-modal').classList.remove('hidden');
+        });
+        document.getElementById('btn-close-agg-history').addEventListener('click', () => {
+            document.getElementById('agg-history-modal').classList.add('hidden');
+        });
+    }
+
+    renderAggHistory() {
+        const tbody = document.getElementById('agg-history-tbody');
+        tbody.innerHTML = '';
+        if (!this.state.aggregationHistory || this.state.aggregationHistory.length === 0) {
+            tbody.innerHTML = '<tr><td style="color:var(--text-muted); text-align:center; padding: 12px;">No history available.</td></tr>';
+            return;
+        }
+
+        this.state.aggregationHistory.forEach(inst => {
+            const tr = document.createElement('tr');
+            
+            const td = document.createElement('td');
+            td.textContent = inst.length > 120 ? inst.substring(0, 120) + '...' : inst;
+            td.title = inst;
+            
+            tr.addEventListener('click', () => {
+                document.getElementById('tool-agg-instructions').value = inst;
+                document.getElementById('agg-history-modal').classList.add('hidden');
+            });
+            
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+        });
     }
 
     openToolsMenu() {
@@ -538,7 +571,11 @@ export class UIManager {
         const instructions = document.getElementById('tool-agg-instructions').value.trim();
         if (!instructions) return alert("Please provide aggregation instructions.");
 
-        // Build internal context payload text
+        // Deduplicate and Update History
+        this.state.aggregationHistory = this.state.aggregationHistory.filter(i => i !== instructions);
+        this.state.aggregationHistory.unshift(instructions);
+        if (this.state.aggregationHistory.length > 20) this.state.aggregationHistory.length = 20;
+
         let fullPayloadText = `These are variations of the same response. We want to aggregate them according to this request: ${instructions}\n\n`;
         
         selectedIndices.forEach(idx => {

@@ -56,7 +56,7 @@
 
             <div class="btn-group">
                 <button id="btn-open-tools" class="quick-btn" title="Tools & Utilities">
-                    <span class="icon">🛠️</span>
+                    <span class="icon">🛠️</span><span>Tools</span>
                 </button>
             </div>
         </div>
@@ -89,7 +89,6 @@
             </div>
             <div class="modal-body" style="display:flex; flex-direction:column; gap: 16px;">
                 
-                <!-- Dice Roll -->
                 <div id="tab-tool-dice" class="tab-pane active" style="flex:1;">
                     <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Roll dice in XdY+Z format (e.g., 2d6 or 1d20+5).</p>
                     <div class="setting-row">
@@ -107,7 +106,6 @@
                     <button id="btn-tool-dice-roll" class="primary">Roll Dice & Inject</button>
                 </div>
 
-                <!-- Name Generator -->
                 <div id="tab-tool-names" class="tab-pane" style="flex:1;">
                     <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Generate a random set of offline names.</p>
                     <div class="setting-row">
@@ -115,7 +113,6 @@
                         <select id="tool-names-theme" style="flex:1; max-width: 200px;">
                             <option value="fantasy">Fantasy</option>
                             <option value="english">English</option>
-                            <option value="misc_1880">English 1880s</option>
                             <option value="japanese">Japanese</option>
                         </select>
                     </div>
@@ -131,7 +128,6 @@
                     <button id="btn-tool-names-gen" class="primary">Generate Names & Inject</button>
                 </div>
 
-                <!-- Draft Aggregator -->
                 <div id="tab-tool-aggregate" class="tab-pane" style="flex:1; height: 100%;">
                     <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Combine the previous parallel drafts into a single cohesive response based on your instructions.</p>
                     
@@ -140,13 +136,31 @@
                     </div>
 
                     <div style="flex:1; display:flex; flex-direction:column; min-height: 150px;">
-                        <span class="label-text" style="margin-bottom: 4px;">Aggregation Instructions</span>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+                            <span class="label-text">Aggregation Instructions</span>
+                            <button id="btn-open-agg-history" class="secondary" style="font-size:0.85em; padding: 2px 6px;">History 🕒</button>
+                        </div>
                         <textarea id="tool-agg-instructions" placeholder="e.g. Combine the descriptive elements of Draft 1 with the dialogue of Draft 3..." style="flex:1; resize:none; font-family: inherit; padding: 12px;"></textarea>
                     </div>
                     
                     <hr style="margin: 12px 0;">
                     <button id="btn-tool-agg-run" class="primary">Generate Aggregation</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aggregation History Modal -->
+    <div id="agg-history-modal" class="modal hidden" style="z-index: 110;">
+        <div class="modal-content" style="width: 500px; max-height: 80vh;">
+            <div class="modal-header">
+                <h2>Aggregation History</h2>
+                <button id="btn-close-agg-history" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 0; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.9em; text-align: left;">
+                    <tbody id="agg-history-tbody"></tbody>
+                </table>
             </div>
         </div>
     </div>
