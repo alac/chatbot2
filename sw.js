@@ -1,6 +1,6 @@
 console.log("Service worker is active - should enable PWA functionality");
 
-const cacheName = 'chtbt2-36960c85'; // Change this to force an update
+const cacheName = 'chtbt2-1cfc7110'; // Change this to force an update
 
 // Files to cache for offline use
 const filesToCache = [
@@ -15,8 +15,10 @@ const filesToCache = [
     './js/storage/StorageManager.js',
     './js/ui/ApplyEditsManager.js',
     './js/ui/BrainstormManager.js',
+    './js/ui/QuickRepliesManager.js',
     './js/ui/SettingsMenu.js',
     './js/ui/SummaryManager.js',
+    './js/ui/ToolsManager.js',
     './js/ui/UIManager.js',
     './js/utils/DiceRoller.js',
     './js/utils/NameGenerator.js',
