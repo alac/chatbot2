@@ -125,15 +125,16 @@ export class UIManager {
 
     handleRetry() {
         if (this.state.history.length === 0) return;
-        const last = this.state.history[this.state.history.length - 1];
+        const lastIdx = this.state.history.length - 1;
+        const last = this.state.history[lastIdx];
         if (last.role === 'assistant') {
-            this.state.undo();
+            this.state.markDraftsAsStale(lastIdx);
             this.renderAll();
-            this.handleSend(true);
+            this.handleSend(true, lastIdx);
         }
     }
 
-    async handleSend(isRetry = false) {
+    async handleSend(isRetry = false, targetIndex = null) {
         if (this.activeBatch) return;
 
         const text = this.input.value.trim();
@@ -155,7 +156,17 @@ export class UIManager {
         document.getElementById('btn-abort').classList.remove('hidden');
         this.isUserScrolledUp = false;
 
+        // Temporarily pop target message so it's not included in its own payload
+        let tempMsg = null;
+        if (targetIndex !== null) {
+            tempMsg = this.state.history.pop();
+        }
+        
         const payloadObj = this.state.buildPromptPayload();
+        
+        if (tempMsg) {
+            this.state.history.push(tempMsg);
+        }
         
         let originalModel = settings.model;
         let originalEnabled = settings.parallelEnabled;
@@ -182,8 +193,20 @@ export class UIManager {
             this.overrideNextSend = null;
         }
         
-        const newIdx = this.state.history.length;
-        this.state.addBatchTurn(count, 'assistant');
+        const newIdx = targetIndex !== null ? targetIndex : this.state.history.length;
+        let draftOffset = 0;
+
+        if (targetIndex !== null) {
+            draftOffset = this.state.history[newIdx].drafts.length;
+            this.state.appendBatchDrafts(newIdx, count);
+            this.state.setActiveDraft(newIdx, draftOffset);
+            
+            const oldWrapper = document.getElementById(`turn-wrapper-${newIdx}`);
+            if (oldWrapper) oldWrapper.remove();
+        } else {
+            this.state.addBatchTurn(count, 'assistant');
+        }
+
         this.appendTurnToDOM('assistant', newIdx);
         
         if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
@@ -197,7 +220,8 @@ export class UIManager {
             
             this.activeBatch.jobs.forEach((job, i) => {
                 if (job.status === 'streaming') {
-                    const timerEl = document.getElementById(`batch-timer-${newIdx}-${i}`);
+                    const actualDraftIdx = i + draftOffset;
+                    const timerEl = document.getElementById(`batch-timer-${newIdx}-${actualDraftIdx}`);
                     if (timerEl) timerEl.textContent = `(${elapsed}s)`;
                 }
             });
@@ -205,8 +229,10 @@ export class UIManager {
 
         try {
             await this.activeBatch.startAll((draftIdx, data) => {
-                this.state.updateBatchDraft(newIdx, draftIdx, data);
-                if (this.state.history[newIdx].activeDraftIndex === draftIdx) {
+                const actualDraftIdx = draftIdx + draftOffset;
+                this.state.updateBatchDraft(newIdx, actualDraftIdx, data);
+                
+                if (this.state.history[newIdx].activeDraftIndex === actualDraftIdx) {
                     const contentNode = document.getElementById(`content-${newIdx}`);
                     const reasonNode = document.getElementById(`reasoning-${newIdx}`);
                     const reasonDiv = document.getElementById(`reasoning-block-${newIdx}`);
@@ -219,7 +245,7 @@ export class UIManager {
                         }
                     }
                     if (contentNode) {
-                        const draftObj = this.state.history[newIdx].drafts[draftIdx];
+                        const draftObj = this.state.history[newIdx].drafts[actualDraftIdx];
                         this.setNodeContent(contentNode, data.content, draftObj);
                     }
                     
@@ -227,11 +253,11 @@ export class UIManager {
                 }
 
                 const iconMap = { 'done':'✔️', 'error':'❌', 'streaming':'🕒' };
-                const iconEl = document.getElementById(`draft-icon-${newIdx}-${draftIdx}`);
+                const iconEl = document.getElementById(`draft-icon-${newIdx}-${actualDraftIdx}`);
                 if (iconEl) iconEl.textContent = iconMap[data.status] || '';
                 
                 if (data.status !== 'streaming') {
-                    const timerEl = document.getElementById(`batch-timer-${newIdx}-${draftIdx}`);
+                    const timerEl = document.getElementById(`batch-timer-${newIdx}-${actualDraftIdx}`);
                     if (timerEl) timerEl.textContent = `(${data.duration}s)`;
                 }
             });
@@ -249,7 +275,11 @@ export class UIManager {
             const oldWrapper = document.getElementById(`turn-wrapper-${newIdx}`);
             if (oldWrapper) oldWrapper.remove();
             
+            let tempMsgFinal = null;
+            if (targetIndex !== null) tempMsgFinal = this.state.history.pop();
             this.state.buildPromptPayload();
+            if (tempMsgFinal) this.state.history.push(tempMsgFinal);
+
             this.appendTurnToDOM('assistant', newIdx);
             this.summaryManager.updateSummaryMeter();
 
@@ -354,14 +384,20 @@ export class UIManager {
         const select = document.createElement('select');
         select.id = `draft-select-${index}`;
         
+        const activeBatchStartIdx = msg.drafts.length - (this.activeBatch ? this.activeBatch.jobs.length : 0);
+
         msg.drafts.forEach((d, i) => {
             const opt = document.createElement('option');
             opt.value = i;
             let modelStr = d.model;
-            if (isStreaming && this.activeBatch && this.activeBatch.jobs[i]) {
-                modelStr = this.activeBatch.jobs[i].model;
+            
+            if (isStreaming && !d.isStale && this.activeBatch && i >= activeBatchStartIdx) {
+                const job = this.activeBatch.jobs[i - activeBatchStartIdx];
+                if (job) modelStr = job.model;
             }
-            opt.textContent = `V${i+1} | ${modelStr ? modelStr.split('/').pop() : 'Unknown'}`;
+
+            const staleMarker = d.isStale ? ' (Old)' : '';
+            opt.textContent = `V${i+1} | ${modelStr ? modelStr.split('/').pop() : 'Unknown'}${staleMarker}`;
             if (i === msg.activeDraftIndex) opt.selected = true;
             select.appendChild(opt);
         });
@@ -389,7 +425,10 @@ export class UIManager {
             const timer = document.createElement('span');
             timer.id = `batch-timer-${index}-${i}`;
             timer.style.marginLeft = '2px';
-            if (!isStreaming || d.status !== 'streaming') {
+            
+            if (d.isStale) {
+                timer.textContent = '[X]';
+            } else if (!isStreaming || d.status !== 'streaming') {
                 timer.textContent = `(${d.duration}s)`;
             }
 
@@ -555,9 +594,10 @@ export class UIManager {
                 actionBar.className = 'action-bar';
                 
                 const metaSpan = document.createElement('span');
+                metaSpan.id = `meta-span-${index}`;
                 if (activeDraft.model) {
                     const shortModel = activeDraft.model.split('/').pop();
-                    metaSpan.textContent = `${shortModel} • ${activeDraft.duration}s`;
+                    metaSpan.textContent = `${shortModel} • ${activeDraft.isStale ? '[X]' : activeDraft.duration + 's'}`;
                 }
                 actionBar.appendChild(metaSpan);
 
@@ -580,13 +620,15 @@ export class UIManager {
                 }
 
                 const btnMd = document.createElement('span');
+                btnMd.id = `btn-md-${index}`;
                 btnMd.textContent = 'Ⓜ️';
                 btnMd.className = 'md-toggle';
                 btnMd.title = "Toggle Markdown";
                 if (this.shouldUseMarkdown(content || '', activeDraft.markdownOverride)) btnMd.classList.add('active');
                 btnMd.addEventListener('click', () => {
-                    const currentlyOn = this.shouldUseMarkdown(activeDraft.content, activeDraft.markdownOverride);
-                    activeDraft.markdownOverride = !currentlyOn;
+                    const currentDraft = this.state.history[index].drafts[this.state.history[index].activeDraftIndex];
+                    const currentlyOn = this.shouldUseMarkdown(currentDraft.content, currentDraft.markdownOverride);
+                    currentDraft.markdownOverride = !currentlyOn;
                     this.renderAll();
                     this.autoSave();
                 });
@@ -608,18 +650,24 @@ export class UIManager {
                 });
                 iconsDiv.appendChild(btnEdit);
 
-                if (role === 'assistant' && activeDraft.usage) {
-                    const btnUsage = document.createElement('span');
-                    btnUsage.textContent = '📊';
-                    btnUsage.title = "Token Usage";
-                    btnUsage.addEventListener('click', () => {
-                        document.getElementById('usage-prompt').textContent = activeDraft.usage.prompt_tokens || 0;
-                        document.getElementById('usage-completion').textContent = activeDraft.usage.completion_tokens || 0;
-                        document.getElementById('usage-total').textContent = activeDraft.usage.total_tokens || 0;
+                const btnUsage = document.createElement('span');
+                btnUsage.id = `btn-usage-${index}`;
+                btnUsage.textContent = '📊';
+                btnUsage.title = "Token Usage";
+                btnUsage.addEventListener('click', () => {
+                    const currentDraft = this.state.history[index].drafts[this.state.history[index].activeDraftIndex];
+                    if (currentDraft.usage) {
+                        document.getElementById('usage-prompt').textContent = currentDraft.usage.prompt_tokens || 0;
+                        document.getElementById('usage-completion').textContent = currentDraft.usage.completion_tokens || 0;
+                        document.getElementById('usage-total').textContent = currentDraft.usage.total_tokens || 0;
                         document.getElementById('usage-modal').classList.remove('hidden');
-                    });
-                    iconsDiv.appendChild(btnUsage);
+                    }
+                });
+                
+                if (role !== 'assistant' || !activeDraft.usage) {
+                    btnUsage.classList.add('hidden');
                 }
+                iconsDiv.appendChild(btnUsage);
 
                 if (role === 'assistant' && isLatestMessage && this.state.lastRawPayload) {
                     const btnPrompt = document.createElement('span');
@@ -706,6 +754,28 @@ export class UIManager {
         if (reasonDiv) {
             if (activeDraft.reasoning) reasonDiv.classList.remove('hidden');
             else reasonDiv.classList.add('hidden');
+        }
+
+        // Update Dynamic Header/Action Bar Metadata
+        const metaSpan = document.getElementById(`meta-span-${msgIndex}`);
+        if (metaSpan) {
+            const shortModel = activeDraft.model ? activeDraft.model.split('/').pop() : 'Unknown';
+            metaSpan.textContent = `${shortModel} • ${activeDraft.isStale ? '[X]' : activeDraft.duration + 's'}`;
+        }
+        
+        const btnMd = document.getElementById(`btn-md-${msgIndex}`);
+        if (btnMd) {
+            if (this.shouldUseMarkdown(activeDraft.content, activeDraft.markdownOverride)) {
+                btnMd.classList.add('active');
+            } else {
+                btnMd.classList.remove('active');
+            }
+        }
+        
+        const btnUsage = document.getElementById(`btn-usage-${msgIndex}`);
+        if (btnUsage) {
+            if (activeDraft.usage) btnUsage.classList.remove('hidden');
+            else btnUsage.classList.add('hidden');
         }
 
         const select = document.getElementById(`draft-select-${msgIndex}`);

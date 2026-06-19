@@ -57,7 +57,7 @@ export class StoryState {
             wasSummarized: false,
             extractedChoices: null,
             meta: meta,
-            drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0, markdownOverride: null, usage: null }]
+            drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0, markdownOverride: null, usage: null, isStale: false }]
         });
         this.redoStack = []; 
         this.trimOldDrafts();
@@ -66,7 +66,7 @@ export class StoryState {
     addBatchTurn(count, roleOverride = 'assistant') {
         const drafts = [];
         for(let i=0; i<count; i++) {
-            drafts.push({ model: '', content: '', reasoning: '', status: 'streaming', duration: 0, markdownOverride: null, usage: null });
+            drafts.push({ model: '', content: '', reasoning: '', status: 'streaming', duration: 0, markdownOverride: null, usage: null, isStale: false });
         }
         this.history.push({
             role: roleOverride,
@@ -79,6 +79,20 @@ export class StoryState {
         });
         this.redoStack = []; 
         this.trimOldDrafts();
+    }
+
+    markDraftsAsStale(msgIndex) {
+        if (this.history[msgIndex] && this.history[msgIndex].drafts) {
+            this.history[msgIndex].drafts.forEach(d => d.isStale = true);
+        }
+    }
+
+    appendBatchDrafts(msgIndex, count) {
+        if (this.history[msgIndex]) {
+            for(let i=0; i<count; i++) {
+                this.history[msgIndex].drafts.push({ model: '', content: '', reasoning: '', status: 'streaming', duration: 0, markdownOverride: null, usage: null, isStale: false });
+            }
+        }
     }
 
     undo() {
@@ -259,6 +273,11 @@ export class StoryState {
         this.history.forEach(m => { 
             if(m.wasSummarized === undefined) m.wasSummarized = false;
             if(!m.meta) m.meta = {};
+            if(m.drafts) {
+                m.drafts.forEach(d => {
+                    if (d.isStale === undefined) d.isStale = false;
+                });
+            }
         });
         this.redoStack = data.redoStack || [];
         this.contextBoundaryIndex = data.contextBoundaryIndex !== undefined ? data.contextBoundaryIndex : -1;
