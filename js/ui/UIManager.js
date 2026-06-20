@@ -322,6 +322,35 @@ export class UIManager {
         });
 
         node.innerHTML = processed;
+
+        // Inject Code Block Copy Buttons
+        const preElements = node.querySelectorAll('pre');
+        preElements.forEach(pre => {
+            if (pre.parentElement.classList.contains('code-block-wrapper')) return;
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'code-block-wrapper';
+            pre.parentNode.insertBefore(wrapper, pre);
+            
+            const topBar = document.createElement('div');
+            topBar.className = 'code-top-bar';
+            
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'code-copy-btn';
+            copyBtn.title = 'Copy code';
+            copyBtn.innerHTML = '📋';
+            copyBtn.addEventListener('click', () => {
+                const code = pre.innerText || pre.textContent;
+                navigator.clipboard.writeText(code).then(() => {
+                    copyBtn.innerHTML = '✅';
+                    setTimeout(() => copyBtn.innerHTML = '📋', 2000);
+                });
+            });
+            
+            topBar.appendChild(copyBtn);
+            wrapper.appendChild(topBar);
+            wrapper.appendChild(pre);
+        });
     }
 
     renderAll() {
@@ -451,6 +480,7 @@ export class UIManager {
         const wrapper = document.createElement('div');
         wrapper.className = `turn ${role}`;
         if (isOutOfContext) wrapper.classList.add('out-of-context');
+        if (msg.isHidden) wrapper.classList.add('hidden-msg');
         wrapper.id = `turn-wrapper-${index}`;
 
         const bubble = document.createElement('div');
@@ -618,6 +648,26 @@ export class UIManager {
                     });
                     iconsDiv.appendChild(btnThink);
                 }
+
+                const btnHide = document.createElement('span');
+                btnHide.textContent = msg.isHidden ? '🙈' : '👁️';
+                btnHide.className = 'hide-toggle';
+                if (msg.isHidden) btnHide.classList.add('active');
+                btnHide.title = msg.isHidden ? "Unhide from context" : "Hide from context";
+                btnHide.addEventListener('click', () => {
+                    msg.isHidden = !msg.isHidden;
+                    btnHide.textContent = msg.isHidden ? '🙈' : '👁️';
+                    btnHide.title = msg.isHidden ? "Unhide from context" : "Hide from context";
+                    if (msg.isHidden) {
+                        wrapper.classList.add('hidden-msg');
+                    } else {
+                        wrapper.classList.remove('hidden-msg');
+                    }
+                    this.state.buildPromptPayload();
+                    this.summaryManager.updateSummaryMeter();
+                    this.autoSave();
+                });
+                iconsDiv.appendChild(btnHide);
 
                 const btnMd = document.createElement('span');
                 btnMd.id = `btn-md-${index}`;

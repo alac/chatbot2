@@ -52,6 +52,7 @@ export class StoryState {
     addTurn(role, content, reasoning = '', meta = {}) {
         this.history.push({ 
             role, 
+            isHidden: false,
             isBatch: false, 
             activeDraftIndex: 0,
             wasSummarized: false,
@@ -70,6 +71,7 @@ export class StoryState {
         }
         this.history.push({
             role: roleOverride,
+            isHidden: false,
             isBatch: true,
             activeDraftIndex: 0,
             wasSummarized: false,
@@ -198,7 +200,7 @@ export class StoryState {
         }
 
         for (let i = this.history.length - 1; i >= 0; i--) {
-            if (this.history[i].role === 'choices' || skipIndices.has(i)) continue;
+            if (this.history[i].role === 'choices' || skipIndices.has(i) || this.history[i].isHidden) continue;
 
             let msgContent = this.getContent(i);
             msgContent = settings.applyRegexes(msgContent, 'outgoing');
@@ -272,6 +274,7 @@ export class StoryState {
         this.history = data.history || [];
         this.history.forEach(m => { 
             if(m.wasSummarized === undefined) m.wasSummarized = false;
+            if(m.isHidden === undefined) m.isHidden = false;
             if(!m.meta) m.meta = {};
             if(m.drafts) {
                 m.drafts.forEach(d => {
