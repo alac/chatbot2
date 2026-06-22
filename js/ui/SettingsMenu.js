@@ -516,11 +516,49 @@ export class SettingsMenu {
     }
 
     exportText() {
-        const text = this.uiManager.state.history.map(m => {
-            let content = m.isBatch ? m.drafts[m.activeDraftIndex].content : m.content;
+        let metaHeader = "=== EXPORT METADATA ===\n";
+        let hasMeta = false;
+
+        const sysPrompt = this.uiManager.state.systemPrompt.trim();
+        if (sysPrompt) {
+            metaHeader += `[Memory / System Prompt]\n${sysPrompt}\n\n`;
+            hasMeta = true;
+        }
+
+        const summary = this.uiManager.state.summary.trim();
+        if (summary) {
+            metaHeader += `[Summary]\n${summary}\n\n`;
+            hasMeta = true;
+        }
+
+        const aNote = this.uiManager.state.anoteContent.trim();
+        if (aNote) {
+            metaHeader += `[Author's Note]\n${aNote}\n\n`;
+            hasMeta = true;
+        }
+
+        if (!hasMeta) {
+            metaHeader = "";
+        } else {
+            metaHeader += "=== CONVERSATION ===\n\n";
+        }
+
+        const text = this.uiManager.state.history.map((m, i) => {
+            let content = this.uiManager.state.getContent(i);
+            
+            // Handle special system roles cleanly for the export text
+            if (m.role === 'aggregation' && m.meta && m.meta.displayInput) {
+                content = m.meta.displayInput;
+            } else if (m.role === 'choices' && m.extractedChoices) {
+                content = m.extractedChoices.map((c, idx) => `${idx + 1}. ${c}`).join('\n');
+            }
+
             return `${m.role.toUpperCase()}:\n${content}\n`;
         }).join('\n');
-        const blob = new Blob([text], { type: 'text/plain' });
+
+        const finalOutput = metaHeader + text;
+
+        const blob = new Blob([finalOutput], { type: 'text/plain' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `story_export_${Date.now()}.txt`;
