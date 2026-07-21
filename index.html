@@ -8,6 +8,7 @@
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
     <header id="top-nav">
@@ -750,6 +751,34 @@
             </div>
             <div class="modal-body">
                 <pre id="prompt-payload-content"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Conflict Modal -->
+    <div id="sync-conflict-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px; width: 95vw; max-height: 90vh;">
+            <div class="modal-header">
+                <h3 style="font-size: 1.1em;">⚠️ Resolve Sync Conflict</h3>
+                <button class="close-btn" id="btn-close-conflict">×</button>
+            </div>
+            <div class="modal-body" style="padding: 16px; display: flex; flex-direction: column; overflow: hidden;">
+                <p style="margin-bottom:12px; font-size:0.9em; color:var(--text-muted); line-height: 1.4;">
+                    Both devices have unsaved changes. Select the version you want to keep. The other will be permanently overwritten.
+                </p>
+                
+                <div class="btn-group" style="width:100%; margin-bottom: 12px; flex-shrink: 0;">
+                    <button id="btn-tab-local" class="primary" style="flex:1;">📱 Local Save</button>
+                    <button id="btn-tab-cloud" style="flex:1;">☁️ Cloud Save</button>
+                </div>
+
+                <div id="conflict-content-area" style="flex: 1; overflow-y: auto; min-height: 200px; background: rgba(0,0,0,0.1); border: 1px solid var(--border); border-radius: 6px; padding: 10px;">
+                    <!-- Content injected by JS -->
+                </div>
+            </div>
+            <div style="padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; background: var(--bg-panel);">
+                <button id="btn-keep-local" class="primary" style="flex:1;">Keep Local ⬆️</button>
+                <button id="btn-keep-cloud" class="primary" style="flex:1;">Keep Cloud ⬇️</button>
             </div>
         </div>
     </div>
