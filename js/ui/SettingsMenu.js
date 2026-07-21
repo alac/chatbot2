@@ -878,15 +878,16 @@ export class SettingsMenu {
         this.chatModal.classList.add('hidden');
     }
 
-
     renderAuthUI() {
         let authContainer = document.getElementById('auth-container');
         if (!authContainer) {
-            // Inject auth container above the slot list if it doesn't exist
-            const slotTab = document.getElementById('tab-slots');
+            // Inject auth container directly above the slot-list
+            const listDiv = document.getElementById('slot-list');
+            if (!listDiv) return; // Safety check
+            
             authContainer = document.createElement('div');
             authContainer.id = 'auth-container';
-            slotTab.insertBefore(authContainer, slotTab.firstChild);
+            listDiv.parentNode.insertBefore(authContainer, listDiv);
         }
 
         if (this.cloudSync.isLoggedIn()) {
@@ -897,7 +898,7 @@ export class SettingsMenu {
             document.getElementById('btn-cloud-logout').onclick = () => this.cloudSync.logout();
         } else {
             authContainer.innerHTML = `
-                <span>Google Drive Sync:</span>
+                <span style="font-size: 0.9em; font-weight: bold;">Google Drive Sync:</span>
                 <button id="btn-cloud-login" class="primary">Sign In</button>
             `;
             document.getElementById('btn-cloud-login').onclick = () => {
