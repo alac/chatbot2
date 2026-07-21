@@ -161,6 +161,18 @@ export class SettingsMenu {
             }
         });
 
+        const btnTrim = document.getElementById('btn-trim-save');
+        if (btnTrim) {
+            btnTrim.addEventListener('click', async () => {
+                if (confirm("This will permanently delete all alternate parallel drafts, AI reasoning blocks, and undo history for the CURRENT story to save space. Continue?")) {
+                    this.uiManager.state.cleanState();
+                    await this.uiManager.autoSave();
+                    this.uiManager.renderAll();
+                    alert("Save trimmed successfully! File size has been reduced.");
+                }
+            });
+        }
+
         // Exports
         document.getElementById('btn-export-txt').addEventListener('click', () => this.exportText());
         document.getElementById('btn-export-json').addEventListener('click', () => this.exportJSON());
@@ -566,8 +578,14 @@ export class SettingsMenu {
     }
 
     exportJSON() {
-        const data = this.uiManager.state.exportData();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        // Wrap the state data with the active slot's name and description
+        const payload = {
+            slotName: this.uiManager.activeSlotName,
+            slotDesc: this.uiManager.activeSlotDesc,
+            data: this.uiManager.state.exportData()
+        };
+        
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `story_save_${Date.now()}.json`;
@@ -580,10 +598,32 @@ export class SettingsMenu {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const data = JSON.parse(e.target.result);
-                if (!data.history) throw new Error("Invalid save file format.");
-                await this.uiManager.storage.saveSlot(this.selectedSlotId, file.name, "Imported", data);
+                const parsed = JSON.parse(e.target.result);
+                let stateData, name, desc;
+
+                // Detect if it's the new wrapped format or the old raw format
+                if (parsed.data && parsed.data.history) {
+                    stateData = parsed.data;
+                    name = parsed.slotName || file.name;
+                    desc = parsed.slotDesc || "Imported";
+                } else if (parsed.history) {
+                    stateData = parsed;
+                    name = file.name;
+                    desc = "Imported (Legacy)";
+                } else {
+                    throw new Error("Invalid save file format.");
+                }
+
+                await this.uiManager.storage.saveSlot(this.selectedSlotId, name, desc, stateData);
                 this.refreshSlotList();
+                
+                // If they imported over their currently active slot, load it immediately
+                if (this.selectedSlotId === this.uiManager.activeSlot) {
+                    await this.uiManager.loadStateFromSlot(this.selectedSlotId);
+                }
+                
+                // Reset the file input so they can import the same file again if needed
+                event.target.value = '';
             } catch (err) {
                 alert("Failed to import JSON: " + err.message);
             }

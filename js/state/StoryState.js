@@ -322,4 +322,21 @@ export class StoryState {
             aggregationHistory: this.aggregationHistory
         };
     }
+
+    cleanState() {
+        // 1. Clear the redo stack
+        this.redoStack = [];
+        
+        // 2. Trim ALL messages down to just their single active draft
+        this.trimOldDrafts(0);
+        
+        // 3. Clear out all AI "thinking/reasoning" strings
+        this.history.forEach(msg => {
+            if (msg.drafts) {
+                msg.drafts.forEach(d => {
+                    d.reasoning = '';
+                });
+            }
+        });
+    }
 }
