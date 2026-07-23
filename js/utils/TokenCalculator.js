@@ -1,4 +1,3 @@
-// BEGIN FILE: js/utils/TokenCalculator.js
 export class TokenCalculator {
     /**
      * Calculates the current context usage and available token budget.
@@ -19,9 +18,18 @@ export class TokenCalculator {
         let summedCost = 0;
         let unsummedCost = 0;
 
+        // Identify aggregated messages to skip (matching StoryState's payload logic)
+        let skipIndices = new Set();
+        for (let i = 0; i < state.history.length; i++) {
+            if (state.history[i].role === 'aggregation' && state.history[i].meta && state.history[i].meta.aggregatedMsgIndex !== undefined) {
+                skipIndices.add(state.history[i].meta.aggregatedMsgIndex);
+            }
+        }
+
         // Tally up messages fitting into the budget
         for (let i = state.history.length - 1; i >= 0; i--) {
-            if (state.history[i].role === 'choices') continue;
+            // Skip choices, hidden messages, and aggregated overrides
+            if (state.history[i].role === 'choices' || state.history[i].isHidden || skipIndices.has(i)) continue;
 
             const T = Math.ceil(state.getContent(i).length / charsRatio);
             if (budget - T >= 0) {
