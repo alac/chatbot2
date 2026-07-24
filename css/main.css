@@ -212,7 +212,7 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .setting-row.column > * { width: 100%; }
 .label-text { font-size: 14px; color: var(--text-main); font-weight: 500; }
 .sampler-row input[type="range"] { flex: 1; }
-.sampler-row input[type="number"] { width: 70px; }
+.sampler-row input[type="number"] { width: 100px; }
 
 #anote-history-tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s; }
 #anote-history-tbody tr:hover { background: rgba(255,255,255,0.05); }
