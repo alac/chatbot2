@@ -23,7 +23,7 @@ export class DraftMergeManager {
         
         modal.innerHTML = `
             <div class="dm-content">
-                <div class="dm-pane">
+                <div id="dm-top-pane" class="dm-pane" style="flex: 0 0 60%;">
                     <div class="dm-header">
                         <select id="dm-draft-select"></select>
                         <button id="dm-btn-close">✖</button>
@@ -31,14 +31,18 @@ export class DraftMergeManager {
                     <div id="dm-source-scroll" class="dm-scroll"></div>
                 </div>
                 
-                <div class="dm-actions">
-                    <button id="dm-btn-append" class="primary">⬇️ Append</button>
-                    <button id="dm-btn-undo" class="secondary">↩️ Undo</button>
+                <div id="dm-resizer">
+                    <div class="dm-resizer-handle"></div>
                 </div>
                 
-                <div class="dm-pane" style="padding: 6px; gap: 6px;">
+                <div id="dm-bottom-pane" class="dm-pane">
                     <textarea id="dm-output-text" placeholder="Merged output will appear here. You can manually type and edit here between appends!"></textarea>
-                    <button id="dm-btn-commit" class="primary" style="padding: 10px; font-weight: bold;">✅ Commit as New Draft</button>
+                    
+                    <div class="dm-actions-bottom">
+                        <button id="dm-btn-append" class="primary" style="flex: 1.5;">⬇️ Append</button>
+                        <button id="dm-btn-undo" class="secondary" style="flex: 1;">↩️ Undo</button>
+                        <button id="dm-btn-commit" class="primary" style="flex: 1.5;">✅ Combine</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -54,6 +58,44 @@ export class DraftMergeManager {
         document.getElementById('dm-btn-commit').addEventListener('click', () => this.commit());
 
         this.bindTouchSelectLogic();
+        this.bindResizerLogic();
+    }
+    
+    bindResizerLogic() {
+        const resizer = document.getElementById('dm-resizer');
+        const topPane = document.getElementById('dm-top-pane');
+        const container = document.querySelector('.dm-content');
+
+        resizer.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            resizer.setPointerCapture(e.pointerId);
+            let isResizing = true;
+            
+            const doResize = (moveEvent) => {
+                if (!isResizing) return;
+                const containerTop = container.getBoundingClientRect().top;
+                let newHeight = moveEvent.clientY - containerTop;
+                
+                // Keep it within bounds (min 60px top, min 100px bottom)
+                if (newHeight < 60) newHeight = 60;
+                const maxH = container.clientHeight - 100;
+                if (newHeight > maxH) newHeight = maxH;
+                
+                topPane.style.flex = `0 0 ${newHeight}px`;
+            };
+            
+            const stopResize = () => {
+                isResizing = false;
+                resizer.releasePointerCapture(e.pointerId);
+                resizer.removeEventListener('pointermove', doResize);
+                resizer.removeEventListener('pointerup', stopResize);
+                resizer.removeEventListener('pointercancel', stopResize);
+            };
+            
+            resizer.addEventListener('pointermove', doResize);
+            resizer.addEventListener('pointerup', stopResize);
+            resizer.addEventListener('pointercancel', stopResize);
+        });
     }
 
     bindTouchSelectLogic() {
