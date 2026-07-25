@@ -7,6 +7,7 @@ import { BrainstormManager } from './BrainstormManager.js';
 import { SummaryManager } from './SummaryManager.js';
 import { ToolsManager } from './ToolsManager.js';
 import { QuickRepliesManager } from './QuickRepliesManager.js';
+import { DraftMergeManager } from './DraftMergeManager.js';
 
 export class UIManager {
     constructor() {
@@ -36,6 +37,7 @@ export class UIManager {
         this.summaryManager = new SummaryManager(this);
         this.toolsManager = new ToolsManager(this);
         this.quickRepliesManager = new QuickRepliesManager(this);
+        this.draftMergeManager = new DraftMergeManager(this);
 
         this.bindEvents();
         this.initApp();
@@ -436,9 +438,15 @@ export class UIManager {
         btnNext.textContent = '▶';
         btnNext.onclick = () => this.switchDraft(index, 1);
 
+        const btnMerge = document.createElement('button');
+        btnMerge.innerHTML = '🔀';
+        btnMerge.title = 'Merge Drafts';
+        btnMerge.onclick = () => this.draftMergeManager.open(index);
+
         controlsRow.appendChild(btnPrev);
         controlsRow.appendChild(select);
         controlsRow.appendChild(btnNext);
+        controlsRow.appendChild(btnMerge);
 
         const statusRow = document.createElement('div');
         statusRow.className = 'switcher-status';
