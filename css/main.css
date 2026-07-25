@@ -349,3 +349,73 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .conflict-msg.user { background: var(--user-bubble); margin-left: 20px; }
 .conflict-msg.assistant { background: var(--ai-bubble); border: 1px solid var(--border); margin-right: 20px; }
 .conflict-msg-role { font-size: 0.75em; opacity: 0.7; margin-bottom: 4px; font-weight: bold; text-transform: uppercase; }
+
+/* Draft Merge Split-Screen Modal */
+.dm-content {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    background: var(--bg-main);
+    display: flex;
+    flex-direction: column;
+}
+.dm-pane {
+    flex: 1 1 50%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Important for flex-child scrolling */
+}
+.dm-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+}
+.dm-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+    touch-action: pan-y; /* smooth scrolling */
+}
+.dm-cell {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9em;
+    line-height: 1.5;
+    transition: background 0.1s;
+    border-left: 3px solid transparent;
+    user-select: none;
+    cursor: pointer;
+}
+.dm-cell.selected {
+    background: rgba(59, 130, 246, 0.25);
+    border-left: 3px solid var(--accent);
+}
+.dm-cell.used {
+    opacity: 0.4;
+    background: rgba(0,0,0,0.1);
+    border-left: 3px solid var(--text-muted);
+}
+.dm-actions {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    justify-content: space-between;
+}
+#dm-output-text {
+    flex: 1;
+    width: 100%;
+    resize: none;
+    background: var(--bg-input);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    font-family: inherit;
+    font-size: 0.9em;
+}
