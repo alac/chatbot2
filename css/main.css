@@ -379,11 +379,25 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     display: flex;
     gap: 4px;
     flex: 1;
-    max-width: 400px; /* Keeps it from stretching too wide on desktop */
+    max-width: 400px; 
+    min-width: 0; /* Critical to allow the flex container to shrink below its content */
 }
 .dm-header-controls select {
     flex: 1;
     min-width: 0;
+    width: 0; /* Forces the browser to strictly obey flex resizing */
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+/* Force narrow dropdown on mobile to protect the layout */
+@media (max-width: 768px) {
+    .dm-header-controls select {
+        max-width: 35vw;
+    }
+    #dm-btn-close {
+        flex-shrink: 0; /* Prevents the X button from ever being squished */
+    }
 }
 #dm-scroll-wrapper {
     display: flex;
