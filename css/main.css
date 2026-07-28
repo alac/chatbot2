@@ -370,15 +370,57 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .dm-header {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     padding: 6px 8px;
     background: var(--bg-panel);
     border-bottom: 1px solid var(--border);
+}
+.dm-header-controls {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+    max-width: 400px; /* Keeps it from stretching too wide on desktop */
+}
+.dm-header-controls select {
+    flex: 1;
+    min-width: 0;
+}
+#dm-scroll-wrapper {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    position: relative;
 }
 .dm-scroll {
     flex: 1;
     overflow-y: auto;
     padding: 0;
     touch-action: pan-y; /* smooth scrolling */
+}
+
+/* Minimap */
+#dm-minimap {
+    width: 16px;
+    background: rgba(0, 0, 0, 0.1);
+    border-left: 1px solid var(--border);
+    position: relative;
+    flex-shrink: 0;
+}
+#dm-minimap-viewport {
+    position: absolute;
+    width: 100%;
+    background: rgba(239, 68, 68, 0.2);
+    pointer-events: none;
+    transition: top 0.1s, height 0.1s;
+}
+.dm-minimap-star {
+    position: absolute;
+    width: 8px;
+    height: 4px;
+    background: #eab308; /* Yellow */
+    left: 4px;
+    border-radius: 2px;
+    pointer-events: none;
 }
 
 /* Tight Margins on Mobile Cells */
@@ -391,6 +433,13 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     border-left: 3px solid transparent;
     user-select: none;
     cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+}
+.dm-cell-content {
+    flex: 1;
 }
 .dm-cell.selected {
     background: rgba(59, 130, 246, 0.25);
@@ -400,6 +449,28 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     opacity: 0.4;
     background: rgba(0,0,0,0.1);
     border-left: 3px solid var(--text-muted);
+}
+
+.dm-star-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2em;
+    padding: 0 4px;
+    cursor: pointer;
+    line-height: 1;
+    opacity: 0.5;
+    transition: opacity 0.2s, color 0.2s;
+}
+.dm-star-btn:hover {
+    opacity: 1;
+}
+.dm-star-btn.active {
+    color: #eab308;
+    opacity: 1;
+}
+.dm-cell.used .dm-star-btn.active {
+    opacity: 0.5; /* Dim stars on used lines */
 }
 
 /* Draggable Splitter */

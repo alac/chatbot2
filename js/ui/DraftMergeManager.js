@@ -10,6 +10,10 @@ export class DraftMergeManager {
         this.selectedLines = new Set();
         this.outputChunks = []; 
         this.historyStack = []; 
+        
+        // New State for persistence during a session
+        this.scrollPositions = {}; 
+        this.starredLines = {}; 
 
         this.injectHTML();
         this.bindEvents();
@@ -25,10 +29,20 @@ export class DraftMergeManager {
             <div class="dm-content">
                 <div id="dm-top-pane" class="dm-pane" style="flex: 0 0 60%;">
                     <div class="dm-header">
-                        <select id="dm-draft-select"></select>
-                        <button id="dm-btn-close">✖</button>
+                        <div class="dm-header-controls">
+                            <button id="dm-btn-prev">◀</button>
+                            <select id="dm-draft-select"></select>
+                            <button id="dm-btn-next">▶</button>
+                        </div>
+                        <button id="dm-btn-close" style="margin-left: 12px;">✖</button>
                     </div>
-                    <div id="dm-source-scroll" class="dm-scroll"></div>
+                    <div id="dm-scroll-wrapper">
+                        <div id="dm-source-scroll" class="dm-scroll"></div>
+                        <div id="dm-minimap">
+                            <div id="dm-minimap-viewport"></div>
+                            <div id="dm-minimap-stars-container"></div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div id="dm-resizer">
@@ -53,11 +67,32 @@ export class DraftMergeManager {
         document.getElementById('dm-btn-close').addEventListener('click', () => this.close());
         document.getElementById('dm-draft-select').addEventListener('change', (e) => this.switchDraft(parseInt(e.target.value)));
         
+        document.getElementById('dm-btn-prev').addEventListener('click', () => this.navigateDraft(-1));
+        document.getElementById('dm-btn-next').addEventListener('click', () => this.navigateDraft(1));
+        
         document.getElementById('dm-btn-append').addEventListener('click', () => this.appendSelected());
         document.getElementById('dm-btn-undo').addEventListener('click', () => this.undoLast());
         document.getElementById('dm-btn-commit').addEventListener('click', () => this.commit());
 
-        this.bindTouchSelectLogic();
+        document.getElementById('dm-source-scroll').addEventListener('scroll', () => this.updateMinimapViewport());
+
+        // Global Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('draft-merge-modal').classList.contains('hidden')) return;
+            
+            // Ignore if they are actively typing in the textarea
+            if (e.target.id === 'dm-output-text') return;
+
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                this.navigateDraft(-1);
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                this.navigateDraft(1);
+            }
+        });
+
+        this.bindSelectLogic();
         this.bindResizerLogic();
     }
     
@@ -76,12 +111,12 @@ export class DraftMergeManager {
                 const containerTop = container.getBoundingClientRect().top;
                 let newHeight = moveEvent.clientY - containerTop;
                 
-                // Keep it within bounds (min 60px top, min 100px bottom)
                 if (newHeight < 60) newHeight = 60;
                 const maxH = container.clientHeight - 100;
                 if (newHeight > maxH) newHeight = maxH;
                 
                 topPane.style.flex = `0 0 ${newHeight}px`;
+                this.updateMinimapViewport(); // Update red box on resize
             };
             
             const stopResize = () => {
@@ -98,31 +133,46 @@ export class DraftMergeManager {
         });
     }
 
-    bindTouchSelectLogic() {
+    bindSelectLogic() {
         const container = document.getElementById('dm-source-scroll');
         let longPressTimer;
         let isDragging = false;
+        let dragMode = null; // 'select' or 'erase'
 
         const clearDrag = () => {
             clearTimeout(longPressTimer);
-            setTimeout(() => { isDragging = false; }, 0); 
+            setTimeout(() => { isDragging = false; dragMode = null; }, 0); 
         };
 
-        // Touch Events (Mobile)
+        const processDragCell = (cell) => {
+            if (!cell) return;
+            const idx = parseInt(cell.dataset.idx);
+            if (this.isLineUsed(this.activeSourceDraft, idx)) return;
+
+            if (dragMode === 'select') {
+                this.selectedLines.add(idx);
+            } else if (dragMode === 'erase') {
+                this.selectedLines.delete(idx);
+            }
+            this.updateCellVisuals();
+        };
+
+        // --- Touch Events (Mobile) ---
         container.addEventListener('touchstart', (e) => {
+            if (e.target.closest('.dm-star-btn')) return; // Ignore star clicks
+            
             const cell = e.target.closest('.dm-cell');
             if (!cell) return;
             
             longPressTimer = setTimeout(() => {
                 isDragging = true;
-                if (navigator.vibrate) navigator.vibrate(40); // Haptic feedback
+                if (navigator.vibrate) navigator.vibrate(40);
                 
                 const idx = parseInt(cell.dataset.idx);
-                if (!this.isLineUsed(this.activeSourceDraft, idx)) {
-                    this.selectedLines.add(idx);
-                    this.updateCellVisuals();
-                }
-            }, 300); // 300ms hold to activate "paintbrush" drag
+                // Smart Paintbrush logic
+                dragMode = this.selectedLines.has(idx) ? 'erase' : 'select';
+                processDragCell(cell);
+            }, 300); 
         }, { passive: false });
 
         container.addEventListener('touchmove', (e) => {
@@ -130,30 +180,49 @@ export class DraftMergeManager {
                 clearTimeout(longPressTimer);
                 return;
             }
-            e.preventDefault(); // Stop page scroll while paintbrushing
+            e.preventDefault(); 
             
             const touch = e.touches[0];
             const target = document.elementFromPoint(touch.clientX, touch.clientY);
             if (target) {
-                const cell = target.closest('.dm-cell');
-                if (cell) {
-                    const hoverIndex = parseInt(cell.dataset.idx);
-                    if (!this.isLineUsed(this.activeSourceDraft, hoverIndex)) {
-                        this.selectedLines.add(hoverIndex);
-                        this.updateCellVisuals();
-                    }
-                }
+                processDragCell(target.closest('.dm-cell'));
             }
         }, { passive: false });
 
         container.addEventListener('touchend', (e) => {
-            if (isDragging) e.preventDefault(); // prevent synthetic click
+            if (isDragging) e.preventDefault(); 
             clearDrag();
+        });
+
+        // --- Mouse Events (Desktop) ---
+        container.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.dm-star-btn')) return; // Ignore star clicks
+            
+            const cell = e.target.closest('.dm-cell');
+            if (!cell) return;
+            
+            isDragging = true;
+            const idx = parseInt(cell.dataset.idx);
+            // Smart Paintbrush logic for mouse
+            dragMode = this.selectedLines.has(idx) ? 'erase' : 'select';
+            processDragCell(cell);
+        });
+
+        container.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            processDragCell(e.target.closest('.dm-cell'));
+        });
+
+        // Use global mouseup to safely stop drag even if outside container
+        document.addEventListener('mouseup', () => {
+            if (isDragging) clearDrag();
         });
 
         // Standard Click (Desktop / Quick Tap)
         container.addEventListener('click', (e) => {
             if (isDragging) return;
+            if (e.target.closest('.dm-star-btn')) return; // Ignore star clicks
+            
             const cell = e.target.closest('.dm-cell');
             if (!cell) return;
             
@@ -177,6 +246,8 @@ export class DraftMergeManager {
         this.selectedLines.clear();
         this.outputChunks = [];
         this.historyStack = [];
+        this.scrollPositions = {};
+        this.starredLines = {};
         document.getElementById('dm-output-text').value = '';
         
         // Populate Dropdown
@@ -191,11 +262,36 @@ export class DraftMergeManager {
         });
 
         document.getElementById('draft-merge-modal').classList.remove('hidden');
+        this.activeSourceDraft = null; // Force switch to trigger setup
         this.switchDraft(msg.activeDraftIndex);
     }
 
+    navigateDraft(direction) {
+        const msg = this.app.state.history[this.targetMessageIndex];
+        const len = msg.drafts.length;
+        if (len <= 1) return;
+        
+        let newIdx = (this.activeSourceDraft + direction) % len;
+        if (newIdx < 0) newIdx += len; // Handle JS negative modulo
+        
+        this.switchDraft(newIdx);
+    }
+
     switchDraft(draftIdx) {
+        const scrollContainer = document.getElementById('dm-source-scroll');
+        
+        // Save old scroll position if a draft is already active
+        if (this.activeSourceDraft !== null) {
+            this.scrollPositions[this.activeSourceDraft] = scrollContainer.scrollTop;
+        }
+        
         this.activeSourceDraft = draftIdx;
+        
+        // Init starred lines set for this draft if needed
+        if (!this.starredLines[draftIdx]) {
+            this.starredLines[draftIdx] = new Set();
+        }
+
         const msg = this.app.state.history[this.targetMessageIndex];
         const draftContent = msg.drafts[draftIdx].content || "";
         
@@ -205,17 +301,52 @@ export class DraftMergeManager {
         
         document.getElementById('dm-draft-select').value = draftIdx;
         this.renderSourceCells();
+        
+        // Restore scroll position (has to happen after render)
+        scrollContainer.scrollTop = this.scrollPositions[draftIdx] || 0;
+        
+        this.renderMinimapStars();
+        this.updateMinimapViewport();
     }
 
     renderSourceCells() {
         const container = document.getElementById('dm-source-scroll');
         container.innerHTML = '';
         
+        const currentStars = this.starredLines[this.activeSourceDraft];
+        
         this.currentParagraphs.forEach((text, i) => {
             const cell = document.createElement('div');
             cell.className = 'dm-cell';
             cell.dataset.idx = i;
-            cell.textContent = text;
+            
+            const content = document.createElement('div');
+            content.className = 'dm-cell-content';
+            content.textContent = text;
+            
+            const starBtn = document.createElement('button');
+            starBtn.className = 'dm-star-btn';
+            
+            const isStarred = currentStars.has(i);
+            starBtn.innerHTML = isStarred ? '⭐' : '☆';
+            if (isStarred) starBtn.classList.add('active');
+            
+            starBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Don't trigger cell selection
+                if (currentStars.has(i)) {
+                    currentStars.delete(i);
+                    starBtn.innerHTML = '☆';
+                    starBtn.classList.remove('active');
+                } else {
+                    currentStars.add(i);
+                    starBtn.innerHTML = '⭐';
+                    starBtn.classList.add('active');
+                }
+                this.renderMinimapStars();
+            });
+
+            cell.appendChild(content);
+            cell.appendChild(starBtn);
             container.appendChild(cell);
         });
         
@@ -232,6 +363,48 @@ export class DraftMergeManager {
             } else {
                 cell.className = 'dm-cell';
             }
+        });
+    }
+
+    updateMinimapViewport() {
+        const scrollContainer = document.getElementById('dm-source-scroll');
+        const viewport = document.getElementById('dm-minimap-viewport');
+        
+        if (scrollContainer.scrollHeight <= 0) return;
+        
+        const topPct = (scrollContainer.scrollTop / scrollContainer.scrollHeight) * 100;
+        const heightPct = (scrollContainer.clientHeight / scrollContainer.scrollHeight) * 100;
+        
+        viewport.style.top = `${topPct}%`;
+        viewport.style.height = `${Math.min(heightPct, 100)}%`;
+    }
+
+    renderMinimapStars() {
+        const container = document.getElementById('dm-minimap-stars-container');
+        const scrollContainer = document.getElementById('dm-source-scroll');
+        container.innerHTML = '';
+        
+        const currentStars = this.starredLines[this.activeSourceDraft];
+        if (!currentStars || currentStars.size === 0) return;
+        
+        if (scrollContainer.scrollHeight <= 0) return;
+        
+        // Small delay to ensure DOM is drawn and offsetTops are accurate
+        requestAnimationFrame(() => {
+            const scrollHeight = scrollContainer.scrollHeight;
+            
+            currentStars.forEach(idx => {
+                const cell = scrollContainer.children[idx];
+                if (!cell) return;
+                
+                const topPct = (cell.offsetTop / scrollHeight) * 100;
+                
+                const starMarker = document.createElement('div');
+                starMarker.className = 'dm-minimap-star';
+                starMarker.style.top = `${topPct}%`;
+                
+                container.appendChild(starMarker);
+            });
         });
     }
 
