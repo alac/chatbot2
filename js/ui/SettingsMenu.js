@@ -1,6 +1,5 @@
 import { settings } from '../state/AppSettings.js'; 
 import { OpenAIClient } from '../api/OpenAIClient.js';
-import { CloudSyncManager } from '../storage/CloudSyncManager.js';
 
 export class SettingsMenu {
     constructor(uiManager) {
@@ -10,17 +9,12 @@ export class SettingsMenu {
         this.choicesModal = document.getElementById('choices-settings-modal');
         this.bindEvents();
         this.populateUI();
-        this.cloudSync = new CloudSyncManager();
-        this.cloudSync.onAuthStateChanged = (isLoggedIn) => {
-            this.renderAuthUI();
-            this.refreshSlotList();
-        };
     }
 
     bindEvents() {
         document.getElementById('btn-settings').addEventListener('click', () => {
             this.globalModal.classList.remove('hidden');
-            this.refreshSlotList(); 
+            if (this.uiManager.slotManager) this.uiManager.slotManager.refreshSlotList(); 
         });
         document.getElementById('btn-close-settings').addEventListener('click', () => this.closeAndSave());
         
@@ -110,80 +104,6 @@ export class SettingsMenu {
             settings.neutralizeSamplers();
             this.populateUI();
         });
-
-        // Save Slots
-        document.getElementById('btn-new-chat').addEventListener('click', async () => {
-            if (confirm("Start a new chat in this slot? This will clear the current history but keep your settings.")) {
-                this.uiManager.state.clear(false); 
-                this.uiManager.activeSlot = this.selectedSlotId;
-                await this.uiManager.autoSave();
-                this.refreshSlotList();
-                this.uiManager.renderAll();
-                this.closeAndSave();
-            }
-        });
-
-        document.getElementById('btn-slot-save').addEventListener('click', async () => {
-            if (this.selectedSlotId !== this.uiManager.activeSlot) {
-                if (!confirm(`Overwrite Slot ${this.selectedSlotId} with your current story?`)) return;
-            }
-            this.uiManager.activeSlot = this.selectedSlotId;
-            await this.uiManager.autoSave();
-            this.refreshSlotList();
-        });
-
-        document.getElementById('btn-slot-load').addEventListener('click', async () => {
-            await this.uiManager.loadStateFromSlot(this.selectedSlotId);
-            this.closeAndSave();
-        });
-        
-        document.getElementById('btn-slot-edit-name').addEventListener('click', async () => {
-            const slot = await this.uiManager.storage.loadSlot(this.selectedSlotId);
-            const newName = prompt("Enter slot name:", slot?.name || `Slot ${this.selectedSlotId}`);
-            if (newName !== null) {
-                if (this.selectedSlotId === this.uiManager.activeSlot) this.uiManager.activeSlotName = newName;
-                await this.uiManager.storage.saveSlot(this.selectedSlotId, newName, slot?.description || "", slot?.data || this.uiManager.state.exportData());
-                this.refreshSlotList();
-            }
-        });
-        document.getElementById('btn-slot-edit-desc').addEventListener('click', async () => {
-            const slot = await this.uiManager.storage.loadSlot(this.selectedSlotId);
-            const newDesc = prompt("Enter slot description:", slot?.description || "");
-            if (newDesc !== null) {
-                if (this.selectedSlotId === this.uiManager.activeSlot) this.uiManager.activeSlotDesc = newDesc;
-                await this.uiManager.storage.saveSlot(this.selectedSlotId, slot?.name || `Slot ${this.selectedSlotId}`, newDesc, slot?.data || this.uiManager.state.exportData());
-                this.refreshSlotList();
-            }
-        });
-
-        document.getElementById('btn-slot-delete').addEventListener('click', async () => {
-            if (confirm("Delete this save slot?")) {
-                await this.uiManager.storage.deleteSlot(this.selectedSlotId);
-                if (this.uiManager.activeSlot === this.selectedSlotId) {
-                    this.uiManager.state.clear(true);
-                }
-                this.refreshSlotList();
-                this.uiManager.renderAll();
-            }
-        });
-
-        const btnTrim = document.getElementById('btn-trim-save');
-        if (btnTrim) {
-            btnTrim.addEventListener('click', async () => {
-                if (confirm("This will permanently delete all alternate parallel drafts, AI reasoning blocks, and undo history for the CURRENT story to save space. Continue?")) {
-                    this.uiManager.state.cleanState();
-                    await this.uiManager.autoSave();
-                    this.uiManager.renderAll();
-                    alert("Save trimmed successfully! File size has been reduced.");
-                }
-            });
-        }
-
-        // Exports
-        document.getElementById('btn-export-txt').addEventListener('click', () => this.exportText());
-        document.getElementById('btn-export-json').addEventListener('click', () => this.exportJSON());
-        document.getElementById('btn-import-json').addEventListener('click', () => document.getElementById('file-import-json').click());
-        document.getElementById('file-import-json').addEventListener('change', (e) => this.importJSON(e));
     }
 
     bindSamplerPair(slideId, numId) {
@@ -205,7 +125,6 @@ export class SettingsMenu {
             const models = await OpenAIClient.fetchModels();
             this.cachedFetchedModels = models.map(m => m.id || m.name);
             
-            // Validate existing settings against fetched models
             let missing = [];
             
             if (settings.model && !this.cachedFetchedModels.includes(settings.model)) {
@@ -238,7 +157,7 @@ export class SettingsMenu {
             if (missing.length > 0) {
                 alert("The following models are no longer available and were reset:\n\n" + missing.join("\n"));
                 settings.save();
-                this.populateUI(); // Refresh settings UI text fields
+                this.populateUI(); 
             }
 
             this.updateAllModelDropdowns();
@@ -503,247 +422,6 @@ export class SettingsMenu {
         });
     }
 
-    async refreshSlotList() {
-        this.renderAuthUI(); // Ensure auth UI is drawn
-
-        const listDiv = document.getElementById('slot-list');
-        listDiv.innerHTML = '<div style="text-align:center; color:var(--text-muted);">Loading slots...</div>';
-        
-        const localSlots = await this.uiManager.storage.getAllSlots();
-        let cloudSlots = [];
-        
-        if (this.cloudSync.isLoggedIn()) {
-            cloudSlots = await this.cloudSync.fetchCloudSlots();
-        }
-
-        listDiv.innerHTML = '';
-
-        localSlots.forEach(slot => {
-            const card = document.createElement('div');
-            card.className = `slot-card ${slot.id === this.uiManager.activeSlot ? 'active' : ''}`;
-            
-            // Find matching cloud save
-            const cloudFile = cloudSlots.find(f => f.name === `slot_${slot.id}.json`);
-            
-            const localDate = slot.lastEdited || 0;
-            const lastSynced = slot.data ? (slot.data.lastSynced || 0) : 0;
-            let cloudDate = cloudFile ? new Date(cloudFile.modifiedTime).getTime() : 0;
-            
-            let syncStatus = '';
-            let statusClass = '';
-
-            if (this.cloudSync.isLoggedIn()) {
-                if (!cloudFile && localDate > 0) {
-                    syncStatus = '⬆️ Pending Push'; statusClass = 'local-newer';
-                } else if (!cloudFile && localDate === 0) {
-                    syncStatus = '☁️ Empty';
-                } else if (localDate > lastSynced && cloudDate > lastSynced) {
-                    syncStatus = '⚠️ Conflict'; statusClass = 'conflict';
-                } else if (localDate > lastSynced) {
-                    syncStatus = '⬆️ Local Newer'; statusClass = 'local-newer';
-                } else if (cloudDate > lastSynced) {
-                    syncStatus = '⬇️ Cloud Newer'; statusClass = 'cloud-newer';
-                } else {
-                    syncStatus = '✔️ Synced'; statusClass = 'synced';
-                }
-            }
-
-            const dateStr = slot.lastEdited ? new Date(slot.lastEdited).toLocaleString() : 'Empty';
-            const msgCount = slot.data && slot.data.history ? slot.data.history.length : 0;
-
-            card.innerHTML = `
-                <div class="slot-title">
-                    <span>${slot.name} <span class="sync-status ${statusClass}">${syncStatus}</span></span>
-                    <span class="slot-meta">Msgs: ${msgCount}</span>
-                </div>
-                <div class="slot-desc">${slot.description || 'No description'}</div>
-                <div class="slot-meta">Last Edit: ${dateStr}</div>
-            `;
-
-            if (this.cloudSync.isLoggedIn() && (localDate > 0 || cloudFile)) {
-                const syncActions = document.createElement('div');
-                syncActions.className = 'sync-actions';
-                
-                // PUSH BUTTON
-                const btnPush = document.createElement('button');
-                btnPush.textContent = '⬆️ Push';
-                btnPush.onclick = async (e) => {
-                    e.stopPropagation();
-                    if (syncStatus === '⚠️ Conflict') {
-                        const choice = await this.handleSyncConflict(slot, cloudFile);
-                        if (choice !== 'local') return; // Cancelled or chose cloud (which they should do via Pull)
-                    } else if (syncStatus === '⬇️ Cloud Newer') {
-                        if (!confirm(`Warning: The Cloud version is newer. Overwrite Google Drive with your older Local save?`)) return;
-                    }
-                    btnPush.textContent = '⏳...';
-                    
-                    // Package the slot to save
-                    const payload = {
-                        slotName: slot.name,
-                        slotDesc: slot.description,
-                        data: slot.data || this.uiManager.state.exportData()
-                    };
-                    
-                    await this.cloudSync.pushSlot(slot.id, payload, cloudFile ? cloudFile.id : null);
-                    
-                    // Update local 'lastSynced' timestamp so we know they match
-                    payload.data.lastSynced = Date.now(); 
-                    await this.uiManager.storage.saveSlot(slot.id, slot.name, slot.description, payload.data);
-                    if (this.uiManager.activeSlot === slot.id) this.uiManager.state.loadFromData(payload.data);
-                    
-                    this.refreshSlotList();
-                };
-
-                // PULL BUTTON
-                const btnPull = document.createElement('button');
-                btnPull.textContent = '⬇️ Pull';
-                btnPull.onclick = async (e) => {
-                    e.stopPropagation();
-                    if (!cloudFile) return alert("No cloud save exists for this slot.");
-                    let finalCloudData = null;
-
-                    if (syncStatus === '⚠️ Conflict') {
-                        const choice = await this.handleSyncConflict(slot, cloudFile);
-                        if (!choice || choice === 'local') return; // Cancelled or chose local (which they should do via Push)
-                        finalCloudData = choice.cloudData; // We already downloaded it in the modal!
-                    } else if (syncStatus === '⬆️ Local Newer') {
-                        if (!confirm(`Warning: Your Local version has unsaved changes. Overwrite Local save with Google Drive?`)) return;
-                    }
-
-                    btnPull.textContent = '⏳...';
-
-                    // Use the pre-downloaded data if we resolved a conflict, otherwise download it now
-                    const cloudData = finalCloudData || await this.cloudSync.pullSlot(cloudFile.id);
-                    
-                    cloudData.data.lastSynced = Date.now();
-                    await this.uiManager.storage.saveSlot(slot.id, cloudData.slotName, cloudData.slotDesc, cloudData.data);
-                    if (this.uiManager.activeSlot === slot.id) {
-                        await this.uiManager.loadStateFromSlot(slot.id);
-                    }
-                    this.refreshSlotList();
-                };
-
-                syncActions.appendChild(btnPull);
-                syncActions.appendChild(btnPush);
-                card.appendChild(syncActions);
-            }
-
-            card.addEventListener('click', () => {
-                document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('active'));
-                card.classList.add('active');
-                this.selectedSlotId = slot.id;
-                document.getElementById('slot-actions').classList.remove('hidden');
-                document.getElementById('selected-slot-label').textContent = `Selected: ${slot.name}`;
-            });
-
-            listDiv.appendChild(card);
-        });
-    }
-
-    exportText() {
-        let metaHeader = "=== EXPORT METADATA ===\n";
-        let hasMeta = false;
-
-        const sysPrompt = this.uiManager.state.systemPrompt.trim();
-        if (sysPrompt) {
-            metaHeader += `[Memory / System Prompt]\n${sysPrompt}\n\n`;
-            hasMeta = true;
-        }
-
-        const summary = this.uiManager.state.summary.trim();
-        if (summary) {
-            metaHeader += `[Summary]\n${summary}\n\n`;
-            hasMeta = true;
-        }
-
-        const aNote = this.uiManager.state.anoteContent.trim();
-        if (aNote) {
-            metaHeader += `[Author's Note]\n${aNote}\n\n`;
-            hasMeta = true;
-        }
-
-        if (!hasMeta) {
-            metaHeader = "";
-        } else {
-            metaHeader += "=== CONVERSATION ===\n\n";
-        }
-
-        const text = this.uiManager.state.history.map((m, i) => {
-            let content = this.uiManager.state.getContent(i);
-            
-            // Handle special system roles cleanly for the export text
-            if (m.role === 'aggregation' && m.meta && m.meta.displayInput) {
-                content = m.meta.displayInput;
-            } else if (m.role === 'choices' && m.extractedChoices) {
-                content = m.extractedChoices.map((c, idx) => `${idx + 1}. ${c}`).join('\n');
-            }
-
-            return `${m.role.toUpperCase()}:\n${content}\n`;
-        }).join('\n');
-
-        const finalOutput = metaHeader + text;
-
-        const blob = new Blob([finalOutput], { type: 'text/plain' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `story_export_${Date.now()}.txt`;
-        a.click();
-    }
-
-    exportJSON() {
-        // Wrap the state data with the active slot's name and description
-        const payload = {
-            slotName: this.uiManager.activeSlotName,
-            slotDesc: this.uiManager.activeSlotDesc,
-            data: this.uiManager.state.exportData()
-        };
-        
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `story_save_${Date.now()}.json`;
-        a.click();
-    }
-
-    importJSON(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const parsed = JSON.parse(e.target.result);
-                let stateData, name, desc;
-
-                // Detect if it's the new wrapped format or the old raw format
-                if (parsed.data && parsed.data.history) {
-                    stateData = parsed.data;
-                    name = parsed.slotName || file.name;
-                    desc = parsed.slotDesc || "Imported";
-                } else if (parsed.history) {
-                    stateData = parsed;
-                    name = file.name;
-                    desc = "Imported (Legacy)";
-                } else {
-                    throw new Error("Invalid save file format.");
-                }
-
-                await this.uiManager.storage.saveSlot(this.selectedSlotId, name, desc, stateData);
-                this.refreshSlotList();
-                
-                // If they imported over their currently active slot, load it immediately
-                if (this.selectedSlotId === this.uiManager.activeSlot) {
-                    await this.uiManager.loadStateFromSlot(this.selectedSlotId);
-                }
-                
-                // Reset the file input so they can import the same file again if needed
-                event.target.value = '';
-            } catch (err) {
-                alert("Failed to import JSON: " + err.message);
-            }
-        };
-        reader.readAsText(file);
-    }
-
     populateUI() {
         document.getElementById('set-api-url').value = settings.apiUrl;
         document.getElementById('set-use-chat').checked = settings.useChatCompletions;
@@ -876,117 +554,5 @@ export class SettingsMenu {
         this.uiManager.renderAll();
 
         this.chatModal.classList.add('hidden');
-    }
-
-    renderAuthUI() {
-        let authContainer = document.getElementById('auth-container');
-        if (!authContainer) {
-            // Inject auth container directly above the slot-list
-            const listDiv = document.getElementById('slot-list');
-            if (!listDiv) return; // Safety check
-            
-            authContainer = document.createElement('div');
-            authContainer.id = 'auth-container';
-            listDiv.parentNode.insertBefore(authContainer, listDiv);
-        }
-
-        if (this.cloudSync.isLoggedIn()) {
-            authContainer.innerHTML = `
-                <span>☁️ Linked to Google Drive</span>
-                <button id="btn-cloud-logout" class="secondary">Sign Out</button>
-            `;
-            document.getElementById('btn-cloud-logout').onclick = () => this.cloudSync.logout();
-        } else {
-            authContainer.innerHTML = `
-                <span style="font-size: 0.9em; font-weight: bold;">Google Drive Sync:</span>
-                <button id="btn-cloud-login" class="primary">Sign In</button>
-            `;
-            document.getElementById('btn-cloud-login').onclick = () => {
-                this.cloudSync.init(); // Init just before login to ensure library is loaded
-                this.cloudSync.login();
-            };
-        }
-    }
-
-    async handleSyncConflict(slot, cloudFile) {
-        const modal = document.getElementById('sync-conflict-modal');
-        const contentArea = document.getElementById('conflict-content-area');
-        const btnLocal = document.getElementById('btn-tab-local');
-        const btnCloud = document.getElementById('btn-tab-cloud');
-        
-        modal.classList.remove('hidden');
-        contentArea.innerHTML = '<div style="text-align:center; margin-top:20px;">Fetching cloud data... ⏳</div>';
-
-        // 1. Fetch Cloud Data into memory
-        const cloudData = await this.cloudSync.pullSlot(cloudFile.id);
-        
-        // Helper to generate the preview HTML
-        const generatePreview = (dataObj, timestamp) => {
-            const dateStr = timestamp ? new Date(timestamp).toLocaleString() : 'Unknown';
-            const msgCount = dataObj && dataObj.history ? dataObj.history.length : 0;
-            
-            let html = `<div class="conflict-meta"><span>Last Edit: ${dateStr}</span><span>Messages: ${msgCount}</span></div>`;
-            
-            if (msgCount > 0) {
-                // Get last 2 messages
-                const lastMsgs = dataObj.history.slice(-2);
-                lastMsgs.forEach(msg => {
-                    let content = "No content";
-                    if (msg.drafts && msg.drafts[msg.activeDraftIndex || 0]) {
-                        content = msg.drafts[msg.activeDraftIndex || 0].content;
-                    }
-                    // Truncate long messages for the preview
-                    if (content.length > 200) content = content.substring(0, 200) + '...';
-                    
-                    html += `
-                        <div class="conflict-msg ${msg.role}">
-                            <div class="conflict-msg-role">${msg.role}</div>
-                            <div>${content}</div>
-                        </div>
-                    `;
-                });
-            } else {
-                html += `<div style="text-align:center; opacity:0.5;">No messages.</div>`;
-            }
-            return html;
-        };
-
-        const localHtml = generatePreview(slot.data, slot.lastEdited);
-        const cloudHtml = generatePreview(cloudData.data, new Date(cloudFile.modifiedTime).getTime());
-
-        // 2. Setup Tabs
-        const switchTab = (isLocal) => {
-            if (isLocal) {
-                btnLocal.classList.add('primary'); btnCloud.classList.remove('primary');
-                contentArea.innerHTML = localHtml;
-            } else {
-                btnCloud.classList.add('primary'); btnLocal.classList.remove('primary');
-                contentArea.innerHTML = cloudHtml;
-            }
-        };
-
-        // Default to local view
-        switchTab(true);
-
-        btnLocal.onclick = () => switchTab(true);
-        btnCloud.onclick = () => switchTab(false);
-
-        // 3. Handle Resolution Promises
-        return new Promise((resolve) => {
-            document.getElementById('btn-close-conflict').onclick = () => {
-                modal.classList.add('hidden');
-                resolve(null); // Cancelled
-            };
-            
-            document.getElementById('btn-keep-local').onclick = () => {
-                modal.classList.add('hidden');
-                resolve('local');
-            };
-            
-            document.getElementById('btn-keep-cloud').onclick = () => {
-                modal.classList.add('hidden');
-                resolve({ cloudData, cloudFile });
-            };
-        });
     }
 }

@@ -57,6 +57,7 @@ export class AppSettings {
         // Tools Menu Global Persistence
         this.diceNotation = "1d20";
 
+        this.lastEdited = 0;
         this.load();
     }
 
@@ -85,7 +86,17 @@ export class AppSettings {
     }
 
     save() {
+        this.lastEdited = Date.now();
         localStorage.setItem('ai_proto_settings', JSON.stringify(this));
+    }
+
+    exportSettings() {
+        return JSON.parse(JSON.stringify(this));
+    }
+
+    importSettings(data) {
+        Object.assign(this, data);
+        this.save();
     }
 
     neutralizeSamplers() {

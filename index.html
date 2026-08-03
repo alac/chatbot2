@@ -383,27 +383,21 @@
 
                 <div id="tab-saveload" class="tab-pane">
                     <h3>Save Slots</h3>
+                    
+                    <!-- Cloud Auth UI will automatically inject itself here -->
+                    
                     <div id="slot-list" class="slot-list"></div>
+                    
                     <div id="slot-actions" class="slot-actions hidden">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <span id="selected-slot-label" style="font-weight: bold;">Selected: None</span>
-                            <button id="btn-new-chat" class="secondary" style="padding: 4px 8px; font-size: 0.85em;">➕ New Chat</button>
                         </div>
-                        <div class="action-grid">
-                            <button id="btn-slot-save" class="primary">💾 Save</button>
-                            <button id="btn-slot-load" class="primary">📂 Load</button>
-                            <button id="btn-slot-edit-name">✏️ Name</button>
-                            <button id="btn-slot-edit-desc">📝 Desc</button>
-                            <button id="btn-slot-delete" class="danger">🗑️ Delete</button>
-                        </div>
-                        <hr>
-                        <div class="action-grid">
-                            <button id="btn-export-json">📥 JSON</button>
-                            <button id="btn-export-txt">📄 TXT</button>
-                            <button id="btn-import-json">📤 Import</button>
-                            <input type="file" id="file-import-json" accept=".json" class="hidden">
-                            <button id="btn-trim-save" class="secondary">🧹 Trim Save</button>
-                        </div>
+                        
+                        <!-- SlotManager.js dynamically injects action buttons here based on what is selected -->
+                        <div id="slot-actions-buttons" class="action-grid"></div>
+                        
+                        <!-- Persistent hidden file input (Kept outside the dynamic div so it isn't destroyed) -->
+                        <input type="file" id="file-import-json" accept=".json" class="hidden">
                     </div>
                 </div>
 

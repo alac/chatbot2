@@ -9,6 +9,9 @@ import { ToolsManager } from './ToolsManager.js';
 import { QuickRepliesManager } from './QuickRepliesManager.js';
 import { DraftMergeManager } from './DraftMergeManager.js';
 
+import { CloudSyncUI } from './CloudSyncUI.js';
+import { SlotManager } from './SlotManager.js';
+
 export class UIManager {
     constructor() {
         this.state = new StoryState();
@@ -38,6 +41,8 @@ export class UIManager {
         this.toolsManager = new ToolsManager(this);
         this.quickRepliesManager = new QuickRepliesManager(this);
         this.draftMergeManager = new DraftMergeManager(this);
+        this.cloudSyncUI = new CloudSyncUI(this);
+        this.slotManager = new SlotManager(this);
 
         this.bindEvents();
         this.initApp();
