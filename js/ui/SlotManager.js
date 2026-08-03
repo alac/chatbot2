@@ -162,7 +162,6 @@ export class SlotManager {
                 a.click();
             };
 
-            // Hook up the invisible file input for Settings
             const fileInput = document.getElementById('file-import-json');
             fileInput.onchange = (e) => {
                 const file = e.target.files[0];
@@ -179,25 +178,70 @@ export class SlotManager {
 
             actionsContainer.append(btnImport, btnExport);
         } else {
-            // Standard Story Slot Actions
             actionsContainer.innerHTML = `
                 <button id="btn-slot-load" class="primary">📂 Load</button>
                 <button id="btn-slot-save" class="primary">💾 Save</button>
-                <button id="btn-new-chat" class="secondary">➕ New Chat</button>
+                <button id="btn-new-chat" class="secondary">➕ New</button>
                 <button id="btn-slot-edit-name" class="secondary">✏️ Name</button>
                 <button id="btn-slot-edit-desc" class="secondary">📝 Desc</button>
                 <button id="btn-export-txt" class="secondary">📄 TXT</button>
                 <button id="btn-export-json" class="secondary">📥 JSON</button>
                 <button id="btn-import-json" class="secondary">📤 Import</button>
-                <button id="btn-trim-save" class="secondary">🧹 Trim Save</button>
+                <button id="btn-trim-save" class="secondary">🧹 Trim</button>
                 <button id="btn-slot-delete" class="danger">🗑️ Delete</button>
             `;
 
-            // Bind existing logic... (simplified here for brevity, matching old SettingsMenu actions)
-            document.getElementById('btn-slot-load').onclick = () => { this.uiManager.loadStateFromSlot(this.selectedSlotId); document.getElementById('settings-modal').classList.add('hidden'); };
-            document.getElementById('btn-slot-save').onclick = () => { this.uiManager.activeSlot = this.selectedSlotId; this.uiManager.autoSave(); this.refreshSlotList(); };
-            ocument.getElementById('btn-export-txt').onclick = () => { this.exportText(); };
+            document.getElementById('btn-slot-load').onclick = () => { 
+                this.uiManager.loadStateFromSlot(this.selectedSlotId); 
+                document.getElementById('settings-modal').classList.add('hidden'); 
+            };
+            document.getElementById('btn-slot-save').onclick = () => { 
+                this.uiManager.activeSlot = this.selectedSlotId; 
+                this.uiManager.autoSave(); 
+                this.refreshSlotList(); 
+            };
             
+            document.getElementById('btn-new-chat').onclick = async () => {
+                if (confirm("Start a new chat in this slot? This clears the current history but keeps settings.")) {
+                    this.uiManager.state.clear(false); 
+                    this.uiManager.activeSlot = this.selectedSlotId;
+                    await this.uiManager.autoSave();
+                    this.refreshSlotList();
+                    this.uiManager.renderAll();
+                    document.getElementById('settings-modal').classList.add('hidden');
+                }
+            };
+
+            document.getElementById('btn-slot-edit-name').onclick = async () => {
+                const slot = await this.uiManager.storage.loadSlot(this.selectedSlotId);
+                const newName = prompt("Enter slot name:", slot?.name || `Slot ${this.selectedSlotId}`);
+                if (newName !== null) {
+                    if (this.selectedSlotId === this.uiManager.activeSlot) this.uiManager.activeSlotName = newName;
+                    await this.uiManager.storage.saveSlot(this.selectedSlotId, newName, slot?.description || "", slot?.data || this.uiManager.state.exportData());
+                    this.refreshSlotList();
+                }
+            };
+
+            document.getElementById('btn-slot-edit-desc').onclick = async () => {
+                const slot = await this.uiManager.storage.loadSlot(this.selectedSlotId);
+                const newDesc = prompt("Enter slot description:", slot?.description || "");
+                if (newDesc !== null) {
+                    if (this.selectedSlotId === this.uiManager.activeSlot) this.uiManager.activeSlotDesc = newDesc;
+                    await this.uiManager.storage.saveSlot(this.selectedSlotId, slot?.name || `Slot ${this.selectedSlotId}`, newDesc, slot?.data || this.uiManager.state.exportData());
+                    this.refreshSlotList();
+                }
+            };
+
+            document.getElementById('btn-export-txt').onclick = () => this.exportText();
+
+            document.getElementById('btn-export-json').onclick = () => {
+                const payload = { slotName: this.uiManager.activeSlotName, slotDesc: this.uiManager.activeSlotDesc, data: this.uiManager.state.exportData() };
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+                a.download = `story_save_${Date.now()}.json`;
+                a.click();
+            };
+
             const fileInput = document.getElementById('file-import-json');
             document.getElementById('btn-import-json').onclick = () => fileInput.click();
             fileInput.onchange = (e) => {
@@ -214,26 +258,16 @@ export class SlotManager {
                 };
                 reader.readAsText(file);
             };
-            
-            // Reattach standard export TXT/JSON functions from old SettingsMenu here
-            document.getElementById('btn-export-json').onclick = () => {
-                const payload = { slotName: this.uiManager.activeSlotName, slotDesc: this.uiManager.activeSlotDesc, data: this.uiManager.state.exportData() };
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
-                a.download = `story_save_${Date.now()}.json`;
-                a.click();
-            };
 
             document.getElementById('btn-trim-save').onclick = async () => {
-                if (confirm("This will permanently delete all alternate parallel drafts, AI reasoning blocks, and undo history for the CURRENT story to save space. Continue?")) {
+                if (confirm("This permanently deletes alternate drafts and AI reasoning from the active story to save space. Continue?")) {
                     this.uiManager.state.cleanState();
                     await this.uiManager.autoSave();
                     this.uiManager.renderAll();
-                    alert("Save trimmed successfully! File size has been reduced.");
+                    alert("Save trimmed successfully!");
                 }
             };
 
-            // Delete, Rename, etc.
             document.getElementById('btn-slot-delete').onclick = async () => {
                 if (confirm("Delete this save slot?")) {
                     await this.uiManager.storage.deleteSlot(this.selectedSlotId);
