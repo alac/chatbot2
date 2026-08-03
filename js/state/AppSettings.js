@@ -82,6 +82,9 @@ export class AppSettings {
             }
 
             if (!this.diceNotation) this.diceNotation = "1d20";
+            if (!this.lastEdited) this.lastEdited = Date.now();
+        } else {
+            this.lastEdited = Date.now();
         }
     }
 

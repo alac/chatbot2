@@ -63,7 +63,8 @@ export class SlotManager {
             syncStatus = await this.uiManager.cloudSyncUI.getSyncStatus(localData, localDate, cloudFile);
         }
 
-        const dateStr = localDate ? new Date(localDate).toLocaleString() : 'Empty';
+        const dateStr = localDate ? new Date(localDate).toLocaleString() : (isSettings ? 'Now' : 'Empty');
+        
         card.innerHTML = `
             <div class="slot-title">
                 <span>${title} <span class="sync-status ${syncStatus.class}">${syncStatus.text}</span></span>
@@ -74,7 +75,7 @@ export class SlotManager {
         `;
 
         // Sync Actions (Push / Pull)
-        if (this.uiManager.cloudSyncUI.manager.isLoggedIn() && (localDate > 0 || cloudFile)) {
+        if (this.uiManager.cloudSyncUI.manager.isLoggedIn() && (localDate > 0 || cloudFile || isSettings)) {
             const syncActions = document.createElement('div');
             syncActions.className = 'sync-actions';
             
