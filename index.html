@@ -227,15 +227,18 @@
             <div class="modal-body" style="display: flex; flex-direction: column;">
                 <div id="tab-memory" class="tab-pane active" style="flex: 1;">
                     <div class="setting-row column" style="height: 100%;">
-                        <span class="label-text">Memory (System Prompt)</span>
-                        <textarea id="set-system-prompt" style="flex: 1; resize: none; min-height: 250px;" placeholder="You are a helpful AI..."></textarea>
+                        <div style="display:flex; justify-content:space-between; align-items:center; width: 100%;">
+                            <span class="label-text">Memory (System Prompt)</span>
+                            <button id="btn-open-memory-history" class="secondary" style="font-size:0.85em; padding: 2px 6px;">History 🕒</button>
+                        </div>
+                        <textarea id="set-system-prompt" style="flex: 1; width: 100%; resize: none; min-height: 250px;" placeholder="You are a helpful AI..."></textarea>
                     </div>
                 </div>
 
                 <div id="tab-anote" class="tab-pane" style="flex: 1;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <h3>Author's Note</h3>
-                        <button id="btn-toggle-anote-history" class="secondary" style="font-size:0.85em;">History 🕒</button>
+                        <button id="btn-toggle-anote-history" class="secondary" style="font-size:0.85em; padding: 2px 6px;">History 🕒</button>
                     </div>
                     
                     <div id="anote-history-container" class="hidden" style="margin-bottom: 10px; border: 1px solid var(--border); border-radius: 4px; max-height: 150px; overflow-y: auto;">
@@ -773,6 +776,35 @@
             <div style="padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; background: var(--bg-panel);">
                 <button id="btn-keep-local" class="primary" style="flex:1;">Keep Local ⬆️</button>
                 <button id="btn-keep-cloud" class="primary" style="flex:1;">Keep Cloud ⬇️</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Memory History Modal -->
+    <div id="memory-history-modal" class="modal hidden" style="z-index: 110;">
+        <div class="modal-content" style="max-width: 900px; width: 95vw; height: 85vh; display:flex; flex-direction:column;">
+            <div class="modal-header" style="padding: 8px 12px;">
+                <h2 style="font-size: 1.1em;">Memory History</h2>
+                <button id="btn-close-memory-history" class="close-btn">&times;</button>
+            </div>
+            
+            <div style="padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-panel); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <button id="btn-mh-prev" class="secondary" style="padding: 4px 12px;">&laquo; Older</button>
+                <div id="mh-version-label" style="font-size: 0.9em; font-weight: bold; text-align: center; line-height: 1.2;"></div>
+                <button id="btn-mh-next" class="secondary" style="padding: 4px 12px;">Newer &raquo;</button>
+            </div>
+            
+            <div style="padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-panel);">
+                <button id="btn-mh-restore" class="primary" style="width: 100%; padding: 8px;">Restore this historical version</button>
+            </div>
+            
+            <div style="display: flex; background: var(--bg-panel); border-bottom: 1px solid var(--border); font-size: 0.85em; font-weight: bold;">
+                <div style="flex: 1; padding: 4px 8px; border-right: 1px solid var(--border);">Historical Version</div>
+                <div style="flex: 1; padding: 4px 8px;">Current Editor Version</div>
+            </div>
+            
+            <div class="modal-body mh-diff-body" style="padding: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column;">
+                <div id="mh-diff-container" class="mh-diff-container"></div>
             </div>
         </div>
     </div>

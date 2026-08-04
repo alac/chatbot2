@@ -534,3 +534,14 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     font-weight: bold;
     font-size: 0.9em;
 }
+
+
+/* Memory History Diff Modal - Mobile Tight Constraints */
+.mh-diff-container { display: flex; flex-direction: row; align-items: stretch; min-height: 100%; font-family: monospace; font-size: 0.85em; white-space: pre-wrap; word-break: break-word; }
+.mh-diff-col { flex: 1; min-width: 0; padding: 6px; overflow-x: hidden; }
+.mh-diff-col.left { border-right: 1px solid var(--border); background: rgba(239, 68, 68, 0.05); }
+.mh-diff-col.right { background: rgba(34, 197, 94, 0.05); }
+.mh-diff-chunk-separator { text-align: center; color: var(--text-muted); opacity: 0.7; padding: 4px 0; font-style: italic; font-size: 0.9em; background: rgba(0,0,0,0.1); border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border); margin: 4px 0; }
+.mh-line { min-height: 1.2em; border-radius: 2px; }
+.mh-line.del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoration: line-through; padding: 0 4px; }
+.mh-line.ins { background: var(--diff-ins-bg); color: var(--diff-ins-txt); text-decoration: none; padding: 0 4px; }

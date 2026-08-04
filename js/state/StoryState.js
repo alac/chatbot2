@@ -8,6 +8,7 @@ export class StoryState {
         this.contextBoundaryIndex = -1;
 
         // Slot-Specific Memory & Story Settings
+        this.systemPromptHistory = [];
         this.systemPrompt = "You are a helpful AI assistant.";
         this.anoteTemplate = "[Author's note: <|>]";
         this.anoteContent = "";
@@ -35,6 +36,7 @@ export class StoryState {
         this.summary = "";
 
         if (resetSettings) {
+            this.systemPromptHistory = [];
             this.systemPrompt = "You are a helpful AI assistant.";
             this.anoteTemplate = "[Author's note: <|>]";
             this.anoteContent = "";
@@ -289,6 +291,7 @@ export class StoryState {
         this.selectedAutoSumPromptTitle = data.selectedAutoSumPromptTitle || "Event Log";
         this.selectedAutoSumPromptText = data.selectedAutoSumPromptText || "Summarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.";
 
+        this.systemPromptHistory = data.systemPromptHistory || [];
         this.systemPrompt = data.systemPrompt !== undefined ? data.systemPrompt : "You are a helpful AI assistant.";
         this.anoteTemplate = data.anoteTemplate !== undefined ? data.anoteTemplate : "[Author's note: <|>]";
         this.anoteContent = data.anoteContent !== undefined ? data.anoteContent : "";
@@ -310,6 +313,7 @@ export class StoryState {
             summary: this.summary,
             selectedAutoSumPromptTitle: this.selectedAutoSumPromptTitle,
             selectedAutoSumPromptText: this.selectedAutoSumPromptText,
+            systemPromptHistory: this.systemPromptHistory,
             systemPrompt: this.systemPrompt,
             anoteTemplate: this.anoteTemplate,
             anoteContent: this.anoteContent,

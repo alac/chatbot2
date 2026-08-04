@@ -529,7 +529,24 @@ export class SettingsMenu {
     }
 
     closeAndSaveChatSettings() {
-        this.uiManager.state.systemPrompt = document.getElementById('set-system-prompt').value;
+        const newSysPrompt = document.getElementById('set-system-prompt').value;
+        const oldSysPrompt = this.uiManager.state.systemPrompt;
+        
+        // Push to History if changed
+        if (newSysPrompt !== oldSysPrompt) {
+            if (!this.uiManager.state.systemPromptHistory) this.uiManager.state.systemPromptHistory = [];
+            if (oldSysPrompt.trim() !== '') {
+                this.uiManager.state.systemPromptHistory.unshift({
+                    text: oldSysPrompt,
+                    timestamp: Date.now()
+                });
+                if (this.uiManager.state.systemPromptHistory.length > 5) {
+                    this.uiManager.state.systemPromptHistory.pop();
+                }
+            }
+        }
+        
+        this.uiManager.state.systemPrompt = newSysPrompt;
         this.uiManager.state.anoteTemplate = document.getElementById('set-anote-template').value;
         this.uiManager.state.anoteContent = document.getElementById('set-anote-content').value;
         this.uiManager.state.anoteUnit = document.getElementById('set-anote-unit').value;
