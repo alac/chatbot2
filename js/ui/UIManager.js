@@ -236,6 +236,10 @@ export class UIManager {
             });
         }, 100);
 
+        // Save state immediately before sending the network request
+        // so we don't lose the user's message if the app is killed while waiting.
+        this.autoSave();
+
         try {
             await this.activeBatch.startAll((draftIdx, data) => {
                 const actualDraftIdx = draftIdx + draftOffset;
