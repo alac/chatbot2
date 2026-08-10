@@ -9,6 +9,7 @@ import { ToolsManager } from './ToolsManager.js';
 import { QuickRepliesManager } from './QuickRepliesManager.js';
 import { DraftMergeManager } from './DraftMergeManager.js';
 import { MemoryHistoryManager } from './MemoryHistoryManager.js';
+import { NotesManager } from './NotesManager.js';
 
 import { CloudSyncUI } from './CloudSyncUI.js';
 import { SlotManager } from './SlotManager.js';
@@ -43,6 +44,7 @@ export class UIManager {
         this.quickRepliesManager = new QuickRepliesManager(this);
         this.draftMergeManager = new DraftMergeManager(this);
         this.memoryHistoryManager = new MemoryHistoryManager(this);
+        this.notesManager = new NotesManager(this);
         this.cloudSyncUI = new CloudSyncUI(this);
         this.slotManager = new SlotManager(this);
 

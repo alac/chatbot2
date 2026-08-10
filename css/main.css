@@ -545,3 +545,108 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .mh-line { min-height: 1.2em; border-radius: 2px; }
 .mh-line.del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoration: line-through; padding: 0 4px; }
 .mh-line.ins { background: var(--diff-ins-bg); color: var(--diff-ins-txt); text-decoration: none; padding: 0 4px; }
+
+
+/* Notes Kanban Board */
+.notes-board {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 100%;
+    padding: 16px;
+    scroll-snap-type: x mandatory;
+    align-items: flex-start;
+}
+.notes-column {
+    background: rgba(0,0,0,0.15);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 85vw;
+    max-width: 350px;
+    min-width: 280px;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    scroll-snap-align: center;
+}
+.notes-column-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    font-weight: bold;
+    background: var(--bg-panel);
+    border-radius: 8px 8px 0 0;
+}
+.notes-column-header input {
+    background: transparent;
+    border: 1px solid transparent;
+    color: inherit;
+    font-weight: bold;
+    font-size: 1.1em;
+    flex: 1;
+    padding: 4px;
+    min-width: 0;
+}
+.notes-column-header input:focus {
+    background: var(--bg-input);
+    border-color: var(--border);
+}
+.notes-column-body {
+    padding: 10px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.notes-column-footer {
+    padding: 10px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-panel);
+    border-radius: 0 0 8px 8px;
+}
+.note-card {
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    cursor: pointer;
+    user-select: none;
+    resize: vertical;
+    overflow: hidden;
+    min-height: 60px;
+    max-height: 800px;
+    position: relative;
+    transition: border-color 0.2s;
+    font-size: 0.9em;
+}
+.note-card:hover {
+    border-color: var(--accent);
+}
+.note-card:active {
+    background: var(--bg-input);
+}
+.btn-add-col {
+    flex-shrink: 0;
+    width: 50px;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0,0,0,0.1);
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 24px;
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+.btn-add-col:hover {
+    background: rgba(255,255,255,0.05);
+    color: var(--text-main);
+    border-color: var(--text-muted);
+}

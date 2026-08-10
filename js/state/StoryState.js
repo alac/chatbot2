@@ -26,6 +26,9 @@ export class StoryState {
         this.nameCountMale = 3;
         this.nameCountFemale = 3;
         this.aggregationHistory = [];
+        
+        // Notes Kanban Board
+        this.notes = [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
     }
 
     clear(resetSettings = false) {
@@ -48,6 +51,7 @@ export class StoryState {
             this.nameCountMale = 3;
             this.nameCountFemale = 3;
             this.aggregationHistory = [];
+            this.notes = [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
         }
     }
 
@@ -303,6 +307,8 @@ export class StoryState {
         this.nameCountMale = data.nameCountMale !== undefined ? data.nameCountMale : 3;
         this.nameCountFemale = data.nameCountFemale !== undefined ? data.nameCountFemale : 3;
         this.aggregationHistory = data.aggregationHistory || [];
+        
+        this.notes = data.notes || [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
     }
 
     exportData() {
@@ -323,7 +329,8 @@ export class StoryState {
             nameTheme: this.nameTheme,
             nameCountMale: this.nameCountMale,
             nameCountFemale: this.nameCountFemale,
-            aggregationHistory: this.aggregationHistory
+            aggregationHistory: this.aggregationHistory,
+            notes: this.notes
         };
     }
 

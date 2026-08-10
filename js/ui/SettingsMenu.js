@@ -20,6 +20,7 @@ export class SettingsMenu {
         
         document.getElementById('btn-chat-settings').addEventListener('click', () => {
             this.populateUI(); 
+            this.uiManager.notesManager.renderBoard();
             this.chatModal.classList.remove('hidden');
         });
         document.getElementById('btn-close-chat-settings').addEventListener('click', () => {
@@ -34,6 +35,9 @@ export class SettingsMenu {
         document.getElementById('chat-settings-page-selector').addEventListener('change', (e) => {
             this.chatModal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
             document.getElementById(e.target.value).classList.add('active');
+            if (e.target.value === 'tab-notes') {
+                this.uiManager.notesManager.renderBoard();
+            }
         });
         document.getElementById('choices-page-selector').addEventListener('change', (e) => {
             this.choicesModal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
