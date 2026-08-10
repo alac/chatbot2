@@ -874,7 +874,7 @@ export class UIManager {
     async autoSave() {
         await this.storage.saveSlot(this.activeSlot, this.activeSlotName, this.activeSlotDesc, this.state.exportData());
         localStorage.setItem('last_active_slot', this.activeSlot);
-        if (window.settingsUI) window.settingsUI.refreshSlotList();
+        if (this.slotManager) this.slotManager.refreshSlotList();
     }
 
     async loadStateFromSlot(id) {
