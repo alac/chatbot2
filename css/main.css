@@ -590,24 +590,25 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     flex: 1;
     padding: 4px;
     min-width: 0;
+    margin-right: 8px;
 }
 .notes-column-header input:focus {
     background: var(--bg-input);
     border-color: var(--border);
 }
+.notes-header-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
 .notes-column-body {
     padding: 10px;
     overflow-y: auto;
     flex: 1;
+    min-height: 0; /* Crucial for scrolling inside flex children */
     display: flex;
     flex-direction: column;
     gap: 10px;
-}
-.notes-column-footer {
-    padding: 10px;
-    border-top: 1px solid var(--border);
-    background: var(--bg-panel);
-    border-radius: 0 0 8px 8px;
 }
 .note-card {
     background: var(--bg-main);
@@ -616,13 +617,15 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     padding: 10px;
     cursor: pointer;
     user-select: none;
-    resize: vertical;
     overflow: hidden;
-    min-height: 60px;
-    max-height: 800px;
     position: relative;
     transition: border-color 0.2s;
     font-size: 0.9em;
+    /* Force single line display */
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    /* Prevent shrinking when column fills up */
+    flex-shrink: 0;
 }
 .note-card:hover {
     border-color: var(--accent);
