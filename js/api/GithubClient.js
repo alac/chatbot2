@@ -19,9 +19,24 @@ export class GithubClient {
         });
         if (!res.ok) throw new Error(`GitHub API Error: ${res.status}`);
         const data = await res.json();
-        // Return the content of the first file in the Gist
+        
+        // Identify the first file in the Gist
         const filename = Object.keys(data.files)[0];
-        return data.files[filename].content;
+        const fileObj = data.files[filename];
+        
+        // GitHub truncates the 'content' string if the file is larger than 1MB.
+        // We must fetch it directly from the raw_url to get the full payload.
+        if (fileObj.truncated && fileObj.raw_url) {
+            const rawRes = await fetch(fileObj.raw_url, {
+                headers: { 
+                    'Authorization': `Bearer ${pat}` 
+                }
+            });
+            if (!rawRes.ok) throw new Error(`GitHub Raw Fetch Error: ${rawRes.status}`);
+            return await rawRes.text();
+        }
+        
+        return fileObj.content;
     }
 
     static async createGist(filename, content, description, pat) {
