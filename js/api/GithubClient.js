@@ -26,12 +26,11 @@ export class GithubClient {
         
         // GitHub truncates the 'content' string if the file is larger than 1MB.
         // We must fetch it directly from the raw_url to get the full payload.
+        // NOTE: gist.githubusercontent.com rejects CORS preflight requests for Authorization headers.
+        // Fortunately, the raw_url includes the commit hash, which acts as an unguessable capability 
+        // token, allowing us to fetch secret gists anonymously without the auth header.
         if (fileObj.truncated && fileObj.raw_url) {
-            const rawRes = await fetch(fileObj.raw_url, {
-                headers: { 
-                    'Authorization': `Bearer ${pat}` 
-                }
-            });
+            const rawRes = await fetch(fileObj.raw_url); // No headers = no CORS preflight
             if (!rawRes.ok) throw new Error(`GitHub Raw Fetch Error: ${rawRes.status}`);
             return await rawRes.text();
         }
