@@ -1,6 +1,6 @@
 console.log("Service worker is active - should enable PWA functionality");
 
-const cacheName = 'chtbt2-54cdb965'; // Change this to force an update
+const cacheName = 'chtbt2-2b830a8e'; // Updated hash to force the new SW to install
 
 // Files to cache for offline use
 const filesToCache = [
@@ -61,13 +61,23 @@ self.addEventListener("activate", event => {
 });
 
 self.addEventListener("fetch", event => {
-    // Network-first strategy
+    // The Cache API only supports GET requests. 
+    // We must pass POST, PATCH, DELETE, etc., straight to the network.
+    if (event.request.method !== 'GET') {
+        event.respondWith(fetch(event.request));
+        return;
+    }
+
+    // Network-first strategy for GET requests
     event.respondWith(
         fetch(event.request)
             .then(response => {
                 // If network fetch succeeds, update the cache and return the response
                 return caches.open(cacheName).then(cache => {
-                    cache.put(event.request, response.clone());
+                    // Only cache valid HTTP/HTTPS responses (prevents extension protocol bugs)
+                    if (event.request.url.startsWith('http')) {
+                        cache.put(event.request, response.clone());
+                    }
                     return response;
                 });
             })

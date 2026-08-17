@@ -14,11 +14,50 @@ export class StorageManager {
                     db.createObjectStore(this.storeName, { keyPath: 'id' });
                 }
             };
-            request.onsuccess = (e) => {
+            request.onsuccess = async (e) => {
                 this.db = e.target.result;
+                // Run the migration silently before the app finishes booting
+                await this.migrateLegacySlots();
                 resolve();
             };
             request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    async migrateLegacySlots() {
+        return new Promise((resolve) => {
+            const tx = this.db.transaction(this.storeName, 'readwrite');
+            const store = tx.objectStore(this.storeName);
+            const req = store.getAll();
+            
+            req.onsuccess = () => {
+                const results = req.result || [];
+                
+                // Track existing string keys so we don't blind-overwrite
+                const stringEntries = new Map(
+                    results.filter(r => typeof r.id === 'string').map(r => [r.id, r])
+                );
+                
+                for (const item of results) {
+                    // Find old legacy Integer keys (1, 2, 3...)
+                    if (typeof item.id === 'number') {
+                        const strId = item.id.toString();
+                        store.delete(item.id); // Wipe the integer-keyed entry
+                        
+                        const existingStr = stringEntries.get(strId);
+                        
+                        // If no string version exists, or if the old Integer version has MORE 
+                        // messages (meaning the string version was an accidental empty fallback)
+                        // we promote the old Integer data to the String slot.
+                        if (!existingStr || (item.messageCount || 0) >= (existingStr.messageCount || 0)) {
+                            item.id = strId;
+                            store.put(item);
+                            stringEntries.set(strId, item);
+                        }
+                    }
+                }
+                resolve();
+            };
         });
     }
 
@@ -56,11 +95,22 @@ export class StorageManager {
             const store = tx.objectStore(this.storeName);
             const req = store.getAll();
             req.onsuccess = () => {
-                // Return whatever exists dynamically. No forced 1-10 loop.
                 let results = req.result || [];
+                
+                // Final safety deduplication in case the UI asks for the list 
+                // exactly during a micro-transition
+                const uniqueMap = new Map();
+                results.forEach(r => {
+                    const existing = uniqueMap.get(r.id.toString());
+                    if (!existing || (r.messageCount > (existing.messageCount || 0))) {
+                        uniqueMap.set(r.id.toString(), r);
+                    }
+                });
+                let uniqueResults = Array.from(uniqueMap.values());
+
                 // Fallback for brand new users
-                if (results.length === 0) {
-                    results.push({
+                if (uniqueResults.length === 0) {
+                    uniqueResults.push({
                         id: '1',
                         name: 'Slot 1',
                         description: '',
@@ -69,7 +119,16 @@ export class StorageManager {
                         data: null
                     });
                 }
-                resolve(results);
+                
+                // Sort slots chronologically or by ID so the list UI doesn't jump around
+                uniqueResults.sort((a, b) => {
+                    const numA = parseInt(a.id);
+                    const numB = parseInt(b.id);
+                    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                    return a.id.localeCompare(b.id);
+                });
+
+                resolve(uniqueResults);
             };
             req.onerror = () => reject(req.error);
         });

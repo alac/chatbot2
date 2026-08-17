@@ -1,5 +1,6 @@
 import { settings } from '../state/AppSettings.js';
 import { GithubClient } from '../api/GithubClient.js';
+import { HashUtils } from '../utils/HashUtils.js';
 
 export class SlotManager {
     constructor(uiManager) {
@@ -17,9 +18,30 @@ export class SlotManager {
         if (this.uiManager.cloudSyncUI.isLoggedIn()) {
             try {
                 cloudGists = await GithubClient.listGists(settings.githubPAT);
+                
+                // === AUTO-HEAL MAPPING FROM CLOUD ===
+                // Scans filenames (e.g. slot_123.json) and ensures settings.gistMapping is perfectly up to date
+                let mappingUpdated = false;
+                for (const gist of cloudGists) {
+                    const filenames = Object.keys(gist.files);
+                    for (const filename of filenames) {
+                        let extractedId = null;
+                        if (filename === 'settings_sync.json') extractedId = 'settings';
+                        else if (filename.startsWith('slot_') && filename.endsWith('.json')) {
+                            extractedId = filename.substring(5, filename.length - 5);
+                        }
+                        
+                        if (extractedId && settings.gistMapping[extractedId] !== gist.id) {
+                            settings.gistMapping[extractedId] = gist.id;
+                            mappingUpdated = true;
+                        }
+                    }
+                }
+                if (mappingUpdated) settings.save();
+                // ====================================
+
             } catch (e) {
-                console.error("Failed to fetch gists, rendering auth error", e);
-                // Invalidate Auth UI state locally to force re-auth
+                console.error("Failed to fetch gists", e);
                 document.getElementById('github-auth-error').textContent = "Connection failed. Check PAT.";
                 document.getElementById('github-auth-error').classList.remove('hidden');
             }
@@ -42,26 +64,58 @@ export class SlotManager {
             'settings_sync.json'
         );
 
-        // 2. Render Story Slots dynamically
-        for (const slot of localSlots) {
-            const gistId = settings.gistMapping[slot.id];
+        // 2. Build a unified list of Local + Cloud Slot IDs
+        const allSlotIds = new Set(localSlots.map(s => s.id));
+        for (const [id, gistId] of Object.entries(settings.gistMapping)) {
+            if (id !== 'settings') allSlotIds.add(id);
+        }
+
+        const sortedIds = Array.from(allSlotIds).sort((a, b) => {
+            const numA = parseInt(a);
+            const numB = parseInt(b);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return a.localeCompare(b);
+        });
+
+        // 3. Render Story Slots dynamically
+        for (const slotId of sortedIds) {
+            const localSlot = localSlots.find(s => s.id === slotId);
+            const gistId = settings.gistMapping[slotId];
             const cloudGist = cloudGists.find(g => g.id === gistId);
-            const msgCount = slot.data?.history?.length || 0;
+            
+            // Skip rendering if it exists in neither place (e.g. deleted from cloud but stuck in mapping)
+            if (!localSlot && !cloudGist) continue;
+
+            let title = `Slot ${slotId}`;
+            let subtitle = "";
+            let rawSlot = localSlot;
+            
+            if (localSlot) {
+                const msgCount = localSlot.data?.history?.length || 0;
+                title = localSlot.name;
+                subtitle = `Msgs: ${msgCount}`;
+            } else if (cloudGist) {
+                // Cloud only slot (Not yet downloaded to this device)
+                const descMatch = cloudGist.description ? cloudGist.description.match(/AILite Slot:\s*(.*?)(?:\s*\||$)/) : null;
+                title = descMatch ? descMatch[1] : `Cloud Slot ${slotId}`;
+                subtitle = "☁️ Not on this device";
+                rawSlot = { name: title, description: "Cloud only save" };
+            }
             
             await this.renderCard(
                 listDiv, 
-                slot.id, 
-                slot.name, 
-                `Msgs: ${msgCount}`, 
-                slot.data, 
-                slot.lastEdited || 0, 
+                slotId, 
+                title, 
+                subtitle, 
+                localSlot ? localSlot.data : null, 
+                localSlot ? (localSlot.lastEdited || 0) : 0, 
                 cloudGist, 
-                `slot_${slot.id}.json`, 
-                slot
+                `slot_${slotId}.json`, 
+                rawSlot
             );
         }
 
-        // 3. Create New Slot Button
+        // 4. Create New Slot Button
         const btnNewSlot = document.createElement('button');
         btnNewSlot.className = 'secondary';
         btnNewSlot.innerHTML = '➕ Create New Save Slot';
@@ -83,17 +137,18 @@ export class SlotManager {
         const localSlots = await this.uiManager.storage.getAllSlots();
         const promises = [];
 
-        // Push Settings
+        const settingsPayload = settings.getCloudSyncPayload();
+        const settingsHash = await HashUtils.computeHash(settingsPayload);
         promises.push(
-            this.uiManager.cloudSyncUI.pushItem('settings', 'settings_sync.json', 'Global Settings', settings.getCloudSyncPayload())
+            this.uiManager.cloudSyncUI.pushItem('settings', 'settings_sync.json', 'Global Settings', settingsPayload, settingsHash)
             .then(ts => { settings.lastEdited = ts; settings.save(); })
         );
 
-        // Push Slots
         for (const slot of localSlots) {
+            const slotHash = await HashUtils.computeHash(slot.data);
             const payload = { slotName: slot.name, slotDesc: slot.description, data: slot.data };
             promises.push(
-                this.uiManager.cloudSyncUI.pushItem(slot.id, `slot_${slot.id}.json`, `AILite Slot: ${slot.name}`, payload)
+                this.uiManager.cloudSyncUI.pushItem(slot.id, `slot_${slot.id}.json`, `AILite Slot: ${slot.name}`, payload, slotHash)
                 .then(ts => this.uiManager.storage.saveSlot(slot.id, slot.name, slot.description, slot.data, ts))
             );
         }
@@ -111,7 +166,6 @@ export class SlotManager {
         if (!confirm("Pull ALL cloud slots and settings? This will overwrite local changes.")) return;
 
         try {
-            // Pull Settings
             const settingsGist = cloudGists.find(g => g.id === settings.gistMapping['settings']);
             if (settingsGist) {
                 const pullRes = await this.uiManager.cloudSyncUI.pullItem('settings', settingsGist);
@@ -123,15 +177,19 @@ export class SlotManager {
                 }
             }
 
-            // Pull Slots
             const localSlots = await this.uiManager.storage.getAllSlots();
-            for (const slot of localSlots) {
-                const gist = cloudGists.find(g => g.id === settings.gistMapping[slot.id]);
+            
+            // Build a set of all known slot IDs
+            const allSlotIds = new Set(localSlots.map(s => s.id));
+            for (const id of Object.keys(settings.gistMapping)) if (id !== 'settings') allSlotIds.add(id);
+
+            for (const slotId of allSlotIds) {
+                const gist = cloudGists.find(g => g.id === settings.gistMapping[slotId]);
                 if (gist) {
-                    const pullRes = await this.uiManager.cloudSyncUI.pullItem(slot.id, gist);
+                    const pullRes = await this.uiManager.cloudSyncUI.pullItem(slotId, gist);
                     if (pullRes) {
-                        await this.uiManager.storage.saveSlot(slot.id, pullRes.data.slotName, pullRes.data.slotDesc, pullRes.data.data, pullRes.timestamp);
-                        if (this.uiManager.activeSlot === slot.id) await this.uiManager.loadStateFromSlot(slot.id);
+                        await this.uiManager.storage.saveSlot(slotId, pullRes.data.slotName, pullRes.data.slotDesc, pullRes.data.data, pullRes.timestamp);
+                        if (this.uiManager.activeSlot === slotId) await this.uiManager.loadStateFromSlot(slotId);
                     }
                 }
             }
@@ -149,7 +207,7 @@ export class SlotManager {
         
         let syncStatus = { text: '', class: '' };
         if (this.uiManager.cloudSyncUI.isLoggedIn()) {
-            syncStatus = this.uiManager.cloudSyncUI.getSyncStatus(localData, localDate, cloudFile);
+            syncStatus = await this.uiManager.cloudSyncUI.getSyncStatus(localData, localDate, cloudFile);
         }
 
         const dateStr = localDate ? new Date(localDate).toLocaleString() : (isSettings ? 'Now' : 'Empty');
@@ -163,7 +221,6 @@ export class SlotManager {
             <div class="slot-meta">Last Edit: ${dateStr}</div>
         `;
 
-        // Sync Actions (Push / Pull)
         if (this.uiManager.cloudSyncUI.isLoggedIn() && (localDate > 0 || cloudFile || isSettings)) {
             const syncActions = document.createElement('div');
             syncActions.className = 'sync-actions';
@@ -172,6 +229,8 @@ export class SlotManager {
             btnPush.textContent = '⬆️ Push';
             btnPush.onclick = async (e) => {
                 e.stopPropagation();
+                if (!localData && !isSettings) return alert("Cannot push. This slot is entirely empty on this device.");
+
                 if (syncStatus.text === '⚠️ Conflict') {
                     const choice = await this.uiManager.cloudSyncUI.handleSyncConflict(localData, localDate, cloudFile, isSettings ? 'settings' : 'slot');
                     if (choice !== 'local') return;
@@ -180,11 +239,12 @@ export class SlotManager {
                 }
                 btnPush.textContent = '⏳...';
                 
+                const hash = await HashUtils.computeHash(localData);
                 const payload = isSettings ? localData : { slotName: rawSlot.name, slotDesc: rawSlot.description, data: localData };
+                
                 try {
-                    const newTs = await this.uiManager.cloudSyncUI.pushItem(id, cloudFileName, isSettings ? 'AILite Settings' : `AILite Slot: ${rawSlot.name}`, payload);
+                    const newTs = await this.uiManager.cloudSyncUI.pushItem(id, cloudFileName, isSettings ? 'AILite Settings' : `AILite Slot: ${rawSlot.name}`, payload, hash);
                     
-                    // Sync the local timestamp EXACTLY to the cloud timestamp to ensure equality
                     if (isSettings) {
                         settings.lastEdited = newTs;
                         settings.save();
@@ -237,6 +297,9 @@ export class SlotManager {
         }
 
         card.addEventListener('click', () => {
+            // Can't select/load a slot that doesn't exist locally yet
+            if (!localData && !isSettings) return alert("You must Pull this cloud save before you can select it.");
+
             document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('active'));
             card.classList.add('active');
             this.selectedSlotId = id;

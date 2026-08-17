@@ -1,6 +1,7 @@
 import { settings } from '../state/AppSettings.js';
 import { GithubClient } from '../api/GithubClient.js';
 import { CryptoUtils } from '../utils/CryptoUtils.js';
+import { HashUtils } from '../utils/HashUtils.js';
 
 export class CloudSyncUI {
     constructor(uiManager) {
@@ -33,7 +34,6 @@ export class CloudSyncUI {
             btnSave.disabled = true;
 
             try {
-                // Verify PAT works
                 await GithubClient.listGists(pat);
                 
                 settings.githubPAT = pat;
@@ -92,13 +92,24 @@ export class CloudSyncUI {
         return !!(settings.githubPAT && settings.encryptionKey);
     }
 
-    getSyncStatus(localTimestamp, cloudGist) {
+    async getSyncStatus(localData, localTimestamp, cloudGist) {
         if (!cloudGist && localTimestamp > 0) return { text: '⬆️ Pending Push', class: 'local-newer' };
         if (!cloudGist && localTimestamp === 0) return { text: '☁️ Empty', class: '' };
 
+        // 1. Hash-based equality check (Bypasses all timestamp issues)
+        const localHash = await HashUtils.computeHash(localData);
+        let cloudHash = null;
+
+        const descMatch = cloudGist.description ? cloudGist.description.match(/\|\s*hash:([a-fA-F0-9]+)/) : null;
+        if (descMatch) cloudHash = descMatch[1];
+
+        if (localHash === cloudHash && localHash !== '') {
+            return { text: '✔️ Synced', class: 'synced' };
+        }
+
+        // 2. Fallback to Timestamps if hashes differ
         const cloudTimestamp = new Date(cloudGist.updated_at).getTime();
         
-        // Give 5 seconds of leeway for slight sync/network mismatches
         if (Math.abs(localTimestamp - cloudTimestamp) < 5000) {
             return { text: '✔️ Synced', class: 'synced' };
         }
@@ -109,9 +120,10 @@ export class CloudSyncUI {
         return { text: '⚠️ Conflict', class: 'conflict' };
     }
 
-    async pushItem(id, filename, description, rawData) {
+    async pushItem(id, filename, baseDescription, rawData, computedHash) {
         if (!this.isLoggedIn()) throw new Error("Not logged in");
 
+        const descriptionWithHash = `${baseDescription} | hash:${computedHash}`;
         const dataStr = JSON.stringify(rawData);
         const encrypted = await CryptoUtils.encryptData(dataStr, settings.encryptionKey);
         
@@ -119,14 +131,14 @@ export class CloudSyncUI {
         let res;
         
         if (gistId) {
-            res = await GithubClient.updateGist(gistId, filename, encrypted, settings.githubPAT);
+            res = await GithubClient.updateGist(gistId, filename, encrypted, settings.githubPAT, descriptionWithHash);
         } else {
-            res = await GithubClient.createGist(filename, encrypted, description, settings.githubPAT);
+            res = await GithubClient.createGist(filename, encrypted, descriptionWithHash, settings.githubPAT);
             settings.gistMapping[id] = res.id;
             settings.save();
         }
         
-        return new Date(res.updated_at).getTime(); // Return authoritative cloud timestamp
+        return new Date(res.updated_at).getTime();
     }
 
     async pullItem(id, cloudGist) {
@@ -142,7 +154,6 @@ export class CloudSyncUI {
         };
     }
 
-    // Handles the UI conflict flow (adapted from your existing conflict logic)
     async handleSyncConflict(localData, localTimestamp, cloudGist, itemType = 'slot') {
         const modal = document.getElementById('sync-conflict-modal');
         const contentArea = document.getElementById('conflict-content-area');
@@ -161,7 +172,7 @@ export class CloudSyncUI {
             return new Promise((resolve) => {
                 document.getElementById('btn-close-conflict').onclick = () => { modal.classList.add('hidden'); resolve(null); };
                 document.getElementById('btn-keep-local').onclick = () => { modal.classList.add('hidden'); resolve('local'); };
-                document.getElementById('btn-keep-cloud').onclick = () => { modal.classList.add('hidden'); resolve(null); }; // Can't keep cloud if broken
+                document.getElementById('btn-keep-cloud').onclick = () => { modal.classList.add('hidden'); resolve(null); };
             });
         }
 

@@ -41,16 +41,19 @@ export class GithubClient {
         return await res.json();
     }
 
-    static async updateGist(gistId, filename, content, pat) {
+    static async updateGist(gistId, filename, content, pat, description = null) {
+        const body = { files: { [filename]: { content } } };
+        if (description !== null) {
+            body.description = description;
+        }
+        
         const res = await fetch(`https://api.github.com/gists/${gistId}`, {
             method: 'PATCH',
             headers: { 
                 'Authorization': `Bearer ${pat}`, 
                 'Content-Type': 'application/json' 
             },
-            body: JSON.stringify({
-                files: { [filename]: { content } }
-            })
+            body: JSON.stringify(body)
         });
         if (!res.ok) throw new Error(`GitHub API Error: ${res.status}`);
         return await res.json();
