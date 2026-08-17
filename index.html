@@ -458,28 +458,28 @@
         </div>
     </div>
 
-    <!-- GitHub Settings Modal -->
+<!-- GitHub Settings Modal -->
     <div id="github-sync-modal" class="modal hidden" style="z-index: 120;">
-        <div class="modal-content" style="width: 400px; max-height: fit-content; margin: auto;">
-            <div class="modal-header">
+        <div class="modal-content" style="width: 420px; max-width: 95vw; height: auto; max-height: 90vh;">
+            <div class="modal-header" style="flex-shrink: 0;">
                 <h2>GitHub Sync Settings</h2>
                 <button id="btn-close-github-sync" class="close-btn">&times;</button>
             </div>
-            <div class="modal-body" style="display:flex; flex-direction:column; gap: 12px; padding: 20px;">
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 20px; flex: 1 1 auto; overflow-y: auto;">
                 <div class="setting-row column">
                     <span class="label-text">GitHub PAT (requires 'gist' scope)</span>
-                    <input type="password" id="set-github-pat" placeholder="ghp_...">
+                    <input type="password" id="set-github-pat" placeholder="ghp_..." style="width: 100%; margin-top: 4px;">
                 </div>
                 <div class="setting-row column">
                     <span class="label-text">Encryption Key (Password)</span>
-                    <input type="password" id="set-encryption-key" placeholder="Keep this safe!">
+                    <input type="password" id="set-encryption-key" placeholder="Keep this safe!" style="width: 100%; margin-top: 4px;">
                 </div>
-                <p style="font-size: 0.85em; color: var(--text-muted); line-height: 1.4;">
+                <p style="font-size: 0.85em; color: var(--text-muted); line-height: 1.4; margin: 0;">
                     Your data is locally encrypted via AES-GCM before being pushed to GitHub Gists. Ensure your password is secure.
                 </p>
                 <div id="github-auth-error" class="hidden" style="color: var(--danger); font-weight: bold; font-size: 0.9em; text-align: center;"></div>
             </div>
-            <div style="padding: 12px; border-top: 1px solid var(--border); background: var(--bg-panel); display: flex; justify-content: flex-end;">
+            <div style="padding: 12px 20px; border-top: 1px solid var(--border); background: var(--bg-panel); display: flex; justify-content: flex-end; flex-shrink: 0;">
                 <button id="btn-save-github-sync" class="primary" style="padding: 8px 16px;">Save & Connect</button>
             </div>
         </div>
