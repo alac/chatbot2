@@ -1,75 +1,171 @@
-import { CloudSyncManager } from '../storage/CloudSyncManager.js';
-import { HashUtils } from '../utils/HashUtils.js';
+import { settings } from '../state/AppSettings.js';
+import { GithubClient } from '../api/GithubClient.js';
+import { CryptoUtils } from '../utils/CryptoUtils.js';
 
 export class CloudSyncUI {
     constructor(uiManager) {
         this.uiManager = uiManager;
-        this.manager = new CloudSyncManager();
-        this.manager.onAuthStateChanged = () => {
-            this.renderAuthUI();
-            if (this.uiManager.slotManager) this.uiManager.slotManager.refreshSlotList();
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        const modal = document.getElementById('github-sync-modal');
+        const btnSave = document.getElementById('btn-save-github-sync');
+        const btnClose = document.getElementById('btn-close-github-sync');
+
+        btnClose.onclick = () => {
+            modal.classList.add('hidden');
+            document.getElementById('github-auth-error').classList.add('hidden');
+        };
+        
+        btnSave.onclick = async () => {
+            const pat = document.getElementById('set-github-pat').value.trim();
+            const key = document.getElementById('set-encryption-key').value.trim();
+            const errDiv = document.getElementById('github-auth-error');
+            
+            if (!pat || !key) {
+                errDiv.textContent = "Both PAT and Password are required.";
+                errDiv.classList.remove('hidden');
+                return;
+            }
+
+            btnSave.textContent = "Verifying...";
+            btnSave.disabled = true;
+
+            try {
+                // Verify PAT works
+                await GithubClient.listGists(pat);
+                
+                settings.githubPAT = pat;
+                settings.encryptionKey = key;
+                settings.save();
+                
+                errDiv.classList.add('hidden');
+                modal.classList.add('hidden');
+                
+                if (this.uiManager.slotManager) {
+                    this.uiManager.slotManager.refreshSlotList();
+                }
+            } catch (e) {
+                errDiv.textContent = "GitHub Auth failed. Check your PAT and permissions.";
+                errDiv.classList.remove('hidden');
+            } finally {
+                btnSave.textContent = "Save & Connect";
+                btnSave.disabled = false;
+            }
         };
     }
 
-    renderAuthUI() {
-        let authContainer = document.getElementById('auth-container');
-        if (!authContainer) {
-            const listDiv = document.getElementById('slot-list');
-            if (!listDiv) return;
-            authContainer = document.createElement('div');
-            authContainer.id = 'auth-container';
-            listDiv.parentNode.insertBefore(authContainer, listDiv);
-        }
+    renderAuthUI(isLoggedIn, gistsCache = []) {
+        const authContainer = document.getElementById('auth-container');
+        if (!authContainer) return;
+        authContainer.innerHTML = '';
 
-        if (this.manager.isLoggedIn()) {
+        if (isLoggedIn) {
             authContainer.innerHTML = `
-                <span>☁️ Linked to Google Drive</span>
-                <button id="btn-cloud-logout" class="secondary">Sign Out</button>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-weight:bold;">GitHub Gists</span>
+                    <button id="btn-cloud-push-all" class="secondary" style="padding: 4px 8px; font-size: 0.85em;">⬆️ Push All</button>
+                    <button id="btn-cloud-pull-all" class="secondary" style="padding: 4px 8px; font-size: 0.85em;">⬇️ Pull All</button>
+                </div>
+                <button id="btn-open-github-modal" class="secondary" title="Settings">⚙️</button>
             `;
-            document.getElementById('btn-cloud-logout').onclick = () => this.manager.logout();
+            
+            document.getElementById('btn-cloud-push-all').onclick = () => this.uiManager.slotManager.pushAll(gistsCache);
+            document.getElementById('btn-cloud-pull-all').onclick = () => this.uiManager.slotManager.pullAll(gistsCache);
         } else {
             authContainer.innerHTML = `
-                <span style="font-size: 0.9em; font-weight: bold;">Google Drive Sync:</span>
-                <button id="btn-cloud-login" class="primary">Sign In</button>
+                <span style="font-size: 0.9em; font-weight: bold;">GitHub Sync</span>
+                <button id="btn-open-github-modal" class="primary" title="Setup Sync">⚙️ Setup</button>
             `;
-            document.getElementById('btn-cloud-login').onclick = () => {
-                this.manager.init(); 
-                this.manager.login();
-            };
         }
+
+        document.getElementById('btn-open-github-modal').onclick = () => {
+            document.getElementById('set-github-pat').value = settings.githubPAT;
+            document.getElementById('set-encryption-key').value = settings.encryptionKey;
+            document.getElementById('github-auth-error').classList.add('hidden');
+            document.getElementById('github-sync-modal').classList.remove('hidden');
+        };
     }
 
-    async getSyncStatus(localData, localTimestamp, cloudFile) {
-        if (!cloudFile && localTimestamp > 0) return { text: '⬆️ Pending Push', class: 'local-newer' };
-        if (!cloudFile && localTimestamp === 0) return { text: '☁️ Empty', class: '' };
+    isLoggedIn() {
+        return !!(settings.githubPAT && settings.encryptionKey);
+    }
 
-        // Hash-based equality check
-        const localHash = await HashUtils.computeHash(localData);
-        const cloudHash = cloudFile.appProperties ? cloudFile.appProperties.hash : null;
+    getSyncStatus(localTimestamp, cloudGist) {
+        if (!cloudGist && localTimestamp > 0) return { text: '⬆️ Pending Push', class: 'local-newer' };
+        if (!cloudGist && localTimestamp === 0) return { text: '☁️ Empty', class: '' };
+
+        const cloudTimestamp = new Date(cloudGist.updated_at).getTime();
         
-        if (localHash === cloudHash && localHash !== '') {
+        // Give 5 seconds of leeway for slight sync/network mismatches
+        if (Math.abs(localTimestamp - cloudTimestamp) < 5000) {
             return { text: '✔️ Synced', class: 'synced' };
         }
-
-        // Fallback to Timestamps if hashes differ
-        const cloudTimestamp = new Date(cloudFile.modifiedTime).getTime();
+        
         if (localTimestamp > cloudTimestamp) return { text: '⬆️ Local Newer', class: 'local-newer' };
         if (cloudTimestamp > localTimestamp) return { text: '⬇️ Cloud Newer', class: 'cloud-newer' };
         
         return { text: '⚠️ Conflict', class: 'conflict' };
     }
 
-    async handleSyncConflict(localData, localTimestamp, cloudFile, itemType = 'slot') {
+    async pushItem(id, filename, description, rawData) {
+        if (!this.isLoggedIn()) throw new Error("Not logged in");
+
+        const dataStr = JSON.stringify(rawData);
+        const encrypted = await CryptoUtils.encryptData(dataStr, settings.encryptionKey);
+        
+        const gistId = settings.gistMapping[id];
+        let res;
+        
+        if (gistId) {
+            res = await GithubClient.updateGist(gistId, filename, encrypted, settings.githubPAT);
+        } else {
+            res = await GithubClient.createGist(filename, encrypted, description, settings.githubPAT);
+            settings.gistMapping[id] = res.id;
+            settings.save();
+        }
+        
+        return new Date(res.updated_at).getTime(); // Return authoritative cloud timestamp
+    }
+
+    async pullItem(id, cloudGist) {
+        if (!this.isLoggedIn()) throw new Error("Not logged in");
+        if (!cloudGist) return null;
+
+        const encrypted = await GithubClient.getGist(cloudGist.id, settings.githubPAT);
+        const decryptedStr = await CryptoUtils.decryptData(encrypted, settings.encryptionKey);
+        
+        return { 
+            data: JSON.parse(decryptedStr), 
+            timestamp: new Date(cloudGist.updated_at).getTime() 
+        };
+    }
+
+    // Handles the UI conflict flow (adapted from your existing conflict logic)
+    async handleSyncConflict(localData, localTimestamp, cloudGist, itemType = 'slot') {
         const modal = document.getElementById('sync-conflict-modal');
         const contentArea = document.getElementById('conflict-content-area');
         const btnLocal = document.getElementById('btn-tab-local');
         const btnCloud = document.getElementById('btn-tab-cloud');
         
         modal.classList.remove('hidden');
-        contentArea.innerHTML = '<div style="text-align:center; margin-top:20px;">Fetching cloud data... ⏳</div>';
+        contentArea.innerHTML = '<div style="text-align:center; margin-top:20px;">Decrypting cloud data... ⏳</div>';
 
-        const cloudDataResponse = await this.manager.pullFile(cloudFile.id);
-        const cloudData = itemType === 'settings' ? cloudDataResponse : cloudDataResponse.data;
+        let cloudDataRaw;
+        try {
+            const pullRes = await this.pullItem(cloudGist.id, cloudGist);
+            cloudDataRaw = pullRes.data;
+        } catch(e) {
+            contentArea.innerHTML = `<div style="text-align:center; color:var(--danger); margin-top:20px;">Failed to decrypt cloud data. Check your Encryption Key.</div>`;
+            return new Promise((resolve) => {
+                document.getElementById('btn-close-conflict').onclick = () => { modal.classList.add('hidden'); resolve(null); };
+                document.getElementById('btn-keep-local').onclick = () => { modal.classList.add('hidden'); resolve('local'); };
+                document.getElementById('btn-keep-cloud').onclick = () => { modal.classList.add('hidden'); resolve(null); }; // Can't keep cloud if broken
+            });
+        }
+
+        const cloudData = itemType === 'settings' ? cloudDataRaw : cloudDataRaw.data;
 
         const generatePreview = (dataObj, timestamp) => {
             const dateStr = timestamp ? new Date(timestamp).toLocaleString() : 'Unknown';
@@ -93,7 +189,7 @@ export class CloudSyncUI {
         };
 
         const localHtml = generatePreview(localData, localTimestamp);
-        const cloudHtml = generatePreview(cloudData, new Date(cloudFile.modifiedTime).getTime());
+        const cloudHtml = generatePreview(cloudData, new Date(cloudGist.updated_at).getTime());
 
         const switchTab = (isLocal) => {
             if (isLocal) { btnLocal.classList.add('primary'); btnCloud.classList.remove('primary'); contentArea.innerHTML = localHtml; }
@@ -107,7 +203,7 @@ export class CloudSyncUI {
         return new Promise((resolve) => {
             document.getElementById('btn-close-conflict').onclick = () => { modal.classList.add('hidden'); resolve(null); };
             document.getElementById('btn-keep-local').onclick = () => { modal.classList.add('hidden'); resolve('local'); };
-            document.getElementById('btn-keep-cloud').onclick = () => { modal.classList.add('hidden'); resolve({ cloudData: cloudDataResponse, cloudFile }); };
+            document.getElementById('btn-keep-cloud').onclick = () => { modal.classList.add('hidden'); resolve({ cloudData: cloudDataRaw, cloudFile: cloudGist }); };
         });
     }
 }

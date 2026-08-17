@@ -22,16 +22,16 @@ export class StorageManager {
         });
     }
 
-    async saveSlot(id, name, desc, storyStateData) {
+    async saveSlot(id, name, desc, storyStateData, customTimestamp = null) {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(this.storeName, 'readwrite');
             const store = tx.objectStore(this.storeName);
             const payload = {
-                id: id,
+                id: id.toString(),
                 name: name,
                 description: desc,
-                lastEdited: Date.now(),
-                messageCount: storyStateData.history.length,
+                lastEdited: customTimestamp || Date.now(),
+                messageCount: storyStateData.history ? storyStateData.history.length : 0,
                 data: storyStateData
             };
             const req = store.put(payload);
@@ -44,7 +44,7 @@ export class StorageManager {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(this.storeName, 'readonly');
             const store = tx.objectStore(this.storeName);
-            const req = store.get(id);
+            const req = store.get(id.toString());
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
         });
@@ -56,13 +56,20 @@ export class StorageManager {
             const store = tx.objectStore(this.storeName);
             const req = store.getAll();
             req.onsuccess = () => {
-                const results = req.result;
-                const slots = [];
-                for (let i = 1; i <= 10; i++) {
-                    const found = results.find(r => r.id === i);
-                    slots.push(found || { id: i, name: `Slot ${i}`, description: '', messageCount: 0, lastEdited: 0, data: null });
+                // Return whatever exists dynamically. No forced 1-10 loop.
+                let results = req.result || [];
+                // Fallback for brand new users
+                if (results.length === 0) {
+                    results.push({
+                        id: '1',
+                        name: 'Slot 1',
+                        description: '',
+                        messageCount: 0,
+                        lastEdited: Date.now(),
+                        data: null
+                    });
                 }
-                resolve(slots);
+                resolve(results);
             };
             req.onerror = () => reject(req.error);
         });
@@ -72,7 +79,7 @@ export class StorageManager {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(this.storeName, 'readwrite');
             const store = tx.objectStore(this.storeName);
-            const req = store.delete(id);
+            const req = store.delete(id.toString());
             req.onsuccess = () => resolve();
             req.onerror = () => reject(req.error);
         });

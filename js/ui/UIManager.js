@@ -19,7 +19,7 @@ export class UIManager {
         this.state = new StoryState();
         this.storage = new StorageManager();
         this.activeBatch = null;
-        this.activeSlot = 1;
+        this.activeSlot = '1';
         this.activeSlotName = `Slot 1`;
         this.activeSlotDesc = ``;
         this.batchTimerInterval = null;
@@ -54,8 +54,8 @@ export class UIManager {
 
     async initApp() {
         await this.storage.init();
-        const lastSlot = localStorage.getItem('last_active_slot') || 1;
-        await this.loadStateFromSlot(parseInt(lastSlot));
+        const lastSlot = localStorage.getItem('last_active_slot') || '1';
+        await this.loadStateFromSlot(lastSlot);
         
         const fab = document.getElementById('btn-jump-bottom');
         this.container.addEventListener('scroll', () => {

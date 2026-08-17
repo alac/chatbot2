@@ -236,7 +236,9 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 #favorites-container { background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 10px; max-height: 200px; overflow-y: auto; width: 100%;}
 .favorite-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); }
 .favorite-item input[type="checkbox"] { transform: scale(1.2); }
-.slot-list { display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 4px; }
+
+/* Save Load */
+.slot-list { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 4px; }
 .slot-card { background: var(--bg-main); padding: 12px; border-radius: 4px; border: 1px solid transparent; cursor: pointer; display: flex; flex-direction: column; gap: 4px;}
 .slot-card:hover { border-color: var(--border); }
 .slot-card.active { border-color: var(--accent); background: rgba(59, 130, 246, 0.1); }
@@ -245,6 +247,8 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .slot-desc { font-size: 0.9em; font-style: italic; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 .action-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .action-grid button { flex: 1; min-width: 100px; font-size: 0.9em;}
+
+#auth-container { padding: 12px; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px;}
 
 @media (max-width: 768px) {
     .modal-content { width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; }
@@ -341,8 +345,6 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 
 .sync-actions { display: flex; gap: 8px; margin-top: 8px; }
 .sync-actions button { flex: 1; font-size: 0.85em; padding: 4px 8px; }
-
-#auth-container { margin-bottom: 20px; padding: 12px; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
 
 .conflict-meta { font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
 .conflict-msg { padding: 8px; border-radius: 6px; font-size: 0.9em; margin-bottom: 8px; line-height: 1.4; word-break: break-word; }

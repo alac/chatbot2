@@ -57,6 +57,11 @@ export class AppSettings {
         // Tools Menu Global Persistence
         this.diceNotation = "1d20";
 
+        // GitHub Sync State
+        this.githubPAT = '';
+        this.encryptionKey = '';
+        this.gistMapping = {};
+
         this.lastEdited = 0;
         this.load();
     }
@@ -82,6 +87,7 @@ export class AppSettings {
             }
 
             if (!this.diceNotation) this.diceNotation = "1d20";
+            if (!this.gistMapping) this.gistMapping = {};
             if (!this.lastEdited) this.lastEdited = Date.now();
         } else {
             this.lastEdited = Date.now();
@@ -93,12 +99,23 @@ export class AppSettings {
         localStorage.setItem('ai_proto_settings', JSON.stringify(this));
     }
 
+    // Includes all auth keys (useful for manual local export/import across devices)
     exportSettings() {
         return JSON.parse(JSON.stringify(this));
     }
 
+    // Strips out sensitive/host-specific data for Cloud Syncing
+    getCloudSyncPayload() {
+        const payload = this.exportSettings();
+        delete payload.githubPAT;
+        delete payload.encryptionKey;
+        delete payload.gistMapping;
+        return payload;
+    }
+
     importSettings(data) {
         Object.assign(this, data);
+        if (!this.gistMapping) this.gistMapping = {};
         this.save();
     }
 
