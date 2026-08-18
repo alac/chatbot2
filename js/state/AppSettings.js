@@ -104,12 +104,13 @@ export class AppSettings {
         return JSON.parse(JSON.stringify(this));
     }
 
-    // Strips out sensitive/host-specific data for Cloud Syncing
+    // Strips out sensitive/host-specific data and timestamps for Cloud Syncing hash stability
     getCloudSyncPayload() {
         const payload = this.exportSettings();
         delete payload.githubPAT;
         delete payload.encryptionKey;
         delete payload.gistMapping;
+        delete payload.lastEdited; 
         return payload;
     }
 
