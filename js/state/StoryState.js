@@ -55,6 +55,68 @@ export class StoryState {
         }
     }
 
+    // --- NOTES KANBAN BOARD METHODS ---
+    
+    addNoteColumn(title = 'New Column') {
+        const id = Math.random().toString(36).substr(2, 9);
+        this.notes.push({ id, title, cards: [] });
+        return id;
+    }
+
+    updateNoteColumnTitle(colId, newTitle) {
+        const col = this.notes.find(c => c.id === colId);
+        if (col) col.title = newTitle;
+    }
+
+    deleteNoteColumn(colId) {
+        this.notes = this.notes.filter(c => c.id !== colId);
+    }
+
+    addNoteCard(colId, content = '') {
+        const col = this.notes.find(c => c.id === colId);
+        if (col) {
+            const newCard = { id: Math.random().toString(36).substr(2, 9), content };
+            col.cards.push(newCard);
+            return newCard.id;
+        }
+        return null;
+    }
+
+    updateNoteCard(colId, cardId, content) {
+        const col = this.notes.find(c => c.id === colId);
+        if (col) {
+            const card = col.cards.find(c => c.id === cardId);
+            if (card) card.content = content;
+        }
+    }
+
+    deleteNoteCard(colId, cardId) {
+        const col = this.notes.find(c => c.id === colId);
+        if (col) {
+            col.cards = col.cards.filter(c => c.id !== cardId);
+        }
+    }
+
+    moveNoteCard(cardId, oldColId, newColId) {
+        const oldCol = this.notes.find(c => c.id === oldColId);
+        const newCol = this.notes.find(c => c.id === newColId);
+        if (oldCol && newCol) {
+            const cardIndex = oldCol.cards.findIndex(c => c.id === cardId);
+            if (cardIndex !== -1) {
+                const [card] = oldCol.cards.splice(cardIndex, 1);
+                newCol.cards.push(card);
+            }
+        }
+    }
+
+    importNotesBoard(notesArray) {
+        if (Array.isArray(notesArray)) {
+            this.notes = notesArray;
+        }
+    }
+
+    // --- END NOTES METHODS ---
+
     addTurn(role, content, reasoning = '', meta = {}) {
         this.history.push({ 
             role, 

@@ -741,9 +741,10 @@
             <div class="modal-header">
                 <h2>Note</h2>
                 <div style="display:flex; gap: 8px;">
-                    <button id="btn-note-toggle-edit" class="secondary">✏️ Edit</button>
-                    <button id="btn-note-edit-save" class="primary">Save</button>
-                    <button id="btn-note-edit-cancel" class="danger">Cancel</button>
+                    <button id="btn-note-toggle-edit" class="secondary" title="Edit">✏️</button>
+                    <button id="btn-note-move" class="secondary" title="Move Note">➡️</button>
+                    <button id="btn-note-edit-save" class="primary" title="Save">💾</button>
+                    <button id="btn-note-edit-cancel" class="danger" title="Cancel">↩️</button>
                 </div>
             </div>
             <div class="modal-body" style="display:flex; flex-direction:column; padding: 0; background: var(--bg-main);">
@@ -752,6 +753,22 @@
             </div>
         </div>
     </div>
+
+    <!-- Note Move Modal -->
+    <div id="note-move-modal" class="modal hidden" style="z-index: 115;">
+        <div class="modal-content" style="width: 400px; max-height: 80vh;">
+            <div class="modal-header">
+                <h2>Move Note</h2>
+                <button id="btn-close-note-move" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" id="note-move-list" style="display:flex; flex-direction:column; gap:8px;">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden input for JSON Imports (Notes, etc.) -->
+    <input type="file" id="import-notes-file" class="hidden" accept=".json">
 
     <!-- Token Usage Modal -->
     <div id="usage-modal" class="modal hidden">

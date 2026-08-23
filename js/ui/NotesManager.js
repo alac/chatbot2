@@ -2,10 +2,21 @@ export class NotesManager {
     constructor(app) {
         this.app = app;
         this.boardEl = document.getElementById('notes-board');
+        
+        // Edit Modal
         this.editModal = document.getElementById('note-edit-modal');
         this.editTextarea = document.getElementById('note-edit-textarea');
         this.markdownRender = document.getElementById('note-markdown-render');
         this.btnToggleEdit = document.getElementById('btn-note-toggle-edit');
+        
+        // Move Modal
+        this.btnNoteMove = document.getElementById('btn-note-move');
+        this.moveModal = document.getElementById('note-move-modal');
+        this.moveList = document.getElementById('note-move-list');
+        this.btnNoteMoveClose = document.getElementById('btn-close-note-move');
+        
+        // Import Logic
+        this.importFileInput = document.getElementById('import-notes-file');
         
         this.editingIds = null;
         this.isEditingMode = false;
@@ -18,6 +29,31 @@ export class NotesManager {
         document.getElementById('btn-note-edit-save').addEventListener('click', () => this.saveNote());
         
         this.btnToggleEdit.addEventListener('click', () => this.toggleEditMode());
+        
+        this.btnNoteMove.addEventListener('click', () => this.openMoveModal());
+        this.btnNoteMoveClose.addEventListener('click', () => this.closeMoveModal());
+
+        this.importFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const parsed = JSON.parse(ev.target.result);
+                    if (Array.isArray(parsed)) {
+                        this.app.state.importNotesBoard(parsed);
+                        this.app.autoSave();
+                        this.renderBoard();
+                    } else {
+                        alert("Invalid notes format. Expected an array of columns.");
+                    }
+                } catch (err) {
+                    alert("Failed to parse JSON file.");
+                }
+                this.importFileInput.value = ''; // Reset input
+            };
+            reader.readAsText(file);
+        });
     }
 
     toggleEditMode() {
@@ -26,7 +62,8 @@ export class NotesManager {
             // Switch to Edit Mode
             this.markdownRender.classList.add('hidden');
             this.editTextarea.classList.remove('hidden');
-            this.btnToggleEdit.textContent = '👁️ View';
+            this.btnToggleEdit.textContent = '👁️';
+            this.btnToggleEdit.title = 'View';
             this.btnToggleEdit.classList.remove('secondary');
             this.btnToggleEdit.classList.add('primary');
             this.editTextarea.focus();
@@ -34,7 +71,8 @@ export class NotesManager {
             // Switch to View (Markdown) Mode
             this.markdownRender.classList.remove('hidden');
             this.editTextarea.classList.add('hidden');
-            this.btnToggleEdit.textContent = '✏️ Edit';
+            this.btnToggleEdit.textContent = '✏️';
+            this.btnToggleEdit.title = 'Edit';
             this.btnToggleEdit.classList.remove('primary');
             this.btnToggleEdit.classList.add('secondary');
             
@@ -46,10 +84,22 @@ export class NotesManager {
 
     renderBoard() {
         if (!this.app.state.notes || this.app.state.notes.length === 0) {
-            this.app.state.notes = [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
+            this.app.state.addNoteColumn('General Notes');
         }
         
-        let html = '';
+        // Dummy Actions Column (Import/Export)
+        let html = `
+            <div class="notes-column" style="min-width: 160px; max-width: 160px; background: transparent; border: 1px dashed var(--border);">
+                <div class="notes-column-header" style="background: transparent; border-bottom: none; justify-content: center; opacity: 0.7;">
+                    <span style="font-weight:bold;">Actions</span>
+                </div>
+                <div class="notes-column-body" style="display: flex; flex-direction: column; gap: 10px; justify-content: flex-start;">
+                    <button id="btn-notes-import" class="secondary" title="Import from a JSON file">📥 Import JSON</button>
+                    <button id="btn-notes-export" class="secondary" title="Export this board to JSON">📤 Export JSON</button>
+                </div>
+            </div>
+        `;
+
         this.app.state.notes.forEach(col => {
             let cardsHtml = '';
             col.cards.forEach(card => {
@@ -86,17 +136,31 @@ export class NotesManager {
         html += `<div class="btn-add-col" title="Add Column">+</div>`;
         this.boardEl.innerHTML = html;
         
+        // Attach Import / Export Events
+        this.boardEl.querySelector('#btn-notes-import').addEventListener('click', () => {
+            this.importFileInput.click();
+        });
+        
+        this.boardEl.querySelector('#btn-notes-export').addEventListener('click', () => {
+            const dataStr = JSON.stringify(this.app.state.notes, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const safeName = (this.app.activeSlotName || 'Story').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            a.download = `${safeName}.notes.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
         // Attach dynamic event listeners based on the generated HTML
-        this.boardEl.querySelectorAll('.notes-column').forEach(colEl => {
+        this.boardEl.querySelectorAll('.notes-column[data-col]').forEach(colEl => {
             const colId = colEl.dataset.col;
             
             const titleInput = colEl.querySelector('.col-title-input');
             titleInput.addEventListener('change', (e) => {
-                const col = this.app.state.notes.find(c => c.id === colId);
-                if (col) {
-                    col.title = e.target.value;
-                    this.app.autoSave();
-                }
+                this.app.state.updateNoteColumnTitle(colId, e.target.value);
+                this.app.autoSave();
             });
             
             const addBtn = colEl.querySelector('.col-add-btn');
@@ -105,7 +169,7 @@ export class NotesManager {
             const delBtn = colEl.querySelector('.col-del-btn');
             delBtn.addEventListener('click', () => {
                 if (confirm("Delete this entire column and all its notes?")) {
-                    this.app.state.notes = this.app.state.notes.filter(c => c.id !== colId);
+                    this.app.state.deleteNoteColumn(colId);
                     this.app.autoSave();
                     this.renderBoard();
                 }
@@ -118,7 +182,7 @@ export class NotesManager {
         });
         
         this.boardEl.querySelector('.btn-add-col').addEventListener('click', () => {
-            this.app.state.notes.push({ id: Math.random().toString(36).substr(2, 9), title: 'New Column', cards: [] });
+            this.app.state.addNoteColumn('New Column');
             this.app.autoSave();
             this.renderBoard();
             setTimeout(() => this.boardEl.scrollLeft = this.boardEl.scrollWidth, 50);
@@ -163,11 +227,9 @@ export class NotesManager {
     }
 
     addNote(colId) {
-        const newCard = { id: Math.random().toString(36).substr(2, 9), content: '' };
-        const col = this.app.state.notes.find(c => c.id === colId);
-        if (col) {
-            col.cards.push(newCard);
-            this.openEditModal(colId, newCard.id, true); // true = bypass markdown, force edit mode on new
+        const newCardId = this.app.state.addNoteCard(colId, '');
+        if (newCardId) {
+            this.openEditModal(colId, newCardId, true); // true = bypass markdown, force edit mode on new
         }
     }
 
@@ -182,13 +244,15 @@ export class NotesManager {
         if (this.isEditingMode) {
             this.markdownRender.classList.add('hidden');
             this.editTextarea.classList.remove('hidden');
-            this.btnToggleEdit.textContent = '👁️ View';
+            this.btnToggleEdit.textContent = '👁️';
+            this.btnToggleEdit.title = 'View';
             this.btnToggleEdit.classList.remove('secondary');
             this.btnToggleEdit.classList.add('primary');
         } else {
             this.markdownRender.classList.remove('hidden');
             this.editTextarea.classList.add('hidden');
-            this.btnToggleEdit.textContent = '✏️ Edit';
+            this.btnToggleEdit.textContent = '✏️';
+            this.btnToggleEdit.title = 'Edit';
             this.btnToggleEdit.classList.remove('primary');
             this.btnToggleEdit.classList.add('secondary');
             
@@ -213,14 +277,9 @@ export class NotesManager {
     saveNote() {
         if (!this.editingIds) return;
         const { colId, cardId } = this.editingIds;
-        const col = this.app.state.notes.find(c => c.id === colId);
-        if (col) {
-            const card = col.cards.find(c => c.id === cardId);
-            if (card) {
-                card.content = this.editTextarea.value;
-                this.app.autoSave();
-            }
-        }
+        this.app.state.updateNoteCard(colId, cardId, this.editTextarea.value);
+        this.app.autoSave();
+        
         this.handleDeletionIfEmpty();
         this.editingIds = null;
         this.editModal.classList.add('hidden');
@@ -230,14 +289,64 @@ export class NotesManager {
     handleDeletionIfEmpty() {
         if (!this.editingIds) return;
         const { colId, cardId } = this.editingIds;
-        const col = this.app.state.notes.find(c => c.id === colId);
-        if (col) {
-            // Check if the current value of the textarea is effectively empty
-            const currentVal = this.editTextarea.value.trim();
-            if (currentVal === '') {
-                col.cards = col.cards.filter(c => c.id !== cardId);
-                this.app.autoSave();
-            }
+        
+        // Check if the current value of the textarea is effectively empty
+        const currentVal = this.editTextarea.value.trim();
+        if (currentVal === '') {
+            this.app.state.deleteNoteCard(colId, cardId);
+            this.app.autoSave();
         }
+    }
+    
+    // --- MOVE LOGIC ---
+    
+    openMoveModal() {
+        if (!this.editingIds) return;
+        this.moveList.innerHTML = '';
+        const { colId, cardId } = this.editingIds;
+        
+        this.app.state.notes.forEach(col => {
+            if (col.id === colId) return; // Skip the column this card is already in
+            
+            const row = document.createElement('div');
+            row.className = 'setting-row';
+            row.style.borderBottom = '1px solid var(--border)';
+            row.style.paddingBottom = '8px';
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.style.fontWeight = 'bold';
+            titleSpan.textContent = col.title;
+            
+            const btnMove = document.createElement('button');
+            btnMove.className = 'primary';
+            btnMove.textContent = 'Move Here ➡️';
+            btnMove.onclick = () => this.handleMoveNote(cardId, colId, col.id);
+            
+            row.appendChild(titleSpan);
+            row.appendChild(btnMove);
+            this.moveList.appendChild(row);
+        });
+        
+        if (this.moveList.children.length === 0) {
+            this.moveList.innerHTML = '<span style="color:var(--text-muted); text-align:center;">No other columns available.</span>';
+        }
+        
+        this.moveModal.classList.remove('hidden');
+    }
+
+    closeMoveModal() {
+        this.moveModal.classList.add('hidden');
+    }
+
+    handleMoveNote(cardId, oldColId, newColId) {
+        // Save current changes to the state before moving
+        this.app.state.updateNoteCard(oldColId, cardId, this.editTextarea.value);
+        
+        // Move it
+        this.app.state.moveNoteCard(cardId, oldColId, newColId);
+        this.app.autoSave();
+        
+        this.closeMoveModal();
+        this.closeEditModal(); // This clears editingIds and re-renders the board
     }
 }
