@@ -65,13 +65,20 @@ export class CloudSyncUI {
              authContainer.innerHTML = `
                 <div style="display:flex; align-items:center; gap:6px; flex-wrap: wrap;">
                     <span style="font-weight:bold; margin-right:4px;">GitHub Gists</span>
+                    <button id="btn-cloud-refresh" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Refresh Remote State">🔄 <span class="hide-mobile">Refresh</span></button>
                     <button id="btn-cloud-manage" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Manage Remote">🛠️ <span class="hide-mobile">Manage</span></button>
                     <button id="btn-cloud-push-all" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Push All">⬆️ <span class="hide-mobile">Push </span>All</button>
                     <button id="btn-cloud-pull-all" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Pull All">⬇️ <span class="hide-mobile">Pull </span>All</button>
                  </div>
                  <button id="btn-open-github-modal" class="secondary" title="Settings">⚙️</button>
-             `;
+            `;
 
+            document.getElementById('btn-cloud-refresh').onclick = () => {
+                const btn = document.getElementById('btn-cloud-refresh');
+                const origHtml = btn.innerHTML;
+                btn.innerHTML = '⏳';
+                this.uiManager.slotManager.refreshSlotList().finally(() => btn.innerHTML = origHtml);
+            };
             document.getElementById('btn-cloud-manage').onclick = () => this.uiManager.remoteManagerUI.openModal();
             document.getElementById('btn-cloud-push-all').onclick = () => this.uiManager.slotManager.pushAll(gistsCache);
             document.getElementById('btn-cloud-pull-all').onclick = () => this.uiManager.slotManager.pullAll(gistsCache);

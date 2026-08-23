@@ -151,9 +151,9 @@ export class RemoteManagerUI {
                 }
                 
                 // Refresh both the modal and the slot UI underneath
-                this.openModal();
+                await this.openModal();
                 if (this.uiManager.slotManager) {
-                    this.uiManager.slotManager.refreshSlotList();
+                    await this.uiManager.slotManager.refreshSlotList();
                 }
             } catch (e) {
                 alert(`Deletion failed: ${e.message}`);
