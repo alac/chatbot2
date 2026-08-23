@@ -251,6 +251,7 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 #auth-container { padding: 12px; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px;}
 
 @media (max-width: 768px) {
+    .hide-mobile { display: none !important; }
     .modal-content { width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; }
     .setting-row { flex-wrap: wrap; }
     /* Mobile dropdown input stacking fix */

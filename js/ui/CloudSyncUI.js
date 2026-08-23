@@ -61,16 +61,18 @@ export class CloudSyncUI {
         if (!authContainer) return;
         authContainer.innerHTML = '';
 
-        if (isLoggedIn) {
-            authContainer.innerHTML = `
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <span style="font-weight:bold;">GitHub Gists</span>
-                    <button id="btn-cloud-push-all" class="secondary" style="padding: 4px 8px; font-size: 0.85em;">⬆️ Push All</button>
-                    <button id="btn-cloud-pull-all" class="secondary" style="padding: 4px 8px; font-size: 0.85em;">⬇️ Pull All</button>
-                </div>
-                <button id="btn-open-github-modal" class="secondary" title="Settings">⚙️</button>
-            `;
-            
+         if (isLoggedIn) {
+             authContainer.innerHTML = `
+                <div style="display:flex; align-items:center; gap:6px; flex-wrap: wrap;">
+                    <span style="font-weight:bold; margin-right:4px;">GitHub Gists</span>
+                    <button id="btn-cloud-manage" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Manage Remote">🛠️ <span class="hide-mobile">Manage</span></button>
+                    <button id="btn-cloud-push-all" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Push All">⬆️ <span class="hide-mobile">Push </span>All</button>
+                    <button id="btn-cloud-pull-all" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Pull All">⬇️ <span class="hide-mobile">Pull </span>All</button>
+                 </div>
+                 <button id="btn-open-github-modal" class="secondary" title="Settings">⚙️</button>
+             `;
+
+            document.getElementById('btn-cloud-manage').onclick = () => this.uiManager.remoteManagerUI.openModal();
             document.getElementById('btn-cloud-push-all').onclick = () => this.uiManager.slotManager.pushAll(gistsCache);
             document.getElementById('btn-cloud-pull-all').onclick = () => this.uiManager.slotManager.pullAll(gistsCache);
         } else {

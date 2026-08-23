@@ -13,6 +13,7 @@ import { NotesManager } from './NotesManager.js';
 
 import { CloudSyncUI } from './CloudSyncUI.js';
 import { SlotManager } from './SlotManager.js';
+import { RemoteManagerUI } from './RemoteManagerUI.js';
 
 export class UIManager {
     constructor() {
@@ -47,6 +48,7 @@ export class UIManager {
         this.notesManager = new NotesManager(this);
         this.cloudSyncUI = new CloudSyncUI(this);
         this.slotManager = new SlotManager(this);
+        this.remoteManagerUI = new RemoteManagerUI(this);
 
         this.bindEvents();
         this.initApp();

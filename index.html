@@ -816,6 +816,30 @@
         </div>
     </div>
 
+    <!-- Remote Management Modal -->
+    <div id="remote-manage-modal" class="modal hidden" style="z-index: 125;">
+        <div class="modal-content" style="max-width: 700px; width: 95vw; max-height: 90vh;">
+            <div class="modal-header">
+                <h2>Remote Cloud Management</h2>
+                <button id="btn-close-remote-manage" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 16px; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.9em; text-align: left;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <th style="padding: 8px;">Cloud Save</th>
+                            <th style="padding: 8px;">Last Updated</th>
+                            <th style="padding: 8px; text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="remote-manage-tbody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- Sync Conflict Modal -->
     <div id="sync-conflict-modal" class="modal hidden">
         <div class="modal-content" style="max-width: 500px; width: 95vw; max-height: 90vh;">

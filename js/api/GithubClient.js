@@ -55,6 +55,18 @@ export class GithubClient {
         return await res.json();
     }
 
+    static async deleteGist(gistId, pat) {
+        const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+            method: 'DELETE',
+            headers: { 
+                'Authorization': `Bearer ${pat}`, 
+                'Accept': 'application/vnd.github.v3+json' 
+            }
+        });
+        if (!res.ok) throw new Error(`GitHub API Error: ${res.status}`);
+        return true;
+    }
+
     static async updateGist(gistId, filename, content, pat, description = null) {
         const body = { files: { [filename]: { content } } };
         if (description !== null) {
