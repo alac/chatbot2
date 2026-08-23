@@ -558,6 +558,7 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     height: 100%;
     padding: 16px;
     scroll-snap-type: x mandatory;
+    scroll-padding-left: 16px; /* Tells the browser to account for the padding when snapping */
     align-items: flex-start;
 }
 .notes-column {
@@ -571,7 +572,12 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-    scroll-snap-align: center;
+    scroll-snap-align: start; /* Changed from center so it aligns cleanly to the left edge */
+}
+@media (hover: hover) and (pointer: fine) {
+    .notes-board {
+        scroll-snap-type: none; /* Let trackpads and mouse-wheels scroll smoothly */
+    }
 }
 .notes-column-header {
     display: flex;
