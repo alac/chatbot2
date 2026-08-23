@@ -64,8 +64,15 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
     // The Cache API only supports GET requests. 
     // We must pass POST, PATCH, DELETE, etc., straight to the network.
-    if (event.request.method !== 'GET') {
-        event.respondWith(fetch(event.request));
+     if (event.request.method !== 'GET') {
+        return;
+    }
+
+    const url = new URL(event.request.url);
+
+    // Bypass Service Worker completely for dynamic APIs and raw Gists
+    if (url.hostname.includes('github.com') || 
+        url.hostname.includes('githubusercontent.com')) {
         return;
     }
 
