@@ -229,13 +229,19 @@ export class UIManager {
                 clearInterval(this.batchTimerInterval);
                 return;
             }
-            const elapsed = ((Date.now() - this.batchStartTime)/1000).toFixed(1);
+            
+            const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
             
             this.activeBatch.jobs.forEach((job, i) => {
                 if (job.status === 'streaming') {
                     const actualDraftIdx = i + draftOffset;
                     const timerEl = document.getElementById(`batch-timer-${newIdx}-${actualDraftIdx}`);
-                    if (timerEl) timerEl.textContent = `(${elapsed}s)`;
+                    if (timerEl) {
+                        const draftData = this.state.history[newIdx].drafts[actualDraftIdx];
+                        const totalChars = (draftData.content?.length || 0) + (draftData.reasoning?.length || 0);
+                        const estTokens = Math.ceil(totalChars / charsRatio);
+                        timerEl.textContent = `(~${estTokens}t)`;
+                    }
                 }
             });
         }, 100);
@@ -255,10 +261,19 @@ export class UIManager {
                     const reasonDiv = document.getElementById(`reasoning-block-${newIdx}`);
                     
                     if (data.reasoning) {
+                        // Check if at the bottom BEFORE mutating text content
+                        let wasAtBottom = true;
+                        if (reasonDiv && !reasonDiv.classList.contains('hidden')) {
+                            wasAtBottom = Math.abs(reasonDiv.scrollHeight - reasonDiv.scrollTop - reasonDiv.clientHeight) < 30;
+                        }
+                        
                         if (reasonNode) reasonNode.textContent = data.reasoning;
+                        
                         if (reasonDiv) {
                             reasonDiv.classList.remove('hidden');
-                            if (data.status === 'streaming') reasonDiv.scrollTop = reasonDiv.scrollHeight;
+                            if (data.status === 'streaming' && wasAtBottom) {
+                                reasonDiv.scrollTop = reasonDiv.scrollHeight;
+                            }
                         }
                     }
                     if (contentNode) {
@@ -480,7 +495,11 @@ export class UIManager {
             
             if (d.isStale) {
                 timer.textContent = '[X]';
-            } else if (!isStreaming || d.status !== 'streaming') {
+            } else if (isStreaming && d.status === 'streaming') {
+                const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
+                const totalChars = (d.content?.length || 0) + (d.reasoning?.length || 0);
+                timer.textContent = `(~${Math.ceil(totalChars / charsRatio)}t)`;
+            } else {
                 timer.textContent = `(${d.duration}s)`;
             }
 
@@ -731,7 +750,22 @@ export class UIManager {
                     const currentDraft = this.state.history[index].drafts[this.state.history[index].activeDraftIndex];
                     if (currentDraft.usage) {
                         document.getElementById('usage-prompt').textContent = currentDraft.usage.prompt_tokens || 0;
-                        document.getElementById('usage-completion').textContent = currentDraft.usage.completion_tokens || 0;
+                        
+                        const compTokens = currentDraft.usage.completion_tokens || 0;
+                        const reasonTokens = currentDraft.usage.completion_tokens_details?.reasoning_tokens || 0;
+                        
+                        const usageCompletionEl = document.getElementById('usage-completion');
+                        const usageReasoningRow = document.getElementById('usage-reasoning-row');
+                        
+                        if (reasonTokens > 0) {
+                            usageCompletionEl.textContent = `${compTokens - reasonTokens} (Output) + ${reasonTokens}`;
+                            document.getElementById('usage-reasoning').textContent = reasonTokens;
+                            usageReasoningRow.classList.remove('hidden');
+                        } else {
+                            usageCompletionEl.textContent = compTokens;
+                            usageReasoningRow.classList.add('hidden');
+                        }
+                        
                         document.getElementById('usage-total').textContent = currentDraft.usage.total_tokens || 0;
                         document.getElementById('usage-modal').classList.remove('hidden');
                     }
