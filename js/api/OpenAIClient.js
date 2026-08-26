@@ -101,6 +101,7 @@ export class GenerationJob {
                             // Check for usage chunk (often the last empty delta)
                             if (data.usage) {
                                 this.usage = data.usage;
+                                hasUpdates = true;
                             }
 
                             const delta = data.choices && data.choices[0] ? data.choices[0].delta : null;
@@ -164,6 +165,17 @@ export class GenerationJob {
         }
         this.finalContent = this.finalContent.trimStart(); 
         this.finalReasoning = this.finalReasoning.trim();
+
+        // Inject reasoning token estimates for APIs that don't natively break them down
+        if (this.usage && this.finalReasoning) {
+            if (!this.usage.completion_tokens_details) {
+                this.usage.completion_tokens_details = {};
+            }
+            if (!this.usage.completion_tokens_details.reasoning_tokens) {
+                const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
+                this.usage.completion_tokens_details.reasoning_tokens = Math.ceil(this.finalReasoning.length / charsRatio);
+            }
+        }
     }
 }
 
