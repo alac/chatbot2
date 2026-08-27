@@ -457,6 +457,11 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 }
 .dm-cell-content {
     flex: 1;
+    min-height: 1.4em; /* Match the line-height */
+    white-space: pre-wrap; /* Preserve leading/trailing spaces for diagrams & code */
+}
+.dm-cell-content.empty-line {
+    opacity: 0.5; /* Optional: makes it slightly visually distinct if you want */
 }
 .dm-cell.selected {
     background: rgba(59, 130, 246, 0.25);

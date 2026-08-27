@@ -295,8 +295,8 @@ export class DraftMergeManager {
         const msg = this.app.state.history[this.targetMessageIndex];
         const draftContent = msg.drafts[draftIdx].content || "";
         
-        // Split by 1 or more newlines
-        this.currentParagraphs = draftContent.split(/\n+/).filter(p => p.trim() !== '');
+        // Split by exact newlines to preserve empty lines
+        this.currentParagraphs = draftContent.split(/\r?\n/);
         this.selectedLines.clear();
         
         document.getElementById('dm-draft-select').value = draftIdx;
@@ -322,7 +322,13 @@ export class DraftMergeManager {
             
             const content = document.createElement('div');
             content.className = 'dm-cell-content';
-            content.textContent = text;
+            
+            if (text === '') {
+                content.classList.add('empty-line');
+                content.textContent = '\u00A0'; // Non-breaking space forces the div to maintain line height
+            } else {
+                content.textContent = text;
+            }
             
             const starBtn = document.createElement('button');
             starBtn.className = 'dm-star-btn';
@@ -426,12 +432,12 @@ export class DraftMergeManager {
         
         // Grab lines in order
         const indices = Array.from(this.selectedLines).sort((a,b) => a - b);
-        const newText = indices.map(i => this.currentParagraphs[i]).join('\n\n');
+        const newText = indices.map(i => this.currentParagraphs[i]).join('\n');
         
         this.outputChunks.push({ sourceDraftIdx: this.activeSourceDraft, sourceLines: indices });
         
         // Append
-        const separator = currentVal.trim() === '' ? '' : '\n\n';
+        const separator = currentVal === '' ? '' : (currentVal.endsWith('\n') ? '' : '\n');
         ta.value = currentVal + separator + newText;
         
         this.selectedLines.clear();
