@@ -344,8 +344,8 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .sync-status.cloud-newer { background: rgba(249, 115, 22, 0.1); color: #f97316; }
 .sync-status.conflict { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 
-.sync-actions { display: flex; gap: 8px; margin-top: 8px; }
-.sync-actions button { flex: 1; font-size: 0.85em; padding: 4px 8px; }
+.sync-actions { display: flex; gap: 6px; margin-top: 8px; }
+.sync-actions button { flex: 1; font-size: 0.85em; padding: 5px 8px; white-space: nowrap; }
 
 .conflict-meta { font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
 .conflict-msg { padding: 8px; border-radius: 6px; font-size: 0.9em; margin-bottom: 8px; line-height: 1.4; word-break: break-word; }

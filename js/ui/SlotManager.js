@@ -296,13 +296,11 @@ export class SlotManager {
         if (this.uiManager.cloudSyncUI.isLoggedIn() && (localDate > 0 || cloudFile || isSettings)) {
             const syncActions = document.createElement('div');
             syncActions.className = 'sync-actions';
-            syncActions.style.display = 'flex';
-            syncActions.style.gap = '6px';
             
             const btnSync = document.createElement('button');
             btnSync.className = 'primary';
-            btnSync.style.flex = '1';
             btnSync.textContent = '🔄 Sync';
+            btnSync.title = 'Smart Sync';
             btnSync.onclick = async (e) => {
                 e.stopPropagation();
                 if (!localData && !isSettings && !cloudFile) return;
@@ -317,49 +315,46 @@ export class SlotManager {
                 }
             };
 
-            const forceGroup = document.createElement('div');
-            forceGroup.className = 'btn-group';
-            forceGroup.style.flex = '0';
-            
-            const btnPush = document.createElement('button');
-            btnPush.innerHTML = '⬆️';
-            btnPush.title = 'Force Push (Overwrite Remote)';
-            btnPush.onclick = async (e) => {
-                e.stopPropagation();
-                if (!localData && !isSettings) return alert("Cannot push. Local slot is empty.");
-                if (!confirm("WARNING: Force Push will permanently overwrite the cloud save. Continue?")) return;
-                
-                btnPush.innerHTML = '⏳';
-                try {
-                    await this.applyPush(id, isSettings, rawSlot, localData, currentLocalHash, lastSyncedHash, localHistory, cloudFileName);
-                    this.refreshSlotList();
-                } catch (err) {
-                    alert(`Force Push failed: ${err.message}`);
-                    btnPush.innerHTML = '⬆️';
-                }
-            };
-
             const btnPull = document.createElement('button');
-            btnPull.innerHTML = '⬇️';
+            btnPull.className = 'secondary';
+            btnPull.textContent = '⬇️ Pull';
             btnPull.title = 'Force Pull (Overwrite Local)';
             btnPull.onclick = async (e) => {
                 e.stopPropagation();
                 if (!cloudFile) return alert("No cloud save exists.");
                 if (!confirm("WARNING: Force Pull will permanently overwrite your local save. Continue?")) return;
                 
-                btnPull.innerHTML = '⏳';
+                btnPull.textContent = '⏳...';
                 try {
                     const pullRes = await this.uiManager.cloudSyncUI.pullItem(id, cloudFile);
                     await this.applyPull(id, isSettings, pullRes);
                     this.refreshSlotList();
                 } catch (err) {
                     alert(`Force Pull failed: ${err.message}`);
-                    btnPull.innerHTML = '⬇️';
+                    btnPull.textContent = '⬇️ Pull';
                 }
             };
 
-            forceGroup.append(btnPull, btnPush);
-            syncActions.append(btnSync, forceGroup);
+            const btnPush = document.createElement('button');
+            btnPush.className = 'secondary';
+            btnPush.textContent = '⬆️ Push';
+            btnPush.title = 'Force Push (Overwrite Remote)';
+            btnPush.onclick = async (e) => {
+                e.stopPropagation();
+                if (!localData && !isSettings) return alert("Cannot push. Local slot is empty.");
+                if (!confirm("WARNING: Force Push will permanently overwrite the cloud save. Continue?")) return;
+                
+                btnPush.textContent = '⏳...';
+                try {
+                    await this.applyPush(id, isSettings, rawSlot, localData, currentLocalHash, lastSyncedHash, localHistory, cloudFileName);
+                    this.refreshSlotList();
+                } catch (err) {
+                    alert(`Force Push failed: ${err.message}`);
+                    btnPush.textContent = '⬆️ Push';
+                }
+            };
+
+            syncActions.append(btnSync, btnPull, btnPush);
             card.appendChild(syncActions);
         }
 
