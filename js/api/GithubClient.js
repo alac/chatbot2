@@ -1,21 +1,23 @@
 export class GithubClient {
     static async listGists(pat) {
-        const res = await fetch('https://api.github.com/gists?per_page=100', {
+        const res = await fetch(`https://api.github.com/gists?per_page=100&_t=${Date.now()}`, {
             headers: { 
                 'Authorization': `Bearer ${pat}`, 
                 'Accept': 'application/vnd.github.v3+json' 
-            }
+            },
+            cache: 'no-store'
         });
         if (!res.ok) throw new Error(`GitHub API Error: ${res.status}`);
         return await res.json();
     }
 
     static async getGist(gistId, pat) {
-        const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+        const res = await fetch(`https://api.github.com/gists/${gistId}?_t=${Date.now()}`, {
             headers: { 
                 'Authorization': `Bearer ${pat}`, 
                 'Accept': 'application/vnd.github.v3+json' 
-            }
+            },
+            cache: 'no-store'
         });
         if (!res.ok) throw new Error(`GitHub API Error: ${res.status}`);
         const data = await res.json();

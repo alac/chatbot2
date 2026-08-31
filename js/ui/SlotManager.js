@@ -169,6 +169,12 @@ export class SlotManager {
         } else {
             await this.uiManager.storage.saveSlot(id, rawSlot.name, rawSlot.description, localData, newTs);
             await this.uiManager.storage.updateSlotSyncState(id, currentLocalHash, newHistory);
+            
+            // Also update the local reference in memory if it's the active slot
+            if (this.uiManager.activeSlot === id) {
+                this.uiManager.activeSlotName = rawSlot.name;
+                this.uiManager.activeSlotDesc = rawSlot.description;
+            }
         }
     }
 
