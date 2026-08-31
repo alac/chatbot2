@@ -63,6 +63,8 @@ export class AppSettings {
         this.gistMapping = {};
 
         this.lastEdited = 0;
+        this.lastSyncedHash = null;
+        this.syncHistory = [];
         this.load();
     }
 
@@ -88,15 +90,37 @@ export class AppSettings {
 
             if (!this.diceNotation) this.diceNotation = "1d20";
             if (!this.gistMapping) this.gistMapping = {};
+            
+            const syncSaved = localStorage.getItem('ai_proto_settings_sync');
+            if (syncSaved) {
+                const parsed = JSON.parse(syncSaved);
+                this.lastSyncedHash = parsed.lastSyncedHash || null;
+                this.syncHistory = parsed.syncHistory || [];
+            } else {
+                this.lastSyncedHash = null;
+                this.syncHistory = [];
+            }
+
             if (!this.lastEdited) this.lastEdited = Date.now();
         } else {
             this.lastEdited = Date.now();
+            this.lastSyncedHash = null;
+            this.syncHistory = [];
         }
     }
 
     save() {
         this.lastEdited = Date.now();
         localStorage.setItem('ai_proto_settings', JSON.stringify(this));
+    }
+
+    updateSyncState(hash, history) {
+        this.lastSyncedHash = hash;
+        this.syncHistory = history;
+        localStorage.setItem('ai_proto_settings_sync', JSON.stringify({
+            lastSyncedHash: this.lastSyncedHash,
+            syncHistory: this.syncHistory
+        }));
     }
 
     // Includes all auth keys (useful for manual local export/import across devices)
@@ -110,7 +134,9 @@ export class AppSettings {
         delete payload.githubPAT;
         delete payload.encryptionKey;
         delete payload.gistMapping;
-        delete payload.lastEdited; 
+        delete payload.lastEdited;
+        delete payload.lastSyncedHash;
+        delete payload.syncHistory;
         return payload;
     }
 

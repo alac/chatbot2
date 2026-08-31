@@ -1,5 +1,6 @@
 import { settings } from '../state/AppSettings.js';
 import { GithubClient } from '../api/GithubClient.js';
+import { SyncEngine } from '../sync/SyncEngine.js';
 import { HashUtils } from '../utils/HashUtils.js';
 
 export class SlotManager {
@@ -20,7 +21,6 @@ export class SlotManager {
                 cloudGists = await GithubClient.listGists(settings.githubPAT);
                 
                 // === AUTO-HEAL MAPPING FROM CLOUD ===
-                // Scans filenames (e.g. slot_123.json) and ensures settings.gistMapping is perfectly up to date
                 let mappingUpdated = false;
                 for (const gist of cloudGists) {
                     const filenames = Object.keys(gist.files);
@@ -53,13 +53,20 @@ export class SlotManager {
         // 1. Render Global Settings Card
         const settingsGistId = settings.gistMapping['settings'];
         const settingsCloudGist = cloudGists.find(g => g.id === settingsGistId);
+        
+        const settingsPayload = settings.getCloudSyncPayload();
+        const settingsCurrentHash = await HashUtils.computeHash(settingsPayload);
+        
         await this.renderCard(
             listDiv, 
             'settings', 
             '⚙️ Global Settings', 
             'Samplers, UI config, and Models', 
-            settings.getCloudSyncPayload(), 
-            settings.lastEdited, 
+            settingsPayload, 
+            settings.lastEdited,
+            settingsCurrentHash,
+            settings.lastSyncedHash,
+            settings.syncHistory,
             settingsCloudGist, 
             'settings_sync.json'
         );
@@ -77,41 +84,51 @@ export class SlotManager {
             return a.localeCompare(b);
         });
 
-        // 3. Render Story Slots dynamically
-        for (const slotId of sortedIds) {
+        // 3. Render Story Slots dynamically (Awaiting all hashes in parallel so it doesn't freeze)
+        const slotRenderPromises = sortedIds.map(async (slotId) => {
             const localSlot = localSlots.find(s => s.id === slotId);
             const gistId = settings.gistMapping[slotId];
             const cloudGist = cloudGists.find(g => g.id === gistId);
             
-            // Skip rendering if it exists in neither place (e.g. deleted from cloud but stuck in mapping)
-            if (!localSlot && !cloudGist) continue;
+            if (!localSlot && !cloudGist) return null;
 
             let title = `Slot ${slotId}`;
             let subtitle = "";
             let rawSlot = localSlot;
+            let currentLocalHash = null;
             
             if (localSlot) {
                 const msgCount = localSlot.data?.history?.length || 0;
                 title = localSlot.name;
                 subtitle = `Msgs: ${msgCount}`;
+                currentLocalHash = await HashUtils.computeHash(localSlot.data);
             } else if (cloudGist) {
-                // Cloud only slot (Not yet downloaded to this device)
                 const descMatch = cloudGist.description ? cloudGist.description.match(/AILite Slot:\s*(.*?)(?:\s*\||$)/) : null;
                 title = descMatch ? descMatch[1] : `Cloud Slot ${slotId}`;
                 subtitle = "☁️ Not on this device";
                 rawSlot = { name: title, description: "Cloud only save" };
             }
             
+            return {
+                id: slotId,
+                title, subtitle, rawSlot,
+                localData: localSlot ? localSlot.data : null,
+                localDate: localSlot ? (localSlot.lastEdited || 0) : 0,
+                currentLocalHash,
+                lastSyncedHash: localSlot ? localSlot.lastSyncedHash : null,
+                localHistory: localSlot ? localSlot.syncHistory : [],
+                cloudGist,
+                cloudFileName: `slot_${slotId}.json`
+            };
+        });
+
+        const slotRenderData = (await Promise.all(slotRenderPromises)).filter(Boolean);
+
+        for (const s of slotRenderData) {
             await this.renderCard(
-                listDiv, 
-                slotId, 
-                title, 
-                subtitle, 
-                localSlot ? localSlot.data : null, 
-                localSlot ? (localSlot.lastEdited || 0) : 0, 
-                cloudGist, 
-                `slot_${slotId}.json`, 
-                rawSlot
+                listDiv, s.id, s.title, s.subtitle, 
+                s.localData, s.localDate, s.currentLocalHash, s.lastSyncedHash, s.localHistory, 
+                s.cloudGist, s.cloudFileName, s.rawSlot
             );
         }
 
@@ -131,113 +148,138 @@ export class SlotManager {
         listDiv.appendChild(btnNewSlot);
     }
 
-    async pushAll(cloudGists = []) {
-        if (!confirm("Push ALL local slots and settings to GitHub? Synced items will be skipped.")) return;
+    async applyPush(id, isSettings, rawSlot, localData, currentLocalHash, lastSyncedHash, localHistory, cloudFileName) {
+        const payload = isSettings ? localData : { slotName: rawSlot.name, slotDesc: rawSlot.description, data: localData };
         
-        const localSlots = await this.uiManager.storage.getAllSlots();
-        const promises = [];
-        let pushedCount = 0;
-
-        // Settings Push Check
-        const settingsPayload = settings.getCloudSyncPayload();
-        const settingsGist = cloudGists.find(g => g.id === settings.gistMapping['settings']);
-        const settingsSyncStatus = await this.uiManager.cloudSyncUI.getSyncStatus(settingsPayload, settings.lastEdited, settingsGist);
-        
-        if (settingsSyncStatus.class !== 'synced') {
-            const settingsHash = await HashUtils.computeHash(settingsPayload);
-            promises.push(
-                this.uiManager.cloudSyncUI.pushItem('settings', 'settings_sync.json', 'Global Settings', settingsPayload, settingsHash)
-                .then(ts => { settings.lastEdited = ts; settings.save(); pushedCount++; })
-            );
+        let newHistory = localHistory || [];
+        if (lastSyncedHash && lastSyncedHash !== currentLocalHash) {
+            newHistory = [...newHistory, lastSyncedHash];
+            if (newHistory.length > 30) newHistory.shift();
         }
 
-        // Slots Push Check
-        for (const slot of localSlots) {
-            const gist = cloudGists.find(g => g.id === settings.gistMapping[slot.id]);
-            const syncStatus = await this.uiManager.cloudSyncUI.getSyncStatus(slot.data, slot.lastEdited || 0, gist);
-            
-            if (syncStatus.class !== 'synced') {
-                const slotHash = await HashUtils.computeHash(slot.data);
-                const payload = { slotName: slot.name, slotDesc: slot.description, data: slot.data };
-                promises.push(
-                    this.uiManager.cloudSyncUI.pushItem(slot.id, `slot_${slot.id}.json`, `AILite Slot: ${slot.name}`, payload, slotHash)
-                    .then(ts => {
-                        pushedCount++;
-                        return this.uiManager.storage.saveSlot(slot.id, slot.name, slot.description, slot.data, ts);
-                    })
-                );
-            }
-        }
-
-        try {
-            await Promise.all(promises);
-            if (pushedCount > 0) this.refreshSlotList();
-            alert(`Push All Successful! (${pushedCount} items pushed)`);
-        } catch(e) {
-            alert(`Push All failed: ${e.message}`);
+        const newTs = await this.uiManager.cloudSyncUI.pushItem(
+            id, cloudFileName, 
+            isSettings ? 'AILite Settings' : `AILite Slot: ${rawSlot.name}`, 
+            payload, currentLocalHash, newHistory
+        );
+        
+        if (isSettings) {
+            settings.lastEdited = newTs;
+            settings.updateSyncState(currentLocalHash, newHistory);
+        } else {
+            await this.uiManager.storage.saveSlot(id, rawSlot.name, rawSlot.description, localData, newTs);
+            await this.uiManager.storage.updateSlotSyncState(id, currentLocalHash, newHistory);
         }
     }
 
-    async pullAll(cloudGists = []) {
-        if (!confirm("Pull ALL cloud slots and settings? Synced items will be skipped.")) return;
+    async applyPull(id, isSettings, pullRes) {
+        if (isSettings) {
+            settings.importSettings(pullRes.data);
+            settings.lastEdited = pullRes.timestamp;
+            settings.updateSyncState(pullRes.remoteHead, pullRes.remoteHistory);
+            if (window.settingsUI) window.settingsUI.populateUI();
+        } else {
+            const dataObj = pullRes.data;
+            await this.uiManager.storage.saveSlot(id, dataObj.slotName, dataObj.slotDesc, dataObj.data, pullRes.timestamp);
+            await this.uiManager.storage.updateSlotSyncState(id, pullRes.remoteHead, pullRes.remoteHistory);
+            
+            if (this.uiManager.activeSlot === id) await this.uiManager.loadStateFromSlot(id);
+        }
+    }
 
-        let pulledCount = 0;
+    async executeSync(id, isSettings, rawSlot, localData, localDate, currentLocalHash, lastSyncedHash, localHistory, cloudFile, cloudFileName) {
+        const syncStatus = this.uiManager.cloudSyncUI.getSyncStatus(localDate, cloudFile, currentLocalHash, lastSyncedHash, localHistory);
+        const action = syncStatus.action;
+        
+        if (action === 'SYNCED') return 'SKIP';
+
+        if (action === 'PUSH') {
+            await this.applyPush(id, isSettings, rawSlot, localData, currentLocalHash, lastSyncedHash, localHistory, cloudFileName);
+            return 'PUSH';
+        }
+
+        const pullRes = await this.uiManager.cloudSyncUI.pullItem(id, cloudFile);
+        if (!pullRes) throw new Error("Failed to pull from cloud.");
+
+        const finalEval = SyncEngine.evaluate(currentLocalHash, lastSyncedHash, localHistory, pullRes.remoteHead, pullRes.remoteHistory);
+
+        if (finalEval === 'PULL') {
+            await this.applyPull(id, isSettings, pullRes);
+            return 'PULL';
+        } 
+        
+        if (finalEval === 'PUSH') {
+            await this.applyPush(id, isSettings, rawSlot, localData, currentLocalHash, lastSyncedHash, localHistory, cloudFileName);
+            return 'PUSH';
+        }
+
+        const choice = await this.uiManager.cloudSyncUI.handleSyncConflict(localData, localDate, cloudFile, isSettings ? 'settings' : 'slot', pullRes);
+        if (choice === 'local') {
+            await this.applyPush(id, isSettings, rawSlot, localData, currentLocalHash, lastSyncedHash, localHistory, cloudFileName);
+            return 'RESOLVED_PUSH';
+        } else if (choice && choice.cloudData) {
+            await this.applyPull(id, isSettings, choice.cloudData);
+            return 'RESOLVED_PULL';
+        }
+
+        return 'SKIP'; 
+    }
+
+    async syncAll(cloudGists = []) {
+        if (!confirm("Smart Sync ALL local slots and settings? Conflicting items will prompt for resolution.")) return;
+        
+        const localSlots = await this.uiManager.storage.getAllSlots();
+        let successCount = 0;
+
         try {
-            // Settings Pull Check
+            // Settings Sync
             const settingsGist = cloudGists.find(g => g.id === settings.gistMapping['settings']);
-            if (settingsGist) {
-                const settingsPayload = settings.getCloudSyncPayload();
-                const syncStatus = await this.uiManager.cloudSyncUI.getSyncStatus(settingsPayload, settings.lastEdited, settingsGist);
-                if (syncStatus.class !== 'synced') {
-                    const pullRes = await this.uiManager.cloudSyncUI.pullItem('settings', settingsGist);
-                    if (pullRes) {
-                        settings.importSettings(pullRes.data);
-                        settings.lastEdited = pullRes.timestamp;
-                        settings.save();
-                        if (window.settingsUI) window.settingsUI.populateUI();
-                        pulledCount++;
-                    }
-                }
-            }
+            const settingsPayload = settings.getCloudSyncPayload();
+            const settingsHash = await HashUtils.computeHash(settingsPayload);
+            
+            const resSettings = await this.executeSync(
+                'settings', true, null, settingsPayload, settings.lastEdited, 
+                settingsHash, settings.lastSyncedHash, settings.syncHistory, settingsGist, 'settings_sync.json'
+            );
+            if (resSettings !== 'SKIP') successCount++;
 
-            // Slots Pull Check
-            const localSlots = await this.uiManager.storage.getAllSlots();
+            // Slots Sync
             const allSlotIds = new Set(localSlots.map(s => s.id));
             for (const id of Object.keys(settings.gistMapping)) if (id !== 'settings') allSlotIds.add(id);
 
             for (const slotId of allSlotIds) {
                 const gist = cloudGists.find(g => g.id === settings.gistMapping[slotId]);
-                if (gist) {
-                    const localSlot = localSlots.find(s => s.id === slotId);
-                    const localData = localSlot ? localSlot.data : null;
-                    const localDate = localSlot ? (localSlot.lastEdited || 0) : 0;
-
-                    const syncStatus = await this.uiManager.cloudSyncUI.getSyncStatus(localData, localDate, gist);
-                    if (syncStatus.class !== 'synced') {
-                        const pullRes = await this.uiManager.cloudSyncUI.pullItem(slotId, gist);
-                        if (pullRes) {
-                            await this.uiManager.storage.saveSlot(slotId, pullRes.data.slotName, pullRes.data.slotDesc, pullRes.data.data, pullRes.timestamp);
-                            if (this.uiManager.activeSlot === slotId) await this.uiManager.loadStateFromSlot(slotId);
-                            pulledCount++;
-                        }
-                    }
-                }
+                const localSlot = localSlots.find(s => s.id === slotId);
+                
+                const localData = localSlot ? localSlot.data : null;
+                const localDate = localSlot ? (localSlot.lastEdited || 0) : 0;
+                const localHead = localSlot ? await HashUtils.computeHash(localSlot.data) : null;
+                const lastSyncedHash = localSlot ? localSlot.lastSyncedHash : null;
+                const localHistory = localSlot ? localSlot.syncHistory : [];
+                
+                const res = await this.executeSync(
+                    slotId, false, localSlot, localData, localDate, localHead, lastSyncedHash, localHistory, 
+                    gist, `slot_${slotId}.json`
+                );
+                
+                if (res !== 'SKIP') successCount++;
             }
-            if (pulledCount > 0) this.refreshSlotList();
-            alert(`Pull All Successful! (${pulledCount} items pulled)`);
+            
+            if (successCount > 0) this.refreshSlotList();
+            alert(`Sync All Complete! (${successCount} items synced)`);
         } catch(e) {
-            alert(`Pull All failed: ${e.message}`);
+            alert(`Sync All failed: ${e.message}`);
         }
     }
 
-    async renderCard(container, id, title, subtitle, localData, localDate, cloudFile, cloudFileName, rawSlot = null) {
+    async renderCard(container, id, title, subtitle, localData, localDate, currentLocalHash, lastSyncedHash, localHistory, cloudFile, cloudFileName, rawSlot = null) {
         const isSettings = id === 'settings';
         const card = document.createElement('div');
         card.className = `slot-card ${id === (isSettings ? this.selectedSlotId : this.uiManager.activeSlot) ? 'active' : ''}`;
         
-        let syncStatus = { text: '', class: '' };
+        let syncStatus = { text: '', class: '', action: 'NONE' };
         if (this.uiManager.cloudSyncUI.isLoggedIn()) {
-            syncStatus = await this.uiManager.cloudSyncUI.getSyncStatus(localData, localDate, cloudFile);
+            syncStatus = this.uiManager.cloudSyncUI.getSyncStatus(localDate, cloudFile, currentLocalHash, lastSyncedHash, localHistory);
         }
 
         const dateStr = localDate ? new Date(localDate).toLocaleString() : (isSettings ? 'Now' : 'Empty');
@@ -254,93 +296,74 @@ export class SlotManager {
         if (this.uiManager.cloudSyncUI.isLoggedIn() && (localDate > 0 || cloudFile || isSettings)) {
             const syncActions = document.createElement('div');
             syncActions.className = 'sync-actions';
+            syncActions.style.display = 'flex';
+            syncActions.style.gap = '6px';
+            
+            const btnSync = document.createElement('button');
+            btnSync.className = 'primary';
+            btnSync.style.flex = '1';
+            btnSync.textContent = '🔄 Sync';
+            btnSync.onclick = async (e) => {
+                e.stopPropagation();
+                if (!localData && !isSettings && !cloudFile) return;
+
+                btnSync.textContent = '⏳...';
+                try {
+                    await this.executeSync(id, isSettings, rawSlot, localData, localDate, currentLocalHash, lastSyncedHash, localHistory, cloudFile, cloudFileName);
+                    this.refreshSlotList(); 
+                } catch (err) {
+                    alert(`Sync failed: ${err.message}`);
+                    btnSync.textContent = '🔄 Sync';
+                }
+            };
+
+            const forceGroup = document.createElement('div');
+            forceGroup.className = 'btn-group';
+            forceGroup.style.flex = '0';
             
             const btnPush = document.createElement('button');
-            btnPush.textContent = '⬆️ Push';
+            btnPush.innerHTML = '⬆️';
+            btnPush.title = 'Force Push (Overwrite Remote)';
             btnPush.onclick = async (e) => {
                 e.stopPropagation();
-                if (!localData && !isSettings) return alert("Cannot push. This slot is entirely empty on this device.");
-
-                if (syncStatus.text === '⚠️ Conflict') {
-                    const choice = await this.uiManager.cloudSyncUI.handleSyncConflict(localData, localDate, cloudFile, isSettings ? 'settings' : 'slot');
-                    if (choice !== 'local') return;
-                } else if (syncStatus.text === '⬇️ Cloud Newer') {
-                    if (!confirm(`Warning: Cloud version is newer. Overwrite GitHub Gist?`)) return;
-                }
-                btnPush.textContent = '⏳...';
+                if (!localData && !isSettings) return alert("Cannot push. Local slot is empty.");
+                if (!confirm("WARNING: Force Push will permanently overwrite the cloud save. Continue?")) return;
                 
-                const hash = await HashUtils.computeHash(localData);
-                const payload = isSettings ? localData : { slotName: rawSlot.name, slotDesc: rawSlot.description, data: localData };
-                
+                btnPush.innerHTML = '⏳';
                 try {
-                    const newTs = await this.uiManager.cloudSyncUI.pushItem(id, cloudFileName, isSettings ? 'AILite Settings' : `AILite Slot: ${rawSlot.name}`, payload, hash);
-                    
-                    if (isSettings) {
-                        settings.lastEdited = newTs;
-                        settings.save();
-                    } else {
-                        await this.uiManager.storage.saveSlot(id, rawSlot.name, rawSlot.description, localData, newTs);
-                    }
-
-                    // Perform instant local UI update to prevent GitHub caching lag
-                    const badge = card.querySelector('.sync-status');
-                    if (badge) {
-                        badge.className = 'sync-status synced';
-                        badge.textContent = '✔️ Synced';
-                    }
-                    const meta = card.querySelector('.last-edit-meta');
-                    if (meta) {
-                        meta.textContent = `Last Edit: ${new Date(newTs).toLocaleString()}`;
-                    }
-                    syncStatus = { text: '✔️ Synced', class: 'synced' }; // Update closure state
+                    await this.applyPush(id, isSettings, rawSlot, localData, currentLocalHash, lastSyncedHash, localHistory, cloudFileName);
+                    this.refreshSlotList();
                 } catch (err) {
-                    alert(`Push failed: ${err.message}`);
-                } finally {
-                    btnPush.textContent = '⬆️ Push';
+                    alert(`Force Push failed: ${err.message}`);
+                    btnPush.innerHTML = '⬆️';
                 }
             };
 
             const btnPull = document.createElement('button');
-            btnPull.textContent = '⬇️ Pull';
+            btnPull.innerHTML = '⬇️';
+            btnPull.title = 'Force Pull (Overwrite Local)';
             btnPull.onclick = async (e) => {
                 e.stopPropagation();
                 if (!cloudFile) return alert("No cloud save exists.");
-                let finalCloudData = null;
-                let finalCloudTimestamp = new Date(cloudFile.updated_at).getTime();
-
-                if (syncStatus.text === '⚠️ Conflict') {
-                    const choice = await this.uiManager.cloudSyncUI.handleSyncConflict(localData, localDate, cloudFile, isSettings ? 'settings' : 'slot');
-                    if (!choice || choice === 'local') return; 
-                    finalCloudData = choice.cloudData; 
-                } else if (syncStatus.text === '⬆️ Local Newer') {
-                    if (!confirm(`Warning: Local version is newer. Overwrite Local save?`)) return;
-                }
-                btnPull.textContent = '⏳...';
-
+                if (!confirm("WARNING: Force Pull will permanently overwrite your local save. Continue?")) return;
+                
+                btnPull.innerHTML = '⏳';
                 try {
-                    const pullRes = finalCloudData ? { data: finalCloudData, timestamp: finalCloudTimestamp } : await this.uiManager.cloudSyncUI.pullItem(id, cloudFile);
-                    
-                    if (isSettings) {
-                        settings.importSettings(pullRes.data);
-                        settings.lastEdited = pullRes.timestamp;
-                        settings.save();
-                        if (window.settingsUI) window.settingsUI.populateUI();
-                    } else {
-                        await this.uiManager.storage.saveSlot(id, pullRes.data.slotName, pullRes.data.slotDesc, pullRes.data.data, pullRes.timestamp);
-                        if (this.uiManager.activeSlot === id) await this.uiManager.loadStateFromSlot(id);
-                    }
-                } catch(err) {
-                    alert(`Pull failed: ${err.message}`);
+                    const pullRes = await this.uiManager.cloudSyncUI.pullItem(id, cloudFile);
+                    await this.applyPull(id, isSettings, pullRes);
+                    this.refreshSlotList();
+                } catch (err) {
+                    alert(`Force Pull failed: ${err.message}`);
+                    btnPull.innerHTML = '⬇️';
                 }
-                this.refreshSlotList();
             };
 
-            syncActions.append(btnPull, btnPush);
+            forceGroup.append(btnPull, btnPush);
+            syncActions.append(btnSync, forceGroup);
             card.appendChild(syncActions);
         }
 
         card.addEventListener('click', () => {
-            // Can't select/load a slot that doesn't exist locally yet
             if (!localData && !isSettings) return alert("You must Pull this cloud save before you can select it.");
 
             document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('active'));

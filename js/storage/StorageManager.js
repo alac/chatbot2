@@ -65,16 +65,48 @@ export class StorageManager {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(this.storeName, 'readwrite');
             const store = tx.objectStore(this.storeName);
-            const payload = {
-                id: id.toString(),
-                name: name,
-                description: desc,
-                lastEdited: customTimestamp || Date.now(),
-                messageCount: storyStateData.history ? storyStateData.history.length : 0,
-                data: storyStateData
+            
+            const getReq = store.get(id.toString());
+            getReq.onsuccess = () => {
+                const existing = getReq.result;
+                
+                const payload = {
+                    id: id.toString(),
+                    name: name,
+                    description: desc,
+                    lastEdited: customTimestamp || Date.now(),
+                    messageCount: storyStateData.history ? storyStateData.history.length : 0,
+                    data: storyStateData,
+                    lastSyncedHash: existing?.lastSyncedHash || null,
+                    syncHistory: existing?.syncHistory || []
+                };
+                
+                const putReq = store.put(payload);
+                putReq.onsuccess = () => resolve();
+                putReq.onerror = () => reject(putReq.error);
             };
-            const req = store.put(payload);
-            req.onsuccess = () => resolve();
+            getReq.onerror = () => reject(getReq.error);
+        });
+    }
+
+    async updateSlotSyncState(id, hash, history) {
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(this.storeName, 'readwrite');
+            const store = tx.objectStore(this.storeName);
+            const req = store.get(id.toString());
+            
+            req.onsuccess = () => {
+                const slot = req.result;
+                if (slot) {
+                    slot.lastSyncedHash = hash;
+                    slot.syncHistory = history;
+                    const putReq = store.put(slot);
+                    putReq.onsuccess = () => resolve();
+                    putReq.onerror = () => reject(putReq.error);
+                } else {
+                    resolve();
+                }
+            };
             req.onerror = () => reject(req.error);
         });
     }

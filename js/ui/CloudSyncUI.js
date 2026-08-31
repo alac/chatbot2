@@ -1,7 +1,7 @@
 import { settings } from '../state/AppSettings.js';
 import { GithubClient } from '../api/GithubClient.js';
 import { CryptoUtils } from '../utils/CryptoUtils.js';
-import { HashUtils } from '../utils/HashUtils.js';
+import { SyncEngine } from '../sync/SyncEngine.js';
 
 export class CloudSyncUI {
     constructor(uiManager) {
@@ -64,11 +64,10 @@ export class CloudSyncUI {
          if (isLoggedIn) {
              authContainer.innerHTML = `
                 <div style="display:flex; align-items:center; gap:6px; flex-wrap: wrap;">
-                    <div style="width: 100%"><span style="font-weight:bold; margin-right:4px;">GitHub Gists</span></div>
+                    <div style="width: 100%"><span style="font-weight:bold; margin-right:4px;">GitHub Sync</span></div>
                     <button id="btn-cloud-refresh" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Refresh Remote State">🔄 <span class="hide-mobile">Refresh</span></button>
                     <button id="btn-cloud-manage" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Manage Remote">🛠️ <span class="hide-mobile">Manage</span></button>
-                    <button id="btn-cloud-pull-all" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Pull All">⬇️ <span class="hide-mobile">Pull </span>All</button>
-                    <button id="btn-cloud-push-all" class="secondary" style="padding: 4px 8px; font-size: 0.85em;" title="Push All">⬆️ <span class="hide-mobile">Push </span>All</button>
+                    <button id="btn-cloud-sync-all" class="primary" style="padding: 4px 8px; font-size: 0.85em;" title="Smart Sync All">🔄 <span class="hide-mobile">Sync </span>All</button>
                 </div>
                 <button id="btn-open-github-modal" class="secondary" title="Settings" style="padding: 4px">⚙️</button>
             `;
@@ -80,8 +79,7 @@ export class CloudSyncUI {
                 this.uiManager.slotManager.refreshSlotList().finally(() => btn.innerHTML = origHtml);
             };
             document.getElementById('btn-cloud-manage').onclick = () => this.uiManager.remoteManagerUI.openModal();
-            document.getElementById('btn-cloud-push-all').onclick = () => this.uiManager.slotManager.pushAll(gistsCache);
-            document.getElementById('btn-cloud-pull-all').onclick = () => this.uiManager.slotManager.pullAll(gistsCache);
+            document.getElementById('btn-cloud-sync-all').onclick = () => this.uiManager.slotManager.syncAll(gistsCache);
         } else {
             authContainer.innerHTML = `
                 <span style="font-size: 0.9em; font-weight: bold;">GitHub Sync</span>
@@ -101,48 +99,58 @@ export class CloudSyncUI {
         return !!(settings.githubPAT && settings.encryptionKey);
     }
 
-    async getSyncStatus(localData, localTimestamp, cloudGist) {
-        if (!cloudGist && localTimestamp > 0) return { text: '⬆️ Pending Push', class: 'local-newer' };
-        if (!cloudGist && localTimestamp === 0) return { text: '☁️ Empty', class: '' };
+    getSyncStatus(localTimestamp, cloudGist, currentLocalHash, lastSyncedHash, localHistory) {
+        if (!cloudGist && localTimestamp > 0) return { text: '⬆️ Local Only', class: 'local-newer', action: 'PUSH' };
+        if (!cloudGist && localTimestamp === 0) return { text: '☁️ Empty', class: '', action: 'NONE' };
 
-        // 1. Hash-based equality check (Bypasses all timestamp issues)
-        const localHash = await HashUtils.computeHash(localData);
-        let cloudHash = null;
-
+        let remoteHead = null;
         const descMatch = cloudGist.description ? cloudGist.description.match(/\|\s*hash:([a-fA-F0-9]+)/) : null;
-        if (descMatch) cloudHash = descMatch[1];
+        if (descMatch) remoteHead = descMatch[1];
 
-        if (localHash === cloudHash && localHash !== '') {
-            return { text: '✔️ Synced', class: 'synced' };
+        if (!remoteHead) {
+            // Legacy V1 Fallback
+            const cloudTimestamp = new Date(cloudGist.updated_at).getTime();
+            if (Math.abs(localTimestamp - cloudTimestamp) < 5000) return { text: '✔️ Synced', class: 'synced', action: 'SYNCED' };
+            if (localTimestamp > cloudTimestamp) return { text: '⬆️ Local Newer', class: 'local-newer', action: 'PUSH' };
+            if (cloudTimestamp > localTimestamp) return { text: '⬇️ Cloud Newer', class: 'cloud-newer', action: 'PULL' };
+            return { text: '⚠️ Conflict', class: 'conflict', action: 'CONFLICT' };
         }
 
-        // 2. Fallback to Timestamps if hashes differ
+        // V2 Fast-Forward Detection
+        const evalResult = SyncEngine.evaluate(currentLocalHash, lastSyncedHash, localHistory, remoteHead, null);
+        
+        if (evalResult === 'SYNCED') return { text: '✔️ Synced', class: 'synced', action: 'SYNCED' };
+        if (evalResult === 'PUSH') return { text: '⬆️ Local Ahead', class: 'local-newer', action: 'PUSH' };
+        
         const cloudTimestamp = new Date(cloudGist.updated_at).getTime();
+        if (cloudTimestamp > localTimestamp) return { text: '⬇️ Cloud Ahead', class: 'cloud-newer', action: 'PULL_OR_CONFLICT' };
         
-        if (Math.abs(localTimestamp - cloudTimestamp) < 5000) {
-            return { text: '✔️ Synced', class: 'synced' };
-        }
-        
-        if (localTimestamp > cloudTimestamp) return { text: '⬆️ Local Newer', class: 'local-newer' };
-        if (cloudTimestamp > localTimestamp) return { text: '⬇️ Cloud Newer', class: 'cloud-newer' };
-        
-        return { text: '⚠️ Conflict', class: 'conflict' };
+        return { text: '⚠️ Conflict', class: 'conflict', action: 'PULL_OR_CONFLICT' };
     }
 
-    async pushItem(id, filename, baseDescription, rawData, computedHash) {
+    async pushItem(id, filename, baseDescription, rawData, computedHash, syncHistory) {
         if (!this.isLoggedIn()) throw new Error("Not logged in");
 
         const descriptionWithHash = `${baseDescription} | hash:${computedHash}`;
         const dataStr = JSON.stringify(rawData);
         const encrypted = await CryptoUtils.encryptData(dataStr, settings.encryptionKey);
         
+        const v2Payload = {
+            format: 'ailite_sync_v2',
+            head: computedHash,
+            history: syncHistory || [],
+            updatedAt: Date.now(),
+            encrypted: encrypted
+        };
+        const contentStr = JSON.stringify(v2Payload);
+        
         const gistId = settings.gistMapping[id];
         let res;
         
         if (gistId) {
-            res = await GithubClient.updateGist(gistId, filename, encrypted, settings.githubPAT, descriptionWithHash);
+            res = await GithubClient.updateGist(gistId, filename, contentStr, settings.githubPAT, descriptionWithHash);
         } else {
-            res = await GithubClient.createGist(filename, encrypted, descriptionWithHash, settings.githubPAT);
+            res = await GithubClient.createGist(filename, contentStr, descriptionWithHash, settings.githubPAT);
             settings.gistMapping[id] = res.id;
             settings.save();
         }
@@ -154,16 +162,32 @@ export class CloudSyncUI {
         if (!this.isLoggedIn()) throw new Error("Not logged in");
         if (!cloudGist) return null;
 
-        const encrypted = await GithubClient.getGist(cloudGist.id, settings.githubPAT);
-        const decryptedStr = await CryptoUtils.decryptData(encrypted, settings.encryptionKey);
+        const contentStr = await GithubClient.getGist(cloudGist.id, settings.githubPAT);
+        
+        let encryptedStr = contentStr;
+        let remoteHead = null;
+        let remoteHistory = [];
+
+        try {
+            const parsed = JSON.parse(contentStr);
+            if (parsed.format === 'ailite_sync_v2') {
+                encryptedStr = parsed.encrypted;
+                remoteHead = parsed.head;
+                remoteHistory = parsed.history || [];
+            }
+        } catch(e) {}
+
+        const decryptedStr = await CryptoUtils.decryptData(encryptedStr, settings.encryptionKey);
         
         return { 
             data: JSON.parse(decryptedStr), 
-            timestamp: new Date(cloudGist.updated_at).getTime() 
+            timestamp: new Date(cloudGist.updated_at).getTime(),
+            remoteHead,
+            remoteHistory
         };
     }
 
-    async handleSyncConflict(localData, localTimestamp, cloudGist, itemType = 'slot') {
+    async handleSyncConflict(localData, localTimestamp, cloudGist, itemType = 'slot', preFetchedPullRes = null) {
         const modal = document.getElementById('sync-conflict-modal');
         const contentArea = document.getElementById('conflict-content-area');
         const btnLocal = document.getElementById('btn-tab-local');
@@ -172,19 +196,21 @@ export class CloudSyncUI {
         modal.classList.remove('hidden');
         contentArea.innerHTML = '<div style="text-align:center; margin-top:20px;">Decrypting cloud data... ⏳</div>';
 
-        let cloudDataRaw;
-        try {
-            const pullRes = await this.pullItem(cloudGist.id, cloudGist);
-            cloudDataRaw = pullRes.data;
-        } catch(e) {
-            contentArea.innerHTML = `<div style="text-align:center; color:var(--danger); margin-top:20px;">Failed to decrypt cloud data. Check your Encryption Key.</div>`;
-            return new Promise((resolve) => {
-                document.getElementById('btn-close-conflict').onclick = () => { modal.classList.add('hidden'); resolve(null); };
-                document.getElementById('btn-keep-local').onclick = () => { modal.classList.add('hidden'); resolve('local'); };
-                document.getElementById('btn-keep-cloud').onclick = () => { modal.classList.add('hidden'); resolve(null); };
-            });
+        let pullRes = preFetchedPullRes;
+        if (!pullRes) {
+            try {
+                pullRes = await this.pullItem(cloudGist.id, cloudGist);
+            } catch(e) {
+                contentArea.innerHTML = `<div style="text-align:center; color:var(--danger); margin-top:20px;">Failed to decrypt cloud data. Check your Encryption Key.</div>`;
+                return new Promise((resolve) => {
+                    document.getElementById('btn-close-conflict').onclick = () => { modal.classList.add('hidden'); resolve(null); };
+                    document.getElementById('btn-keep-local').onclick = () => { modal.classList.add('hidden'); resolve('local'); };
+                    document.getElementById('btn-keep-cloud').onclick = () => { modal.classList.add('hidden'); resolve(null); };
+                });
+            }
         }
 
+        const cloudDataRaw = pullRes.data;
         const cloudData = itemType === 'settings' ? cloudDataRaw : cloudDataRaw.data;
 
         const generatePreview = (dataObj, timestamp) => {
@@ -209,7 +235,7 @@ export class CloudSyncUI {
         };
 
         const localHtml = generatePreview(localData, localTimestamp);
-        const cloudHtml = generatePreview(cloudData, new Date(cloudGist.updated_at).getTime());
+        const cloudHtml = generatePreview(cloudData, pullRes.timestamp);
 
         const switchTab = (isLocal) => {
             if (isLocal) { btnLocal.classList.add('primary'); btnCloud.classList.remove('primary'); contentArea.innerHTML = localHtml; }
@@ -223,7 +249,7 @@ export class CloudSyncUI {
         return new Promise((resolve) => {
             document.getElementById('btn-close-conflict').onclick = () => { modal.classList.add('hidden'); resolve(null); };
             document.getElementById('btn-keep-local').onclick = () => { modal.classList.add('hidden'); resolve('local'); };
-            document.getElementById('btn-keep-cloud').onclick = () => { modal.classList.add('hidden'); resolve({ cloudData: cloudDataRaw, cloudFile: cloudGist }); };
+            document.getElementById('btn-keep-cloud').onclick = () => { modal.classList.add('hidden'); resolve({ cloudData: pullRes }); };
         });
     }
 }
