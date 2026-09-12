@@ -1,3 +1,6 @@
+import { settings } from '../state/AppSettings.js';
+import { TextRenderer } from './TextRenderer.js';
+
 export class DraftMergeManager {
     constructor(app) {
         this.app = app;
@@ -314,6 +317,7 @@ export class DraftMergeManager {
         container.innerHTML = '';
         
         const currentStars = this.starredLines[this.activeSourceDraft];
+        const isHighlight = this.targetMessageIndex >= this.app.state.history.length - settings.highlightTurnCount;
         
         this.currentParagraphs.forEach((text, i) => {
             const cell = document.createElement('div');
@@ -328,6 +332,11 @@ export class DraftMergeManager {
                 content.textContent = '\u00A0'; // Non-breaking space forces the div to maintain line height
             } else {
                 content.textContent = text;
+                
+                // Safely apply highlighting to this exact div if enabled and in range
+                if (isHighlight && settings.highlightEnabled && settings.highlightList.trim()) {
+                    TextRenderer.applySlopHighlighting(content);
+                }
             }
             
             const starBtn = document.createElement('button');
