@@ -6,6 +6,28 @@ export class TextRenderer {
         return !/<(?:edit|old|new|reasoning)[>\s]/i.test(content) && settings.renderMarkdown;
     }
 
+    static splitParagraphsSafely(text) {
+        let blocks = [];
+        let inCode = false;
+        let currentBlock = "";
+        let lines = text.split('\n');
+        
+        for(let i=0; i<lines.length; i++) {
+            let line = lines[i];
+            if (line.startsWith('```')) inCode = !inCode;
+            
+            currentBlock += line;
+            if (i < lines.length - 1) currentBlock += '\n';
+            
+            if (!inCode && line.trim() === '' && i < lines.length - 1) {
+                blocks.push(currentBlock);
+                currentBlock = "";
+            }
+        }
+        if (currentBlock) blocks.push(currentBlock);
+        return blocks;
+    }
+
     static setNodeContent(node, content, draft, isWithinHighlightRange = false) {
         // 1. Global Visual Regexes
         let processed = settings.applyRegexes(content || '', 'visually');
@@ -21,7 +43,16 @@ export class TextRenderer {
         // 3. Escape LLM tags like <action>, <thought> so they don't break the DOM
         processed = processed.replace(/<(\/?)([a-zA-Z][^>]*)>/g, '&lt;$1$2&gt;');
 
-        // 4. Markdown Rendering
+        // 4. Inject tracking markers safely at the END of each block (so they don't break markdown headers/quotes)
+        const blocks = TextRenderer.splitParagraphsSafely(processed);
+        processed = blocks.map((b, i) => {
+            const match = b.match(/(\n*)$/);
+            const trailing = match ? match[1] : '';
+            const core = b.substring(0, b.length - trailing.length);
+            return `${core}<span class="p-marker" data-p="${i}"></span>${trailing}`;
+        }).join('');
+
+        // 5. Markdown Rendering
         if (TextRenderer.shouldUseMarkdown(processed, draft.markdownOverride)) {
             processed = marked.parse(processed);
             node.classList.add('markdown-body');

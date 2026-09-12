@@ -214,7 +214,7 @@ export class StoryState {
         if (index >= 0 && index < this.history.length) {
             const msg = this.history[index];
             msg.drafts[msg.activeDraftIndex].content = newContent;
-            msg.isBatch = false; 
+            // Purposely NOT setting msg.isBatch = false so parallel drafts remain accessible
             this.redoStack = []; 
         }
     }

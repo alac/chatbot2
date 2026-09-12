@@ -681,3 +681,28 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     color: var(--text-main);
     border-color: var(--text-muted);
 }
+
+/* Surgical Edit Popover */
+.floating-edit-btn {
+    position: fixed;
+    z-index: 1000;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.9em;
+    transform: translate(-50%, -100%);
+    margin-top: -10px;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, margin-top 0.2s;
+}
+.floating-edit-btn.visible {
+    opacity: 1;
+    pointer-events: auto;
+    margin-top: -15px;
+}
+.p-marker {
+    display: none;
+}
