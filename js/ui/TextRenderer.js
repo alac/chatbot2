@@ -10,26 +10,7 @@ export class TextRenderer {
         // 1. Global Visual Regexes
         let processed = settings.applyRegexes(content || '', 'visually');
 
-        // 2. Slop Highlighting (Tools)
-        if (isWithinHighlightRange && settings.highlightEnabled && settings.highlightList.trim()) {
-            const lines = settings.highlightList.split('\n').filter(l => l.trim());
-            lines.forEach(line => {
-                try {
-                    let r;
-                    const match = line.trim().match(/^\/(.+)\/([a-z]*)$/i);
-                    if (match) {
-                        r = new RegExp(match[1], match[2].includes('g') ? match[2] : match[2] + 'g');
-                    } else {
-                        // Escape string to literal regex
-                        const escaped = line.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        r = new RegExp(escaped, 'gi');
-                    }
-                    processed = processed.replace(r, (m) => `<mark style="background:${settings.highlightBg}; color:${settings.highlightFg};">${m}</mark>`);
-                } catch(e) { }
-            });
-        }
-        
-        // 3. Stash raw HTML blocks to prevent markdown parser interference
+        // 2. Stash raw HTML blocks (used by AI Edits)
         let htmlBlocks = [];
         processed = processed.replace(/<html>([\s\S]*?)<\/html>/gi, (m, inner) => {
             const clean = window.DOMPurify ? window.DOMPurify.sanitize(inner) : inner;
@@ -37,6 +18,7 @@ export class TextRenderer {
             return `%%HTML_BLOCK_${htmlBlocks.length - 1}%%`;
         });
 
+        // 3. Escape LLM tags like <action>, <thought> so they don't break the DOM
         processed = processed.replace(/<(\/?)([a-zA-Z][^>]*)>/g, '&lt;$1$2&gt;');
 
         // 4. Markdown Rendering
@@ -55,7 +37,12 @@ export class TextRenderer {
 
         node.innerHTML = processed;
 
-        // 6. Inject Code Block Copy Buttons
+        // 6. Apply Slop Highlighting safely on rendered DOM text nodes
+        if (isWithinHighlightRange && settings.highlightEnabled && settings.highlightList.trim()) {
+            TextRenderer.applySlopHighlighting(node);
+        }
+
+        // 7. Inject Code Block Copy Buttons
         const preElements = node.querySelectorAll('pre');
         preElements.forEach(pre => {
             if (pre.parentElement.classList.contains('code-block-wrapper')) return;
@@ -83,5 +70,66 @@ export class TextRenderer {
             wrapper.appendChild(topBar);
             wrapper.appendChild(pre);
         });
+    }
+
+    static applySlopHighlighting(containerNode) {
+        const lines = settings.highlightList.split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length === 0) return;
+
+        const regexes = [];
+        for (const line of lines) {
+            try {
+                const match = line.match(/^\/(.+)\/([a-z]*)$/i);
+                if (match) {
+                    const flags = match[2].includes('g') ? match[2] : match[2] + 'g';
+                    regexes.push(new RegExp(match[1], flags));
+                } else {
+                    const escaped = line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    regexes.push(new RegExp(escaped, 'gi'));
+                }
+            } catch (e) {}
+        }
+        if (regexes.length === 0) return;
+
+        const walker = document.createTreeWalker(containerNode, NodeFilter.SHOW_TEXT, null);
+        const textNodes = [];
+        let currentNode;
+        while ((currentNode = walker.nextNode())) {
+            const parentTag = currentNode.parentElement ? currentNode.parentElement.tagName.toLowerCase() : '';
+            if (parentTag === 'code' || parentTag === 'pre' || parentTag === 'mark') continue;
+            if (currentNode.nodeValue.trim().length > 0) {
+                textNodes.push(currentNode);
+            }
+        }
+
+        for (const textNode of textNodes) {
+            let text = textNode.nodeValue;
+            let hasMatch = false;
+            for (const re of regexes) {
+                re.lastIndex = 0;
+                if (re.test(text)) {
+                    hasMatch = true;
+                    break;
+                }
+            }
+            if (!hasMatch) continue;
+
+            let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            for (const re of regexes) {
+                re.lastIndex = 0;
+                safeText = safeText.replace(re, (m) => `<mark style="background:${settings.highlightBg}; color:${settings.highlightFg};">${m}</mark>`);
+            }
+
+            const tempSpan = document.createElement('span');
+            tempSpan.innerHTML = safeText;
+
+            const parent = textNode.parentNode;
+            if (parent) {
+                while (tempSpan.firstChild) {
+                    parent.insertBefore(tempSpan.firstChild, textNode);
+                }
+                parent.removeChild(textNode);
+            }
+        }
     }
 }

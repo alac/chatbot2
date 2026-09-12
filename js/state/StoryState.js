@@ -159,6 +159,7 @@ export class StoryState {
 
     appendBatchDrafts(msgIndex, count) {
         if (this.history[msgIndex]) {
+            this.history[msgIndex].isBatch = true;
             for(let i=0; i<count; i++) {
                 this.history[msgIndex].drafts.push({ model: '', content: '', reasoning: '', status: 'streaming', duration: 0, markdownOverride: null, usage: null, isStale: false });
             }

@@ -126,15 +126,26 @@ export class UIManager {
             const idx = parseInt(document.getElementById('btn-edit-save').dataset.idx);
             const newContent = document.getElementById('edit-message-content').value;
             const msg = this.state.history[idx];
+            if (!msg) return;
 
             if (msg.role === 'aggregation') {
+                if (msg.meta.displayInput === newContent) {
+                    document.getElementById('edit-modal').classList.add('hidden');
+                    return;
+                }
+                const oldInstructions = msg.meta.displayInput;
                 msg.meta.displayInput = newContent;
-                msg.drafts[0].content = `These are variations of the same response. We want to aggregate them according to this request: ${newContent}\n\n`; 
+                if (oldInstructions && msg.drafts[0]?.content) {
+                    msg.drafts[0].content = msg.drafts[0].content.replaceAll(oldInstructions, newContent);
+                }
+                this.state.redoStack = [];
             } else {
                 const currentContent = this.state.getContent(idx);
-                if (newContent !== currentContent) {
-                    this.state.editTurn(idx, newContent);
+                if (newContent === currentContent) {
+                    document.getElementById('edit-modal').classList.add('hidden');
+                    return;
                 }
+                this.state.editTurn(idx, newContent);
             }
             
             document.getElementById('edit-modal').classList.add('hidden');
@@ -333,13 +344,17 @@ export class UIManager {
     async generateAdditionalDrafts(msgIndex, modelList) {
         if (this.activeBatch) return;
 
-        // Temporarily pop messages after msgIndex to build payload up to msgIndex
+        // 1. Show Cancel/Stop button
+        document.getElementById('btn-send').classList.add('hidden');
+        document.getElementById('btn-retry').classList.add('hidden');
+        document.getElementById('btn-abort').classList.remove('hidden');
+
+        // 2. Extract context up to msgIndex
         const popped = this.state.history.splice(msgIndex + 1);
         const targetMsg = this.state.history.pop(); 
         
         const payloadObj = this.state.buildPromptPayload();
         
-        // Restore history immediately
         this.state.history.push(targetMsg);
         this.state.history.push(...popped);
 
@@ -349,8 +364,22 @@ export class UIManager {
         this.activeBatch = new ParallelGenerationBatch(payloadObj.messages, count, overrides);
         const draftOffset = targetMsg.drafts.length;
         
+        // 3. Mark message as batch, append draft slots, and point active to new draft
+        targetMsg.isBatch = true;
         this.state.appendBatchDrafts(msgIndex, count);
-        this.draftSwitcher.switchDraftExplicit(msgIndex, draftOffset); 
+        this.state.setActiveDraft(msgIndex, draftOffset);
+
+        // 4. Immediately rebuild the switcher in the DOM so that the dropdown has
+        //    the new options and status icons (allowing streaming updates to bind)
+        const oldSwitcher = document.getElementById(`switcher-${msgIndex}`);
+        const newSwitcher = this.draftSwitcher.buildSwitcherDOM(msgIndex, targetMsg, true);
+        if (oldSwitcher) {
+            oldSwitcher.replaceWith(newSwitcher);
+        } else {
+            const wrapper = document.getElementById(`turn-wrapper-${msgIndex}`);
+            if (wrapper) wrapper.insertBefore(newSwitcher, wrapper.firstChild);
+        }
+        this.draftSwitcher.switchDraftExplicit(msgIndex, draftOffset);
 
         if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
         this.batchStartTime = Date.now();
@@ -414,11 +443,14 @@ export class UIManager {
             if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
             this.activeBatch = null;
             
-            // Re-render switcher to show all newly completed models
-            const topSwitcher = document.getElementById(`switcher-${msgIndex}`);
-            if (topSwitcher) {
-                const newSwitcher = this.draftSwitcher.buildSwitcherDOM(msgIndex, this.state.history[msgIndex], false);
-                topSwitcher.replaceWith(newSwitcher);
+            // 5. Restore standard Send/Retry buttons
+            document.getElementById('btn-abort').classList.add('hidden');
+            document.getElementById('btn-send').classList.remove('hidden');
+            document.getElementById('btn-retry').classList.remove('hidden');
+
+            const currentSwitcher = document.getElementById(`switcher-${msgIndex}`);
+            if (currentSwitcher) {
+                currentSwitcher.replaceWith(this.draftSwitcher.buildSwitcherDOM(msgIndex, this.state.history[msgIndex], false));
             }
             this.summaryManager.updateSummaryMeter();
             this.autoSave();
