@@ -2,6 +2,10 @@ import { settings } from '../state/AppSettings.js';
 import { StoryState } from '../state/StoryState.js';
 import { ParallelGenerationBatch } from '../api/OpenAIClient.js';
 import { StorageManager } from '../storage/StorageManager.js';
+
+import { TextRenderer } from './TextRenderer.js';
+import { DraftSwitcher } from './DraftSwitcher.js';
+
 import { ApplyEditsManager } from './ApplyEditsManager.js';
 import { BrainstormManager } from './BrainstormManager.js';
 import { SummaryManager } from './SummaryManager.js';
@@ -38,6 +42,7 @@ export class UIManager {
         this.hardcodedMoods = ['Action-packed', 'Aggressive', 'Alien', 'Angsty', 'Bleak', 'Chaotic', 'Cheerful', 'Cinematic', 'Comedic', 'Cozy', 'Creepy', 'Cyberpunk', 'Dark', 'Desperate', 'Dramatic', 'Dreamy', 'Eerie', 'Epic', 'Euphoric', 'Fast-paced', 'Flirty', 'Gloomy', 'Gothic', 'Gritty', 'Heartwarming', 'Heroic', 'Hopeful', 'Horror', 'Intense', 'Lighthearted', 'Melancholic', 'Mysterious', 'Noir', 'Nostalgic', 'Ominous', 'Optimistic', 'Peaceful', 'Philosophical', 'Playful', 'Romantic', 'Sci-Fi', 'Sensual', 'Sexy', 'Serious', 'Slow-burn', 'Steampunk', 'Suspenseful', 'Tense', 'Tragic', 'Whimsical', 'Wholesome'];
 
         // Instantiate sub-managers
+        this.draftSwitcher = new DraftSwitcher(this);
         this.applyEditsManager = new ApplyEditsManager(this);
         this.brainstormManager = new BrainstormManager(this);
         this.summaryManager = new SummaryManager(this);
@@ -100,7 +105,7 @@ export class UIManager {
                 const lastIdx = this.state.history.length - 1;
                 const msg = this.state.history[lastIdx];
                 if (msg.isBatch && msg.drafts.length > 1) {
-                    this.switchDraft(lastIdx, e.key === 'ArrowLeft' ? -1 : 1);
+                    this.draftSwitcher.switchDraft(lastIdx, e.key === 'ArrowLeft' ? -1 : 1);
                 }
             }
         });
@@ -120,14 +125,18 @@ export class UIManager {
         document.getElementById('btn-edit-save').addEventListener('click', () => {
             const idx = parseInt(document.getElementById('btn-edit-save').dataset.idx);
             const newContent = document.getElementById('edit-message-content').value;
-            const currentContent = this.state.getContent(idx);
-            
-            if (newContent === currentContent) {
-                document.getElementById('edit-modal').classList.add('hidden');
-                return;
+            const msg = this.state.history[idx];
+
+            if (msg.role === 'aggregation') {
+                msg.meta.displayInput = newContent;
+                msg.drafts[0].content = `These are variations of the same response. We want to aggregate them according to this request: ${newContent}\n\n`; 
+            } else {
+                const currentContent = this.state.getContent(idx);
+                if (newContent !== currentContent) {
+                    this.state.editTurn(idx, newContent);
+                }
             }
             
-            this.state.editTurn(idx, newContent);
             document.getElementById('edit-modal').classList.add('hidden');
             this.renderAll();
             this.autoSave();
@@ -278,7 +287,8 @@ export class UIManager {
                     }
                     if (contentNode) {
                         const draftObj = this.state.history[newIdx].drafts[actualDraftIdx];
-                        this.setNodeContent(contentNode, data.content, draftObj);
+                        const isHighlight = newIdx >= this.state.history.length - settings.highlightTurnCount;
+                        TextRenderer.setNodeContent(contentNode, data.content, draftObj, isHighlight);
                     }
                     
                     if (!this.isUserScrolledUp) this.scrollToBottom();
@@ -320,69 +330,103 @@ export class UIManager {
         }
     }
 
+    async generateAdditionalDrafts(msgIndex, modelList) {
+        if (this.activeBatch) return;
+
+        // Temporarily pop messages after msgIndex to build payload up to msgIndex
+        const popped = this.state.history.splice(msgIndex + 1);
+        const targetMsg = this.state.history.pop(); 
+        
+        const payloadObj = this.state.buildPromptPayload();
+        
+        // Restore history immediately
+        this.state.history.push(targetMsg);
+        this.state.history.push(...popped);
+
+        const count = modelList.length;
+        const overrides = modelList.map(m => ({ enabled: true, model: m }));
+        
+        this.activeBatch = new ParallelGenerationBatch(payloadObj.messages, count, overrides);
+        const draftOffset = targetMsg.drafts.length;
+        
+        this.state.appendBatchDrafts(msgIndex, count);
+        this.draftSwitcher.switchDraftExplicit(msgIndex, draftOffset); 
+
+        if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
+        this.batchStartTime = Date.now();
+        this.batchTimerInterval = setInterval(() => {
+            if (!this.activeBatch || this.activeBatch.isFinished) {
+                clearInterval(this.batchTimerInterval);
+                return;
+            }
+            const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
+            this.activeBatch.jobs.forEach((job, i) => {
+                if (job.status === 'streaming') {
+                    const actualDraftIdx = i + draftOffset;
+                    const timerEl = document.getElementById(`batch-timer-${msgIndex}-${actualDraftIdx}`);
+                    if (timerEl) {
+                        const draftData = this.state.history[msgIndex].drafts[actualDraftIdx];
+                        const totalChars = (draftData.content?.length || 0) + (draftData.reasoning?.length || 0);
+                        timerEl.textContent = `(~${Math.ceil(totalChars / charsRatio)}t)`;
+                    }
+                }
+            });
+        }, 100);
+
+        try {
+            await this.activeBatch.startAll((draftIdx, data) => {
+                const actualDraftIdx = draftIdx + draftOffset;
+                this.state.updateBatchDraft(msgIndex, actualDraftIdx, data);
+                
+                if (this.state.history[msgIndex].activeDraftIndex === actualDraftIdx) {
+                    const contentNode = document.getElementById(`content-${msgIndex}`);
+                    const reasonNode = document.getElementById(`reasoning-${msgIndex}`);
+                    const reasonDiv = document.getElementById(`reasoning-block-${msgIndex}`);
+                    
+                    if (data.reasoning) {
+                        let wasAtBottom = true;
+                        if (reasonDiv && !reasonDiv.classList.contains('hidden')) {
+                            wasAtBottom = Math.abs(reasonDiv.scrollHeight - reasonDiv.scrollTop - reasonDiv.clientHeight) < 30;
+                        }
+                        if (reasonNode) reasonNode.textContent = data.reasoning;
+                        if (reasonDiv) {
+                            reasonDiv.classList.remove('hidden');
+                            if (data.status === 'streaming' && wasAtBottom) reasonDiv.scrollTop = reasonDiv.scrollHeight;
+                        }
+                    }
+                    if (contentNode) {
+                        const draftObj = this.state.history[msgIndex].drafts[actualDraftIdx];
+                        const isHighlight = msgIndex >= this.state.history.length - settings.highlightTurnCount;
+                        TextRenderer.setNodeContent(contentNode, data.content, draftObj, isHighlight);
+                    }
+                    if (!this.isUserScrolledUp) this.scrollToBottom();
+                }
+
+                const iconEl = document.getElementById(`draft-icon-${msgIndex}-${actualDraftIdx}`);
+                if (iconEl) iconEl.textContent = {'done':'✔️', 'error':'❌', 'streaming':'🕒'}[data.status] || '';
+                
+                if (data.status !== 'streaming') {
+                    const timerEl = document.getElementById(`batch-timer-${msgIndex}-${actualDraftIdx}`);
+                    if (timerEl) timerEl.textContent = `(${data.duration}s)`;
+                }
+            });
+        } finally {
+            if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
+            this.activeBatch = null;
+            
+            // Re-render switcher to show all newly completed models
+            const topSwitcher = document.getElementById(`switcher-${msgIndex}`);
+            if (topSwitcher) {
+                const newSwitcher = this.draftSwitcher.buildSwitcherDOM(msgIndex, this.state.history[msgIndex], false);
+                topSwitcher.replaceWith(newSwitcher);
+            }
+            this.summaryManager.updateSummaryMeter();
+            this.autoSave();
+        }
+    }
+
     handleAbort() {
         if (this.activeBatch) this.activeBatch.cancelAll();
-    }
-
-    shouldUseMarkdown(content, draftOverride) {
-        if (draftOverride !== undefined && draftOverride !== null) return draftOverride;
-        return !/<(?:edit|old|new|reasoning)[>\s]/i.test(content) && settings.renderMarkdown;
-    }
-
-    setNodeContent(node, content, draft) {
-        const visuallyApplied = settings.applyRegexes(content, 'visually');
-        
-        let htmlBlocks = [];
-        let processed = visuallyApplied.replace(/<html>([\s\S]*?)<\/html>/gi, (m, inner) => {
-            const clean = window.DOMPurify ? window.DOMPurify.sanitize(inner) : inner;
-            htmlBlocks.push(clean);
-            return `%%HTML_BLOCK_${htmlBlocks.length - 1}%%`;
-        });
-
-        processed = processed.replace(/<(\/?)([a-zA-Z][^>]*)>/g, '&lt;$1$2&gt;');
-
-        if (this.shouldUseMarkdown(content, draft.markdownOverride)) {
-            processed = marked.parse(processed);
-            node.classList.add('markdown-body');
-        } else {
-            processed = processed.replace(/\n/g, '<br>');
-            node.classList.remove('markdown-body');
-        }
-
-        htmlBlocks.forEach((block, i) => {
-            processed = processed.replace(`%%HTML_BLOCK_${i}%%`, block);
-        });
-
-        node.innerHTML = processed;
-
-        // Inject Code Block Copy Buttons
-        const preElements = node.querySelectorAll('pre');
-        preElements.forEach(pre => {
-            if (pre.parentElement.classList.contains('code-block-wrapper')) return;
-            
-            const wrapper = document.createElement('div');
-            wrapper.className = 'code-block-wrapper';
-            pre.parentNode.insertBefore(wrapper, pre);
-            
-            const topBar = document.createElement('div');
-            topBar.className = 'code-top-bar';
-            
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'code-copy-btn';
-            copyBtn.title = 'Copy code';
-            copyBtn.innerHTML = '📋';
-            copyBtn.addEventListener('click', () => {
-                const code = pre.innerText || pre.textContent;
-                navigator.clipboard.writeText(code).then(() => {
-                    copyBtn.innerHTML = '✅';
-                    setTimeout(() => copyBtn.innerHTML = '📋', 2000);
-                });
-            });
-            
-            topBar.appendChild(copyBtn);
-            wrapper.appendChild(topBar);
-            wrapper.appendChild(pre);
-        });
     }
 
     renderAll() {
@@ -430,94 +474,12 @@ export class UIManager {
         this.summaryManager.updateSummaryMeter();
     }
 
-    buildSwitcherDOM(index, msg, isStreaming) {
-        const switcher = document.createElement('div');
-        switcher.className = `draft-switcher top`;
-        switcher.id = `switcher-${index}`;
-        
-        const controlsRow = document.createElement('div');
-        controlsRow.className = 'switcher-controls';
-
-        const btnPrev = document.createElement('button');
-        btnPrev.textContent = '◀';
-        btnPrev.onclick = () => this.switchDraft(index, -1);
-        
-        const select = document.createElement('select');
-        select.id = `draft-select-${index}`;
-        
-        const activeBatchStartIdx = msg.drafts.length - (this.activeBatch ? this.activeBatch.jobs.length : 0);
-
-        msg.drafts.forEach((d, i) => {
-            const opt = document.createElement('option');
-            opt.value = i;
-            let modelStr = d.model;
-            
-            if (isStreaming && !d.isStale && this.activeBatch && i >= activeBatchStartIdx) {
-                const job = this.activeBatch.jobs[i - activeBatchStartIdx];
-                if (job) modelStr = job.model;
-            }
-
-            const staleMarker = d.isStale ? ' (Old)' : '';
-            opt.textContent = `V${i+1} | ${modelStr ? modelStr.split('/').pop() : 'Unknown'}${staleMarker}`;
-            if (i === msg.activeDraftIndex) opt.selected = true;
-            select.appendChild(opt);
-        });
-        select.onchange = (e) => this.switchDraftExplicit(index, parseInt(e.target.value));
-
-        const btnNext = document.createElement('button');
-        btnNext.textContent = '▶';
-        btnNext.onclick = () => this.switchDraft(index, 1);
-
-        const btnMerge = document.createElement('button');
-        btnMerge.innerHTML = '🔀';
-        btnMerge.title = 'Merge Drafts';
-        btnMerge.onclick = () => this.draftMergeManager.open(index);
-
-        controlsRow.appendChild(btnPrev);
-        controlsRow.appendChild(select);
-        controlsRow.appendChild(btnNext);
-        controlsRow.appendChild(btnMerge);
-
-        const statusRow = document.createElement('div');
-        statusRow.className = 'switcher-status';
-        
-        msg.drafts.forEach((d, i) => {
-            const spanGroup = document.createElement('span');
-            
-            const icon = document.createElement('span');
-            icon.id = `draft-icon-${index}-${i}`;
-            icon.textContent = d.status === 'done' ? '✔️' : (d.status === 'error' ? '❌' : '🕒');
-            if (i === msg.activeDraftIndex) icon.classList.add('active-icon');
-            
-            const timer = document.createElement('span');
-            timer.id = `batch-timer-${index}-${i}`;
-            timer.style.marginLeft = '2px';
-            
-            if (d.isStale) {
-                timer.textContent = '[X]';
-            } else if (isStreaming && d.status === 'streaming') {
-                const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
-                const totalChars = (d.content?.length || 0) + (d.reasoning?.length || 0);
-                timer.textContent = `(~${Math.ceil(totalChars / charsRatio)}t)`;
-            } else {
-                timer.textContent = `(${d.duration}s)`;
-            }
-
-            spanGroup.appendChild(icon);
-            spanGroup.appendChild(timer);
-            statusRow.appendChild(spanGroup);
-        });
-
-        switcher.appendChild(controlsRow);
-        switcher.appendChild(statusRow);
-        return switcher;
-    }
-
     appendTurnToDOM(role, index) {
         const msg = this.state.history[index];
         const isStreaming = this.activeBatch && index === this.state.history.length - 1;
         const isLatestMessage = index === this.state.history.length - 1;
         const isOutOfContext = index <= this.state.contextBoundaryIndex;
+        const isHighlight = index >= this.state.history.length - settings.highlightTurnCount;
         
         const wrapper = document.createElement('div');
         wrapper.className = `turn ${role}`;
@@ -528,28 +490,83 @@ export class UIManager {
         const bubble = document.createElement('div');
         bubble.className = 'turn-bubble';
 
-        // System Role Rendering
+        // System Role
         if (role === 'system') {
             const contentDiv = document.createElement('div');
             contentDiv.className = 'turn-content';
             const spanContent = document.createElement('div');
             spanContent.id = `content-${index}`;
-            this.setNodeContent(spanContent, msg.drafts[0].content || '', msg.drafts[0]);
+            TextRenderer.setNodeContent(spanContent, msg.drafts[0].content || '', msg.drafts[0], isHighlight);
             contentDiv.appendChild(spanContent);
             bubble.appendChild(contentDiv);
         }
-        // Aggregation Request Role Rendering
+        // Aggregation Request Role
         else if (role === 'aggregation') {
             const header = document.createElement('div');
             header.className = 'aggregation-header';
             header.innerHTML = `<span>🛠️ Aggregation Request</span>`;
             bubble.appendChild(header);
 
+            // Action Controls
+            const actionBar = document.createElement('div');
+            actionBar.className = 'action-bar';
+            const iconsDiv = document.createElement('div');
+            iconsDiv.className = 'action-icons';
+            
+            const btnHide = document.createElement('span');
+            btnHide.textContent = msg.isHidden ? '🙈' : '👁️';
+            btnHide.className = 'hide-toggle';
+            if (msg.isHidden) btnHide.classList.add('active');
+            btnHide.title = msg.isHidden ? "Unhide from context" : "Hide from context";
+            btnHide.addEventListener('click', () => {
+                msg.isHidden = !msg.isHidden;
+                btnHide.textContent = msg.isHidden ? '🙈' : '👁️';
+                btnHide.title = msg.isHidden ? "Unhide from context" : "Hide from context";
+                if (msg.isHidden) wrapper.classList.add('hidden-msg');
+                else wrapper.classList.remove('hidden-msg');
+                this.state.buildPromptPayload();
+                this.summaryManager.updateSummaryMeter();
+                this.autoSave();
+            });
+            iconsDiv.appendChild(btnHide);
+
+            const btnEdit = document.createElement('span');
+            btnEdit.textContent = '✏️';
+            btnEdit.title = "Edit";
+            btnEdit.addEventListener('click', () => {
+                document.getElementById('edit-message-content').value = msg.meta.displayInput || '';
+                document.getElementById('btn-edit-save').dataset.idx = index;
+                document.getElementById('edit-modal').classList.remove('hidden');
+            });
+            iconsDiv.appendChild(btnEdit);
+            
+            const btnDelete = document.createElement('span');
+            btnDelete.textContent = '🗑️';
+            btnDelete.title = "Delete";
+            btnDelete.addEventListener('click', () => {
+                if (confirm("Delete this message?")) {
+                    this.state.deleteTurn(index);
+                    this.state.buildPromptPayload(); 
+                    this.renderAll();
+                    this.autoSave();
+                }
+            });
+            iconsDiv.appendChild(btnDelete);
+            
+            actionBar.appendChild(document.createElement('span')); 
+            actionBar.appendChild(iconsDiv);
+            bubble.appendChild(actionBar);
+
             const contentDiv = document.createElement('div');
             contentDiv.className = 'turn-content';
             contentDiv.style.fontStyle = 'italic';
             contentDiv.style.color = 'var(--text-muted)';
-            contentDiv.textContent = msg.meta.displayInput || '';
+            
+            const spanContent = document.createElement('span');
+            spanContent.id = `content-${index}`;
+            spanContent.textContent = msg.meta.displayInput || '';
+            contentDiv.appendChild(spanContent);
+            
             bubble.appendChild(contentDiv);
         }
         else if (role === 'choices') {
@@ -636,7 +653,7 @@ export class UIManager {
                 btnReroll.textContent = '🔄 Reroll';
                 btnReroll.addEventListener('click', () => {
                     this.state.deleteTurn(index);
-                    this.startChoicesGeneration();
+                    this.brainstormManager.startChoicesGeneration();
                 });
                 
                 const btnDel = document.createElement('button');
@@ -658,7 +675,7 @@ export class UIManager {
             const reasoning = activeDraft.reasoning;
 
             if (msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
-                wrapper.appendChild(this.buildSwitcherDOM(index, msg, isStreaming));
+                wrapper.appendChild(this.draftSwitcher.buildSwitcherDOM(index, msg, isStreaming));
             }
 
             if (!isStreaming) {
@@ -716,10 +733,10 @@ export class UIManager {
                 btnMd.textContent = 'Ⓜ️';
                 btnMd.className = 'md-toggle';
                 btnMd.title = "Toggle Markdown";
-                if (this.shouldUseMarkdown(content || '', activeDraft.markdownOverride)) btnMd.classList.add('active');
+                if (TextRenderer.shouldUseMarkdown(content || '', activeDraft.markdownOverride)) btnMd.classList.add('active');
                 btnMd.addEventListener('click', () => {
                     const currentDraft = this.state.history[index].drafts[this.state.history[index].activeDraftIndex];
-                    const currentlyOn = this.shouldUseMarkdown(currentDraft.content, currentDraft.markdownOverride);
+                    const currentlyOn = TextRenderer.shouldUseMarkdown(currentDraft.content, currentDraft.markdownOverride);
                     currentDraft.markdownOverride = !currentlyOn;
                     this.renderAll();
                     this.autoSave();
@@ -821,7 +838,7 @@ export class UIManager {
             const spanContent = document.createElement('div');
             spanContent.style.display = "inline";
             spanContent.id = `content-${index}`;
-            this.setNodeContent(spanContent, content || '', activeDraft);
+            TextRenderer.setNodeContent(spanContent, content || '', activeDraft, isHighlight);
             contentDiv.appendChild(spanContent);
             
             if (isStreaming) {
@@ -836,70 +853,6 @@ export class UIManager {
 
         wrapper.appendChild(bubble);
         this.container.appendChild(wrapper);
-    }
-
-    switchDraft(msgIndex, dir) {
-        const msg = this.state.history[msgIndex];
-        const len = msg.drafts.length;
-        const newIdx = (msg.activeDraftIndex + dir + len) % len;
-        this.switchDraftExplicit(msgIndex, newIdx);
-    }
-
-    switchDraftExplicit(msgIndex, draftIdx) {
-        this.state.setActiveDraft(msgIndex, draftIdx);
-        
-        const contentNode = document.getElementById(`content-${msgIndex}`);
-        const reasonNode = document.getElementById(`reasoning-${msgIndex}`);
-        const reasonDiv = document.getElementById(`reasoning-block-${msgIndex}`);
-        
-        const msg = this.state.history[msgIndex];
-        const activeDraft = msg.drafts[draftIdx];
-
-        if (contentNode) this.setNodeContent(contentNode, activeDraft.content, activeDraft);
-        if (reasonNode) reasonNode.textContent = activeDraft.reasoning;
-        
-        if (reasonDiv) {
-            if (activeDraft.reasoning) reasonDiv.classList.remove('hidden');
-            else reasonDiv.classList.add('hidden');
-        }
-
-        // Update Dynamic Header/Action Bar Metadata
-        const metaSpan = document.getElementById(`meta-span-${msgIndex}`);
-        if (metaSpan) {
-            const shortModel = activeDraft.model ? activeDraft.model.split('/').pop() : 'Unknown';
-            metaSpan.textContent = `${shortModel} • ${activeDraft.isStale ? '[X]' : activeDraft.duration + 's'}`;
-        }
-        
-        const btnMd = document.getElementById(`btn-md-${msgIndex}`);
-        if (btnMd) {
-            if (this.shouldUseMarkdown(activeDraft.content, activeDraft.markdownOverride)) {
-                btnMd.classList.add('active');
-            } else {
-                btnMd.classList.remove('active');
-            }
-        }
-        
-        const btnUsage = document.getElementById(`btn-usage-${msgIndex}`);
-        if (btnUsage) {
-            if (activeDraft.usage) btnUsage.classList.remove('hidden');
-            else btnUsage.classList.add('hidden');
-        }
-
-        const select = document.getElementById(`draft-select-${msgIndex}`);
-        if (select) select.value = draftIdx;
-
-        msg.drafts.forEach((_, i) => {
-            const icon = document.getElementById(`draft-icon-${msgIndex}-${i}`);
-            if (icon) {
-                if (i === draftIdx) icon.classList.add('active-icon');
-                else icon.classList.remove('active-icon');
-            }
-        });
-        
-        const topSwitcher = document.getElementById(`switcher-${msgIndex}`);
-        if (topSwitcher) {
-            topSwitcher.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
     }
 
     scrollToBottom() {

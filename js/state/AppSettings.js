@@ -56,6 +56,13 @@ export class AppSettings {
         
         // Tools Menu Global Persistence
         this.diceNotation = "1d20";
+        this.highlightEnabled = false;
+        this.highlightBg = '#7f1d1d';
+        this.highlightFg = '#ffffff';
+        this.highlightList = '';
+        this.highlightTurnCount = 3;
+
+        this.recentAdditionalDrafts = []; // Array of Arrays of strings e.g. [["gemma-4"], ["modelA", "modelB"]]
 
         // GitHub Sync State
         this.githubPAT = '';
@@ -89,6 +96,14 @@ export class AppSettings {
             }
 
             if (!this.diceNotation) this.diceNotation = "1d20";
+            
+            if (this.highlightEnabled === undefined) this.highlightEnabled = false;
+            if (!this.highlightBg) this.highlightBg = '#7f1d1d';
+            if (!this.highlightFg) this.highlightFg = '#ffffff';
+            if (!this.highlightList) this.highlightList = '';
+            if (!this.highlightTurnCount) this.highlightTurnCount = 3;
+            if (!Array.isArray(this.recentAdditionalDrafts)) this.recentAdditionalDrafts = [];
+
             if (!this.gistMapping) this.gistMapping = {};
             
             const syncSaved = localStorage.getItem('ai_proto_settings_sync');

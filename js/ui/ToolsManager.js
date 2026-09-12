@@ -40,6 +40,23 @@ export class ToolsManager {
         document.getElementById('btn-close-agg-history').addEventListener('click', () => {
             document.getElementById('agg-history-modal').classList.add('hidden');
         });
+
+        // 4. Slop Highlighting bindings
+        const hlInputs = ['tool-hl-enable', 'tool-hl-turns', 'tool-hl-bg', 'tool-hl-fg', 'tool-hl-list'];
+        hlInputs.forEach(id => {
+            document.getElementById(id).addEventListener('change', () => this.saveHighlightSettings());
+        });
+        document.getElementById('tool-hl-list').addEventListener('input', () => this.saveHighlightSettings());
+    }
+
+    saveHighlightSettings() {
+        settings.highlightEnabled = document.getElementById('tool-hl-enable').checked;
+        settings.highlightTurnCount = parseInt(document.getElementById('tool-hl-turns').value) || 3;
+        settings.highlightBg = document.getElementById('tool-hl-bg').value;
+        settings.highlightFg = document.getElementById('tool-hl-fg').value;
+        settings.highlightList = document.getElementById('tool-hl-list').value;
+        settings.save();
+        this.app.renderAll();
     }
 
     openToolsMenu() {
@@ -50,6 +67,12 @@ export class ToolsManager {
         document.getElementById('tool-names-theme').value = this.app.state.nameTheme;
         document.getElementById('tool-names-male').value = this.app.state.nameCountMale;
         document.getElementById('tool-names-female').value = this.app.state.nameCountFemale;
+        
+        document.getElementById('tool-hl-enable').checked = settings.highlightEnabled;
+        document.getElementById('tool-hl-turns').value = settings.highlightTurnCount;
+        document.getElementById('tool-hl-bg').value = settings.highlightBg;
+        document.getElementById('tool-hl-fg').value = settings.highlightFg;
+        document.getElementById('tool-hl-list').value = settings.highlightList;
         
         // If aggregate tab is active initially
         if (document.getElementById('tools-page-selector').value === 'tab-tool-aggregate') {

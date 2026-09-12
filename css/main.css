@@ -227,6 +227,20 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .merge-equal { background: transparent; border-left: 3px solid var(--text-muted); opacity: 0.8; }
 
 .batch-row-container { display: flex; flex-direction: column; gap: 6px; background: var(--bg-main); padding: 10px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 10px;}
+.recent-config-btn {
+    background: rgba(0,0,0,0.2);
+    border: 1px dashed var(--border);
+    color: var(--text-main);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.recent-config-btn:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: var(--text-muted);
+}
 .batch-row-top { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 0.9em; color: var(--text-muted);}
 .batch-row-bottom { display: flex; flex-wrap: wrap; gap: 8px; }
 

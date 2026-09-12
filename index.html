@@ -84,6 +84,7 @@
                     <option value="tab-tool-dice">1. Dice Roll</option>
                     <option value="tab-tool-names">2. Name Generator</option>
                     <option value="tab-tool-aggregate">3. Draft Aggregator</option>
+                    <option value="tab-tool-highlight">4. Slop Highlight</option>
                 </select>
                 <button id="btn-close-tools" class="close-btn">&times;</button>
             </div>
@@ -146,6 +147,67 @@
                     <hr style="margin: 12px 0;">
                     <button id="btn-tool-agg-run" class="primary">Generate Aggregation</button>
                 </div>
+
+                <div id="tab-tool-highlight" class="tab-pane" style="flex:1;">
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Highlight repetitive phrases in the last few messages to easily spot AI slop.</p>
+                    <div class="setting-row">
+                        <span class="label-text">Enable Highlighting</span>
+                        <input type="checkbox" id="tool-hl-enable">
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Search Window (Turns)</span>
+                        <input type="number" id="tool-hl-turns" min="1" max="20" value="3" style="width: 60px;">
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Background Color</span>
+                        <input type="color" id="tool-hl-bg" value="#7f1d1d">
+                    </div>
+                    <div class="setting-row">
+                        <span class="label-text">Text Color</span>
+                        <input type="color" id="tool-hl-fg" value="#ffffff">
+                    </div>
+                    <div style="display:flex; flex-direction:column; flex:1; min-height:150px; margin-top:12px;">
+                        <span class="label-text" style="margin-bottom:4px;">Phrases / Regex (one per line)</span>
+                        <textarea id="tool-hl-list" placeholder="e.g. shivers down my spine\n/testament to/i" style="flex:1; resize:none; padding:12px; font-family:monospace; white-space:pre;"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Drafts Modal -->
+    <div id="add-drafts-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="max-height: 80vh; width: 600px;">
+            <div class="modal-header">
+                <h2>Generate Additional Drafts</h2>
+                <button id="btn-close-add-drafts" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 16px;">
+                <div style="font-size: 0.9em; color: var(--text-muted);">Recent Configurations:</div>
+                <div id="add-drafts-recent" style="display:flex; flex-wrap:wrap; gap: 8px; margin-bottom: 8px;">
+                    <!-- Filled by JS -->
+                </div>
+                
+                <hr style="margin:0;">
+                
+                <div class="setting-row">
+                    <span class="label-text">Number of Drafts</span>
+                    <select id="add-drafts-count" style="width: 100px;">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                    </select>
+                </div>
+                
+                <div id="add-drafts-selectors" style="display:flex; flex-direction:column; gap:8px;">
+                    <!-- Selects populated by JS -->
+                    <select id="add-drafts-model-0" class="model-dropdown hidden"></select>
+                    <select id="add-drafts-model-1" class="model-dropdown hidden"></select>
+                    <select id="add-drafts-model-2" class="model-dropdown hidden"></select>
+                </div>
+            </div>
+            <div style="padding: 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:flex-end;">
+                <button id="btn-generate-add-drafts" class="primary">Generate Drafts</button>
             </div>
         </div>
     </div>
