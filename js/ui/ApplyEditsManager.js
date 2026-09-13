@@ -1,6 +1,6 @@
-// BEGIN FILE: js/ui/ApplyEditsManager.js
 import { settings } from '../state/AppSettings.js';
 import { diffWords } from '../utils/diff.js';
+import { TextRenderer } from './TextRenderer.js';
 
 export class ApplyEditsManager {
     constructor(app) {
@@ -354,7 +354,10 @@ export class ApplyEditsManager {
             
             if (msg.activeDraftIndex === edit.sourceDraftIndex) {
                 const contentNode = document.getElementById(`content-${msgIdx}`);
-                if (contentNode) this.app.setNodeContent(contentNode, draft.content, draft);
+                if (contentNode) {
+                    const isHighlight = msgIdx >= this.app.state.history.length - settings.highlightTurnCount;
+                    TextRenderer.setNodeContent(contentNode, draft.content, draft, isHighlight);
+                }
             }
         }
         
