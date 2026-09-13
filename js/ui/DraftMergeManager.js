@@ -79,22 +79,6 @@ export class DraftMergeManager {
 
         document.getElementById('dm-source-scroll').addEventListener('scroll', () => this.updateMinimapViewport());
 
-        // Global Keyboard Shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (document.getElementById('draft-merge-modal').classList.contains('hidden')) return;
-            
-            // Ignore if they are actively typing in the textarea
-            if (e.target.id === 'dm-output-text') return;
-
-            if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                this.navigateDraft(-1);
-            } else if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                this.navigateDraft(1);
-            }
-        });
-
         this.bindSelectLogic();
         this.bindResizerLogic();
     }

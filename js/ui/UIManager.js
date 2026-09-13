@@ -95,21 +95,6 @@ export class UIManager {
             this.input.style.height = (this.input.scrollHeight) + 'px';
         });
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.activeBatch) {
-                this.handleAbort();
-                return;
-            }
-            if (e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-                if (this.state.history.length === 0) return;
-                const lastIdx = this.state.history.length - 1;
-                const msg = this.state.history[lastIdx];
-                if (msg.isBatch && msg.drafts.length > 1) {
-                    this.draftSwitcher.switchDraft(lastIdx, e.key === 'ArrowLeft' ? -1 : 1);
-                }
-            }
-        });
-
         document.getElementById('btn-more-menu').addEventListener('click', () => {
             document.getElementById('quick-menu').classList.toggle('hidden');
         });
