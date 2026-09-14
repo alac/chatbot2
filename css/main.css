@@ -266,6 +266,19 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 
 @media (max-width: 768px) {
     .hide-mobile { display: none !important; }
+    
+    /* Dock the floating edit button to the bottom on mobile */
+    .floating-edit-btn {
+        top: auto !important;
+        bottom: 80px !important; /* Rests right above the input bar */
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        margin-top: 0 !important;
+    }
+    .floating-edit-btn.visible {
+        margin-top: 0 !important;
+        bottom: 95px !important; /* Slight upward pop animation */
+    }
     .modal-content { width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; }
     .setting-row { flex-wrap: wrap; }
     /* Mobile dropdown input stacking fix */
@@ -696,7 +709,7 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     cursor: pointer;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s, margin-top 0.2s;
+    transition: opacity 0.2s, margin-top 0.2s, bottom 0.2s;
 }
 .floating-edit-btn.visible {
     opacity: 1;
