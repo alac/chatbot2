@@ -1,3 +1,4 @@
+// BEGIN FILE: js/ui/TextRenderer.js
 import { settings } from '../state/AppSettings.js';
 
 export class TextRenderer {
@@ -6,74 +7,59 @@ export class TextRenderer {
         return !/<(?:edit|old|new|reasoning)[>\s]/i.test(content) && settings.renderMarkdown;
     }
 
-    static splitParagraphsSafely(text) {
-        let blocks = [];
-        let inCode = false;
-        let currentBlock = "";
-        let lines = text.split('\n');
-        
-        for(let i=0; i<lines.length; i++) {
-            let line = lines[i];
-            if (line.startsWith('```')) inCode = !inCode;
-            
-            currentBlock += line;
-            if (i < lines.length - 1) currentBlock += '\n';
-            
-            if (!inCode && line.trim() === '' && i < lines.length - 1) {
-                blocks.push(currentBlock);
-                currentBlock = "";
-            }
-        }
-        if (currentBlock) blocks.push(currentBlock);
-        return blocks;
-    }
-
     static setNodeContent(node, content, draft, isWithinHighlightRange = false) {
-        // 1. Global Visual Regexes
-        let processed = settings.applyRegexes(content || '', 'visually');
+        const useMarkdown = TextRenderer.shouldUseMarkdown(content, draft?.markdownOverride);
+        
+        // 1. Get raw tokens via AST to maintain a 1:1 mapping with Surgical Edit
+        const tokens = marked.lexer(content || '');
+        let finalHtml = '';
 
-        // 2. Stash raw HTML blocks (used by AI Edits)
-        let htmlBlocks = [];
-        processed = processed.replace(/<html>([\s\S]*?)<\/html>/gi, (m, inner) => {
-            const clean = window.DOMPurify ? window.DOMPurify.sanitize(inner) : inner;
-            htmlBlocks.push(clean);
-            return `%%HTML_BLOCK_${htmlBlocks.length - 1}%%`;
+        tokens.forEach((token, idx) => {
+            // 2. Global Visual Regexes applied to the token's exact raw text
+            let processed = settings.applyRegexes(token.raw, 'visually');
+
+            // 3. Stash raw HTML blocks (used by AI Edits)
+            let htmlBlocks = [];
+            processed = processed.replace(/<html>([\s\S]*?)<\/html>/gi, (m, inner) => {
+                const clean = window.DOMPurify ? window.DOMPurify.sanitize(inner) : inner;
+                htmlBlocks.push(clean);
+                return `%%HTML_BLOCK_${idx}_${htmlBlocks.length - 1}%%`;
+            });
+
+            // 4. Escape LLM tags like <action>, <thought> so they don't break the DOM
+            processed = processed.replace(/<(\/?)([a-zA-Z][^>]*)>/g, '&lt;$1$2&gt;');
+
+            // 5. Markdown Rendering per block
+            let blockHtml;
+            if (useMarkdown) {
+                blockHtml = marked.parse(processed);
+            } else {
+                blockHtml = processed.replace(/\n/g, '<br>');
+            }
+
+            // 6. Restore HTML Blocks
+            htmlBlocks.forEach((block, i) => {
+                blockHtml = blockHtml.replace(`%%HTML_BLOCK_${idx}_${i}%%`, block);
+            });
+
+            // Wrap in AST mapping tracking div
+            finalHtml += `<div class="md-block" data-block-idx="${idx}">${blockHtml}</div>`;
         });
 
-        // 3. Escape LLM tags like <action>, <thought> so they don't break the DOM
-        processed = processed.replace(/<(\/?)([a-zA-Z][^>]*)>/g, '&lt;$1$2&gt;');
-
-        // 4. Inject tracking markers safely at the END of each block (so they don't break markdown headers/quotes)
-        const blocks = TextRenderer.splitParagraphsSafely(processed);
-        processed = blocks.map((b, i) => {
-            const match = b.match(/(\n*)$/);
-            const trailing = match ? match[1] : '';
-            const core = b.substring(0, b.length - trailing.length);
-            return `${core}<span class="p-marker" data-p="${i}"></span>${trailing}`;
-        }).join('');
-
-        // 5. Markdown Rendering
-        if (TextRenderer.shouldUseMarkdown(processed, draft.markdownOverride)) {
-            processed = marked.parse(processed);
+        if (useMarkdown) {
             node.classList.add('markdown-body');
         } else {
-            processed = processed.replace(/\n/g, '<br>');
             node.classList.remove('markdown-body');
         }
 
-        // 5. Restore HTML Blocks
-        htmlBlocks.forEach((block, i) => {
-            processed = processed.replace(`%%HTML_BLOCK_${i}%%`, block);
-        });
+        node.innerHTML = finalHtml;
 
-        node.innerHTML = processed;
-
-        // 6. Apply Slop Highlighting safely on rendered DOM text nodes
+        // 7. Apply Slop Highlighting safely on rendered DOM text nodes
         if (isWithinHighlightRange && settings.highlightEnabled && settings.highlightList.trim()) {
             TextRenderer.applySlopHighlighting(node);
         }
 
-        // 7. Inject Code Block Copy Buttons
+        // 8. Inject Code Block Copy Buttons
         const preElements = node.querySelectorAll('pre');
         preElements.forEach(pre => {
             if (pre.parentElement.classList.contains('code-block-wrapper')) return;
@@ -164,3 +150,4 @@ export class TextRenderer {
         }
     }
 }
+// END FILE: js/ui/TextRenderer.js

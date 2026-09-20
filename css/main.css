@@ -716,6 +716,6 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     pointer-events: auto;
     margin-top: -15px;
 }
-.p-marker {
-    display: none;
+.md-block {
+    display: contents;
 }

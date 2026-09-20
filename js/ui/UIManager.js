@@ -14,6 +14,7 @@ import { QuickRepliesManager } from './QuickRepliesManager.js';
 import { DraftMergeManager } from './DraftMergeManager.js';
 import { MemoryHistoryManager } from './MemoryHistoryManager.js';
 import { NotesManager } from './NotesManager.js';
+import { SurgicalEditManager } from './SurgicalEditManager.js';
 
 import { CloudSyncUI } from './CloudSyncUI.js';
 import { SlotManager } from './SlotManager.js';
@@ -51,6 +52,7 @@ export class UIManager {
         this.draftMergeManager = new DraftMergeManager(this);
         this.memoryHistoryManager = new MemoryHistoryManager(this);
         this.notesManager = new NotesManager(this);
+        this.surgicalEditManager = new SurgicalEditManager(this);
         this.cloudSyncUI = new CloudSyncUI(this);
         this.slotManager = new SlotManager(this);
         this.remoteManagerUI = new RemoteManagerUI(this);
@@ -139,156 +141,6 @@ export class UIManager {
         });
         document.getElementById('btn-close-prompt').addEventListener('click', () => document.getElementById('prompt-modal').classList.add('hidden'));
         document.getElementById('btn-close-usage').addEventListener('click', () => document.getElementById('usage-modal').classList.add('hidden'));
-        
-        // Surgical Edit Bindings
-        document.addEventListener('selectionchange', () => {
-            clearTimeout(this.selectionTimeout);
-            this.selectionTimeout = setTimeout(() => this.handleSelectionChange(), 150);
-        });
-
-        const floatBtn = document.getElementById('floating-edit-btn');
-        floatBtn.addEventListener('mousedown', (e) => {
-            e.preventDefault(); // Prevent focus loss that clears selection
-            this.openSurgicalEdit();
-        });
-
-        document.getElementById('btn-close-surgical').addEventListener('click', () => document.getElementById('surgical-edit-modal').classList.add('hidden'));
-        document.getElementById('btn-surgical-cancel').addEventListener('click', () => document.getElementById('surgical-edit-modal').classList.add('hidden'));
-        
-        document.getElementById('surgical-context-lines').addEventListener('change', (e) => {
-            if (!this.surgicalState) return;
-            this.surgicalState.contextLines = parseInt(e.target.value);
-            this.updateSurgicalModal(false); 
-        });
-
-        document.getElementById('btn-surgical-apply').addEventListener('click', () => this.applySurgicalEdit());
-    }
-
-    handleSelectionChange() {
-        const sel = window.getSelection();
-        const floatBtn = document.getElementById('floating-edit-btn');
-        
-        if (!sel.rangeCount || sel.isCollapsed || !sel.toString().trim()) {
-            floatBtn.classList.remove('visible');
-            return;
-        }
-
-        const range = sel.getRangeAt(0);
-        let container = range.commonAncestorContainer;
-        if (container.nodeType === 3) container = container.parentNode;
-        
-        const turnContent = container.closest('.turn-content');
-        if (!turnContent) {
-            floatBtn.classList.remove('visible');
-            return;
-        }
-        
-        const turnElement = turnContent.closest('.turn');
-        if (!turnElement) return;
-
-        const idMatch = turnElement.id.match(/turn-wrapper-(\d+)/);
-        if (!idMatch) return;
-        
-        const msgIndex = parseInt(idMatch[1]);
-        const rect = range.getBoundingClientRect();
-        
-        floatBtn.style.left = `${rect.left + rect.width / 2}px`;
-        floatBtn.style.top = `${Math.max(10, rect.top)}px`;
-        floatBtn.classList.add('visible');
-        
-        this.pendingSurgicalEdit = { msgIndex, range: range.cloneRange(), turnElement };
-    }
-
-    openSurgicalEdit() {
-        document.getElementById('floating-edit-btn').classList.remove('visible');
-        if (!this.pendingSurgicalEdit) return;
-        
-        const { msgIndex, range, turnElement } = this.pendingSurgicalEdit;
-        const contentNode = turnElement.querySelector(`#content-${msgIndex}`);
-        if (!contentNode) return;
-        
-        const msg = this.state.history[msgIndex];
-        const activeDraft = msg.drafts[msg.activeDraftIndex];
-        const rawBlocks = TextRenderer.splitParagraphsSafely(activeDraft.content);
-        
-        const markers = Array.from(contentNode.querySelectorAll('.p-marker'));
-        if (markers.length === 0) return; 
-        
-        let startP = -1;
-        let endP = -1;
-        let foundEnd = false;
-        
-        markers.forEach(marker => {
-            if (foundEnd || !marker.parentNode) return;
-            
-            const p = parseInt(marker.dataset.p);
-            try {
-                // Returns -1 if marker is before range, 0 if inside, 1 if after
-                const cmp = range.comparePoint(marker.parentNode, Array.from(marker.parentNode.childNodes).indexOf(marker));
-                
-                if (cmp === 0) { 
-                    if (startP === -1) startP = p;
-                    endP = p;
-                } else if (cmp === 1) {
-                    if (startP === -1) startP = p;
-                    endP = p;
-                    foundEnd = true;
-                }
-            } catch (e) {
-                // Fallback for detached nodes
-            }
-        });
-        
-        if (startP === -1) startP = 0;
-        if (endP === -1) endP = markers.length - 1;
-
-        this.surgicalState = { msgIndex, rawBlocks, startP, endP, contextLines: parseInt(document.getElementById('surgical-context-lines').value) || 1 };
-        this.updateSurgicalModal(true);
-        
-        document.getElementById('surgical-edit-modal').classList.remove('hidden');
-        window.getSelection().removeAllRanges();
-    }
-
-    updateSurgicalModal(overwriteTextarea = true) {
-        const { rawBlocks, startP, endP, contextLines } = this.surgicalState;
-        
-        const topStart = Math.max(0, startP - contextLines);
-        const topBlocks = rawBlocks.slice(topStart, startP);
-        const topEl = document.getElementById('surgical-top-context');
-        topEl.textContent = topBlocks.join('');
-        topEl.style.display = topBlocks.length ? 'block' : 'none';
-        
-        if (overwriteTextarea) {
-            const activeBlocks = rawBlocks.slice(startP, endP + 1);
-            document.getElementById('surgical-edit-textarea').value = activeBlocks.join('');
-        }
-        
-        const bottomEnd = Math.min(rawBlocks.length, endP + 1 + contextLines);
-        const bottomBlocks = rawBlocks.slice(endP + 1, bottomEnd);
-        const bottomEl = document.getElementById('surgical-bottom-context');
-        bottomEl.textContent = bottomBlocks.join('');
-        bottomEl.style.display = bottomBlocks.length ? 'block' : 'none';
-    }
-
-    applySurgicalEdit() {
-        if (!this.surgicalState) return;
-        const { msgIndex, rawBlocks, startP, endP } = this.surgicalState;
-        
-        const newActiveText = document.getElementById('surgical-edit-textarea').value;
-        const before = rawBlocks.slice(0, startP).join('');
-        const after = rawBlocks.slice(endP + 1).join('');
-        
-        const finalContent = before + newActiveText + after;
-        
-        const currentContent = this.state.getContent(msgIndex);
-        if (finalContent !== currentContent) {
-            this.state.editTurn(msgIndex, finalContent);
-            this.renderAll();
-            this.autoSave();
-        }
-        
-        document.getElementById('surgical-edit-modal').classList.add('hidden');
-        this.surgicalState = null;
     }
 
     handleRetry() {
