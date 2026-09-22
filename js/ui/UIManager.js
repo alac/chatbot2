@@ -15,6 +15,7 @@ import { DraftMergeManager } from './DraftMergeManager.js';
 import { MemoryHistoryManager } from './MemoryHistoryManager.js';
 import { NotesManager } from './NotesManager.js';
 import { SurgicalEditManager } from './SurgicalEditManager.js';
+import { BatchEditManager } from './BatchEditManager.js';
 
 import { CloudSyncUI } from './CloudSyncUI.js';
 import { SlotManager } from './SlotManager.js';
@@ -53,6 +54,7 @@ export class UIManager {
         this.memoryHistoryManager = new MemoryHistoryManager(this);
         this.notesManager = new NotesManager(this);
         this.surgicalEditManager = new SurgicalEditManager(this);
+        this.batchEditManager = new BatchEditManager(this);
         this.cloudSyncUI = new CloudSyncUI(this);
         this.slotManager = new SlotManager(this);
         this.remoteManagerUI = new RemoteManagerUI(this);

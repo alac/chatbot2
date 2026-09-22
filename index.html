@@ -85,6 +85,7 @@
                     <option value="tab-tool-names">2. Name Generator</option>
                     <option value="tab-tool-aggregate">3. Draft Aggregator</option>
                     <option value="tab-tool-highlight">4. Slop Highlight</option>
+                    <option value="tab-tool-batch-edit">5. Batch Edit</option>
                 </select>
                 <button id="btn-close-tools" class="close-btn">&times;</button>
             </div>
@@ -169,6 +170,54 @@
                     <div style="display:flex; flex-direction:column; flex:1; min-height:150px; margin-top:12px;">
                         <span class="label-text" style="margin-bottom:4px;">Phrases / Regex (one per line)</span>
                         <textarea id="tool-hl-list" placeholder="e.g. shivers down my spine\n/testament to/i" style="flex:1; resize:none; padding:12px; font-family:monospace; white-space:pre;"></textarea>
+                    </div>
+                </div>
+
+                <div id="tab-tool-batch-edit" class="tab-pane" style="flex:1;">
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Modify or delete multiple messages at once. (Use Undo to revert mistakes).</p>
+                    
+                    <div class="setting-row">
+                        <span class="label-text">Range (1-based index)</span>
+                        <div style="display:flex; align-items:center; gap: 8px;">
+                            <input type="number" id="batch-edit-start" min="1" value="1" style="width: 70px;">
+                            <span style="color:var(--text-muted);">to</span>
+                            <input type="number" id="batch-edit-end" min="1" value="1" style="width: 70px;">
+                            <span id="batch-edit-total" style="font-size:0.85em; color:var(--text-muted); margin-left:8px;">(Total: 0)</span>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-row">
+                        <span class="label-text">Quick Select</span>
+                        <div class="btn-group">
+                            <button id="btn-batch-all">All</button>
+                            <button id="btn-batch-last-10">Last 10</button>
+                            <button id="btn-batch-all-user">All User</button>
+                            <button id="btn-batch-all-bot">All Bot</button>
+                        </div>
+                    </div>
+
+                    <div class="setting-row">
+                        <span class="label-text">Role Filter</span>
+                        <select id="batch-edit-role" style="width: 150px;">
+                            <option value="all">All Roles</option>
+                            <option value="user">User Only</option>
+                            <option value="assistant">Assistant Only</option>
+                        </select>
+                    </div>
+
+                    <div class="setting-row">
+                        <span class="label-text">Action</span>
+                        <select id="batch-edit-action" style="width: 200px;">
+                            <option value="hide">🙈 Hide from Context</option>
+                            <option value="show">👁️ Show in Context</option>
+                            <option value="delete">🗑️ Delete Messages</option>
+                        </select>
+                    </div>
+
+                    <hr>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span id="batch-edit-feedback" style="font-size: 0.9em; font-weight: bold; color: var(--accent);">Will affect 0 messages.</span>
+                        <button id="btn-batch-edit-apply" class="primary">Apply Changes</button>
                     </div>
                 </div>
             </div>

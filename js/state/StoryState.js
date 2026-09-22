@@ -29,6 +29,10 @@ export class StoryState {
         
         // Notes Kanban Board
         this.notes = [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
+
+        // Undo Snapshots for Batch Operations
+        this.undoSnapshot = null;
+        this.isSnapshotActive = false;
     }
 
     clear(resetSettings = false) {
@@ -37,6 +41,9 @@ export class StoryState {
         this.lastRawPayload = null;
         this.contextBoundaryIndex = -1;
         this.summary = "";
+        
+        this.undoSnapshot = null;
+        this.isSnapshotActive = false;
 
         if (resetSettings) {
             this.systemPromptHistory = [];
@@ -129,6 +136,8 @@ export class StoryState {
             drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0, markdownOverride: null, usage: null, isStale: false }]
         });
         this.redoStack = []; 
+        this.undoSnapshot = null;
+        this.isSnapshotActive = false;
         this.trimOldDrafts();
     }
 
@@ -147,7 +156,9 @@ export class StoryState {
             meta: {},
             drafts: drafts
         });
-        this.redoStack = []; 
+        this.redoStack = [];
+        this.undoSnapshot = null;
+        this.isSnapshotActive = false;
         this.trimOldDrafts();
     }
 
@@ -167,6 +178,13 @@ export class StoryState {
     }
 
     undo() {
+        if (this.isSnapshotActive && this.undoSnapshot) {
+            this.redoStack.push({ type: 'snapshot', data: structuredClone(this.history) });
+            this.history = this.undoSnapshot;
+            this.undoSnapshot = null;
+            this.isSnapshotActive = false;
+            return true;
+        }
         if (this.history.length > 0) {
             this.redoStack.push(this.history.pop());
             return true;
@@ -176,10 +194,50 @@ export class StoryState {
 
     redo() {
         if (this.redoStack.length > 0) {
-            this.history.push(this.redoStack.pop());
+            const item = this.redoStack.pop();
+            if (item && item.type === 'snapshot') {
+                this.undoSnapshot = structuredClone(this.history);
+                this.isSnapshotActive = true;
+                this.history = item.data;
+                return true;
+            }
+            this.history.push(item);
             return true;
         }
         return false;
+    }
+
+    batchSetHidden(startIdx, endIdx, roleFilter, hiddenState) {
+        this.undoSnapshot = structuredClone(this.history);
+        this.isSnapshotActive = true;
+        this.redoStack = [];
+        
+        let count = 0;
+        for (let i = startIdx; i <= endIdx; i++) {
+            if (!this.history[i]) continue;
+            if (roleFilter === 'all' || this.history[i].role === roleFilter) {
+                this.history[i].isHidden = hiddenState;
+                count++;
+            }
+        }
+        return count;
+    }
+
+    batchDelete(startIdx, endIdx, roleFilter) {
+        this.undoSnapshot = structuredClone(this.history);
+        this.isSnapshotActive = true;
+        this.redoStack = [];
+        
+        const toDelete = new Set();
+        for (let i = startIdx; i <= endIdx; i++) {
+            if (!this.history[i]) continue;
+            if (roleFilter === 'all' || this.history[i].role === roleFilter) {
+                toDelete.add(i);
+            }
+        }
+        
+        this.history = this.history.filter((_, i) => !toDelete.has(i));
+        return toDelete.size;
     }
 
     updateBatchDraft(msgIndex, draftIndex, data) {

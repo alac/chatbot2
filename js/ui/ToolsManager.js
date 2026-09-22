@@ -19,6 +19,7 @@ export class ToolsManager {
             document.getElementById(e.target.value).classList.add('active');
             
             if (e.target.value === 'tab-tool-aggregate') this.populateDraftAggregatorUI();
+            if (e.target.value === 'tab-tool-batch-edit') this.app.batchEditManager.populateUI();
         });
 
         // 1. Dice Tool
@@ -77,6 +78,9 @@ export class ToolsManager {
         // If aggregate tab is active initially
         if (document.getElementById('tools-page-selector').value === 'tab-tool-aggregate') {
             this.populateDraftAggregatorUI();
+        }
+        if (document.getElementById('tools-page-selector').value === 'tab-tool-batch-edit') {
+            this.app.batchEditManager.populateUI();
         }
         
         document.getElementById('tools-modal').classList.remove('hidden');
