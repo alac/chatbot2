@@ -104,8 +104,20 @@ export class RemoteManagerUI {
         btnElement.disabled = true;
 
         try {
-            const encrypted = await GithubClient.getGist(gist.id, settings.githubPAT);
-            const decryptedStr = await CryptoUtils.decryptData(encrypted, settings.encryptionKey);
+            const contentStr = await GithubClient.getGist(gist.id, settings.githubPAT);
+            
+            let encryptedStr = contentStr;
+            try {
+                const parsed = JSON.parse(contentStr);
+                if (parsed && parsed.format === 'ailite_sync_v2') {
+                    encryptedStr = parsed.encrypted;
+                } else if (typeof parsed === 'string') {
+                    // Fallback for V1 legacy gists which were JSON-stringified strings
+                    encryptedStr = parsed;
+                }
+            } catch(e) {}
+
+            const decryptedStr = await CryptoUtils.decryptData(encryptedStr, settings.encryptionKey);
             
             const blob = new Blob([decryptedStr], { type: 'application/json' });
             const a = document.createElement('a');
