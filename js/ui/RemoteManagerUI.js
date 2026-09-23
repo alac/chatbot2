@@ -1,6 +1,6 @@
 import { settings } from '../state/AppSettings.js';
 import { GithubClient } from '../api/GithubClient.js';
-import { CryptoUtils } from '../utils/CryptoUtils.js';
+import { CloudPayloadCodec } from '../sync/CloudPayloadCodec.js';
 
 export class RemoteManagerUI {
     constructor(uiManager) {
@@ -106,18 +106,9 @@ export class RemoteManagerUI {
         try {
             const contentStr = await GithubClient.getGist(gist.id, settings.githubPAT);
             
-            let encryptedStr = contentStr;
-            try {
-                const parsed = JSON.parse(contentStr);
-                if (parsed && parsed.format === 'ailite_sync_v2') {
-                    encryptedStr = parsed.encrypted;
-                } else if (typeof parsed === 'string') {
-                    // Fallback for V1 legacy gists which were JSON-stringified strings
-                    encryptedStr = parsed;
-                }
-            } catch(e) {}
-
-            const decryptedStr = await CryptoUtils.decryptData(encryptedStr, settings.encryptionKey);
+            // Centralized unpacking handles decryption and decompression
+            const result = await CloudPayloadCodec.unpack(contentStr, settings.encryptionKey);
+            const decryptedStr = JSON.stringify(result.data, null, 2);
             
             const blob = new Blob([decryptedStr], { type: 'application/json' });
             const a = document.createElement('a');

@@ -2,6 +2,7 @@ import { settings } from '../state/AppSettings.js';
 import { GithubClient } from '../api/GithubClient.js';
 import { CryptoUtils } from '../utils/CryptoUtils.js';
 import { SyncEngine } from '../sync/SyncEngine.js';
+import { CloudPayloadCodec } from '../sync/CloudPayloadCodec.js';
 
 export class CloudSyncUI {
     constructor(uiManager) {
@@ -132,17 +133,12 @@ export class CloudSyncUI {
         if (!this.isLoggedIn()) throw new Error("Not logged in");
 
         const descriptionWithHash = `${baseDescription} | hash:${computedHash}`;
-        const dataStr = JSON.stringify(rawData);
-        const encrypted = await CryptoUtils.encryptData(dataStr, settings.encryptionKey);
         
-        const v2Payload = {
-            format: 'ailite_sync_v2',
+        // Use Codec to pack into V3 with Compression
+        const contentStr = await CloudPayloadCodec.pack(rawData, settings.encryptionKey, {
             head: computedHash,
-            history: syncHistory || [],
-            updatedAt: Date.now(),
-            encrypted: encrypted
-        };
-        const contentStr = JSON.stringify(v2Payload);
+            history: syncHistory
+        });
         
         const gistId = settings.gistMapping[id];
         let res;
@@ -164,27 +160,15 @@ export class CloudSyncUI {
 
         const contentStr = await GithubClient.getGist(cloudGist.id, settings.githubPAT);
         
-        let encryptedStr = contentStr;
-        let remoteHead = null;
-        let remoteHistory = [];
-
-        try {
-            const parsed = JSON.parse(contentStr);
-            if (parsed.format === 'ailite_sync_v2') {
-                encryptedStr = parsed.encrypted;
-                remoteHead = parsed.head;
-                remoteHistory = parsed.history || [];
-            }
-        } catch(e) {}
-
-        const decryptedStr = await CryptoUtils.decryptData(encryptedStr, settings.encryptionKey);
+        // Codec handles V1, V2, and V3 decompression automatically
+        const result = await CloudPayloadCodec.unpack(contentStr, settings.encryptionKey);
         
-        return { 
-            data: JSON.parse(decryptedStr), 
-            timestamp: new Date(cloudGist.updated_at).getTime(),
-            remoteHead,
-            remoteHistory
-        };
+        // Ensure we still use the Gist's system timestamp as a fallback
+        if (!result.timestamp) {
+            result.timestamp = new Date(cloudGist.updated_at).getTime();
+        }
+        
+        return result;
     }
 
     async handleSyncConflict(localData, localTimestamp, cloudGist, itemType = 'slot', preFetchedPullRes = null) {
