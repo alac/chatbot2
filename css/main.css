@@ -27,7 +27,7 @@
 body { font-family: system-ui, sans-serif; background: var(--bg-main); color: var(--text-main); display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
 .hidden { display: none !important; }
 
-#sticky-draft-toolbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; background: var(--bg-panel); padding: 6px 12px; border-bottom: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 20; flex-shrink: 0; }
+#sticky-draft-toolbar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; align-items: center; background: var(--bg-panel); padding: 6px 4px; border-bottom: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 20; flex-shrink: 0; }
 
 header { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: var(--bg-panel); border-bottom: 1px solid var(--border); gap: 12px; }
 .logo { font-weight: bold; white-space: nowrap; }
@@ -160,9 +160,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .thinking-block::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 .draft-switcher { display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; width: 100%; max-width: 600px;}
-.switcher-controls { display: flex; align-items: center; gap: 4px; flex-wrap: wrap;}
-.switcher-controls select { padding: 2px 6px; font-size: 0.9em; max-width: 150px; text-overflow: ellipsis; min-width: 0;}
-.switcher-controls button { padding: 2px 8px; font-size: 0.9em; }
+.switcher-controls { display: flex; align-items: center; gap: 3px; flex-wrap: nowrap; width: 100%; }
+.switcher-controls select { padding: 2px 4px; font-size: 0.85em; flex: 1; min-width: 60px; max-width: 200px; text-overflow: ellipsis; }
+.switcher-controls button { padding: 2px 7px; font-size: 0.85em; flex-shrink: 0; }
 .switcher-status { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 0.9em; color: var(--text-muted);}
 .switcher-status span.active-icon { border-bottom: 2px solid var(--accent); padding-bottom: 1px;}
 
