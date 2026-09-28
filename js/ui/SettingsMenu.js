@@ -440,12 +440,15 @@ export class SettingsMenu {
         document.getElementById('set-stop-seqs').value = settings.stopSequences;
         
         document.getElementById('set-system-prompt').value = this.uiManager.state.systemPrompt;
+        document.getElementById('set-memory-disabled').checked = this.uiManager.state.disableMemory;
+        
         document.getElementById('set-anote-template').value = this.uiManager.state.anoteTemplate;
         document.getElementById('set-anote-content').value = this.uiManager.state.anoteContent;
         document.getElementById('set-anote-unit').value = this.uiManager.state.anoteUnit;
         document.getElementById('set-anote-depth').value = this.uiManager.state.anoteDepth;
         
         document.getElementById('set-summary-content').value = this.uiManager.state.summary;
+        document.getElementById('set-summary-disabled').checked = this.uiManager.state.disableSummary;
         document.getElementById('set-track-summary').checked = settings.trackSummary;
         document.getElementById('set-summarize-model-txt').value = settings.summarizeModel;
         if (document.getElementById('lbl-active-sum-prompt')) {
@@ -551,6 +554,8 @@ export class SettingsMenu {
         }
         
         this.uiManager.state.systemPrompt = newSysPrompt;
+        this.uiManager.state.disableMemory = document.getElementById('set-memory-disabled').checked;
+        
         this.uiManager.state.anoteTemplate = document.getElementById('set-anote-template').value;
         this.uiManager.state.anoteContent = document.getElementById('set-anote-content').value;
         this.uiManager.state.anoteUnit = document.getElementById('set-anote-unit').value;
@@ -565,6 +570,7 @@ export class SettingsMenu {
         }
 
         this.uiManager.state.summary = document.getElementById('set-summary-content').value;
+        this.uiManager.state.disableSummary = document.getElementById('set-summary-disabled').checked;
         settings.trackSummary = document.getElementById('set-track-summary').checked;
         settings.summarizeModel = document.getElementById('set-summarize-model-txt').value.trim();
 

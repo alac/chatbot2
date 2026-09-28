@@ -20,6 +20,10 @@ export class StoryState {
         this.summary = "";
         this.selectedAutoSumPromptTitle = "Event Log";
         this.selectedAutoSumPromptText = "Summarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.";
+        
+        // Context Toggle State
+        this.disableMemory = false;
+        this.disableSummary = false;
 
         // Slot-Specific Tool Settings
         this.nameTheme = "fantasy";
@@ -46,6 +50,8 @@ export class StoryState {
         this.isSnapshotActive = false;
 
         if (resetSettings) {
+            this.disableMemory = false;
+            this.disableSummary = false;
             this.systemPromptHistory = [];
             this.systemPrompt = "You are a helpful AI assistant.";
             this.anoteTemplate = "[Author's note: <|>]";
@@ -296,14 +302,18 @@ export class StoryState {
         const messages = [];
         const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
         
-        let sysAnoteString = this.systemPrompt.trim();
+        let sysAnoteString = "";
+        if (!this.disableMemory) {
+            sysAnoteString += this.systemPrompt.trim();
+        }
         
-        if (!isSummarizing && this.anoteUnit === "message" && this.anoteContent.trim()) {
-            sysAnoteString += "\n" + this.anoteTemplate.replace('<|>', this.anoteContent.trim());
+        if (!this.disableMemory && !isSummarizing && this.anoteUnit === "message" && this.anoteContent.trim()) {
+            if (sysAnoteString) sysAnoteString += "\n";
+            sysAnoteString += this.anoteTemplate.replace('<|>', this.anoteContent.trim());
         }
 
         let sumLength = 0;
-        if (this.summary.trim()) {
+        if (!this.disableSummary && this.summary.trim()) {
             sumLength = Math.ceil((this.summary.trim().length + 20) / charsRatio);
         }
 
@@ -348,17 +358,17 @@ export class StoryState {
             }
         }
 
-        if (this.systemPrompt.trim() !== "") {
+        if (!this.disableMemory && this.systemPrompt.trim() !== "") {
             messages.push({ role: "system", content: this.systemPrompt.trim() });
         }
 
-        if (this.summary.trim()) {
+        if (!this.disableSummary && this.summary.trim()) {
             messages.push({ role: "system", content: `<summary>\n${this.summary.trim()}\n</summary>` });
         }
 
         includedHistoryMsgs.forEach(m => messages.push(m));
 
-        if (!isSummarizing) {
+        if (!this.disableMemory && !isSummarizing) {
             const anote = this.anoteContent.trim();
             if (anote !== "") {
                 const formattedAnote = this.anoteTemplate.replace('<|>', anote);
@@ -430,6 +440,8 @@ export class StoryState {
         this.aggregationHistory = data.aggregationHistory || [];
         
         this.notes = data.notes || [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
+        this.disableMemory = data.disableMemory || false;
+        this.disableSummary = data.disableSummary || false;
     }
 
     exportData() {
@@ -451,7 +463,9 @@ export class StoryState {
             nameCountMale: this.nameCountMale,
             nameCountFemale: this.nameCountFemale,
             aggregationHistory: this.aggregationHistory,
-            notes: this.notes
+            notes: this.notes,
+            disableMemory: this.disableMemory,
+            disableSummary: this.disableSummary
         };
     }
 

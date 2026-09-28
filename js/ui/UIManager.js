@@ -170,8 +170,7 @@ export class UIManager {
             }
         }
 
-        const oldSwitcher = document.getElementById(`switcher-${this.state.history.length - 1}`);
-        if (oldSwitcher) oldSwitcher.remove();
+        this.draftSwitcher.clearOffsets();
 
         document.getElementById('btn-send').classList.add('hidden');
         document.getElementById('btn-retry').classList.add('hidden');
@@ -230,6 +229,7 @@ export class UIManager {
         }
 
         this.appendTurnToDOM('assistant', newIdx);
+        this.draftSwitcher.renderSwitcher(newIdx, true);
         
         if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
         this.batchStartTime = Date.now();
@@ -239,24 +239,25 @@ export class UIManager {
                 return;
             }
             
-            const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
-            
-            this.activeBatch.jobs.forEach((job, i) => {
-                if (job.status === 'streaming') {
-                    const actualDraftIdx = i + draftOffset;
-                    const timerEl = document.getElementById(`batch-timer-${newIdx}-${actualDraftIdx}`);
-                    if (timerEl) {
-                        const draftData = this.state.history[newIdx].drafts[actualDraftIdx];
-                        const totalChars = (draftData.content?.length || 0) + (draftData.reasoning?.length || 0);
-                        const estTokens = Math.ceil(totalChars / charsRatio);
-                        timerEl.textContent = `(~${estTokens}t)`;
+            if (this.draftSwitcher.activeMsgIndex === newIdx) {
+                const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
+                
+                this.activeBatch.jobs.forEach((job, i) => {
+                    if (job.status === 'streaming') {
+                        const actualDraftIdx = i + draftOffset;
+                        const timerEl = document.getElementById(`tb-timer-${actualDraftIdx}`);
+                        if (timerEl) {
+                            const draftData = this.state.history[newIdx].drafts[actualDraftIdx];
+                            const totalChars = (draftData.content?.length || 0) + (draftData.reasoning?.length || 0);
+                            const estTokens = Math.ceil(totalChars / charsRatio);
+                            timerEl.textContent = `(~${estTokens}t)`;
+                        }
                     }
-                }
-            });
+                });
+            }
         }, 100);
 
         // Save state immediately before sending the network request
-        // so we don't lose the user's message if the app is killed while waiting.
         this.autoSave();
 
         try {
@@ -270,7 +271,6 @@ export class UIManager {
                     const reasonDiv = document.getElementById(`reasoning-block-${newIdx}`);
                     
                     if (data.reasoning) {
-                        // Check if at the bottom BEFORE mutating text content
                         let wasAtBottom = true;
                         if (reasonDiv && !reasonDiv.classList.contains('hidden')) {
                             wasAtBottom = Math.abs(reasonDiv.scrollHeight - reasonDiv.scrollTop - reasonDiv.clientHeight) < 30;
@@ -294,13 +294,15 @@ export class UIManager {
                     if (!this.isUserScrolledUp) this.scrollToBottom();
                 }
 
-                const iconMap = { 'done':'✔️', 'error':'❌', 'streaming':'🕒' };
-                const iconEl = document.getElementById(`draft-icon-${newIdx}-${actualDraftIdx}`);
-                if (iconEl) iconEl.textContent = iconMap[data.status] || '';
-                
-                if (data.status !== 'streaming') {
-                    const timerEl = document.getElementById(`batch-timer-${newIdx}-${actualDraftIdx}`);
-                    if (timerEl) timerEl.textContent = `(${data.duration}s)`;
+                if (this.draftSwitcher.activeMsgIndex === newIdx) {
+                    const iconMap = { 'done':'✔️', 'error':'❌', 'streaming':'🕒' };
+                    const iconEl = document.getElementById(`tb-draft-icon-${actualDraftIdx}`);
+                    if (iconEl) iconEl.textContent = iconMap[data.status] || '';
+                    
+                    if (data.status !== 'streaming') {
+                        const timerEl = document.getElementById(`tb-timer-${actualDraftIdx}`);
+                        if (timerEl) timerEl.textContent = `(${data.duration}s)`;
+                    }
                 }
             });
         } finally {
@@ -323,6 +325,10 @@ export class UIManager {
             if (tempMsgFinal) this.state.history.push(tempMsgFinal);
 
             this.appendTurnToDOM('assistant', newIdx);
+            if (this.draftSwitcher.activeMsgIndex === newIdx) {
+                this.draftSwitcher.renderSwitcher(newIdx, false);
+            }
+            
             this.summaryManager.updateSummaryMeter();
 
             if (!this.isUserScrolledUp) this.scrollToBottom();
@@ -358,16 +364,8 @@ export class UIManager {
         this.state.appendBatchDrafts(msgIndex, count);
         this.state.setActiveDraft(msgIndex, draftOffset);
 
-        // 4. Immediately rebuild the switcher in the DOM so that the dropdown has
-        //    the new options and status icons (allowing streaming updates to bind)
-        const oldSwitcher = document.getElementById(`switcher-${msgIndex}`);
-        const newSwitcher = this.draftSwitcher.buildSwitcherDOM(msgIndex, targetMsg, true);
-        if (oldSwitcher) {
-            oldSwitcher.replaceWith(newSwitcher);
-        } else {
-            const wrapper = document.getElementById(`turn-wrapper-${msgIndex}`);
-            if (wrapper) wrapper.insertBefore(newSwitcher, wrapper.firstChild);
-        }
+        // 4. Update UI
+        this.draftSwitcher.renderSwitcher(msgIndex, true);
         this.draftSwitcher.switchDraftExplicit(msgIndex, draftOffset);
 
         if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
@@ -377,18 +375,20 @@ export class UIManager {
                 clearInterval(this.batchTimerInterval);
                 return;
             }
-            const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
-            this.activeBatch.jobs.forEach((job, i) => {
-                if (job.status === 'streaming') {
-                    const actualDraftIdx = i + draftOffset;
-                    const timerEl = document.getElementById(`batch-timer-${msgIndex}-${actualDraftIdx}`);
-                    if (timerEl) {
-                        const draftData = this.state.history[msgIndex].drafts[actualDraftIdx];
-                        const totalChars = (draftData.content?.length || 0) + (draftData.reasoning?.length || 0);
-                        timerEl.textContent = `(~${Math.ceil(totalChars / charsRatio)}t)`;
+            if (this.draftSwitcher.activeMsgIndex === msgIndex) {
+                const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
+                this.activeBatch.jobs.forEach((job, i) => {
+                    if (job.status === 'streaming') {
+                        const actualDraftIdx = i + draftOffset;
+                        const timerEl = document.getElementById(`tb-timer-${actualDraftIdx}`);
+                        if (timerEl) {
+                            const draftData = this.state.history[msgIndex].drafts[actualDraftIdx];
+                            const totalChars = (draftData.content?.length || 0) + (draftData.reasoning?.length || 0);
+                            timerEl.textContent = `(~${Math.ceil(totalChars / charsRatio)}t)`;
+                        }
                     }
-                }
-            });
+                });
+            }
         }, 100);
 
         try {
@@ -420,12 +420,14 @@ export class UIManager {
                     if (!this.isUserScrolledUp) this.scrollToBottom();
                 }
 
-                const iconEl = document.getElementById(`draft-icon-${msgIndex}-${actualDraftIdx}`);
-                if (iconEl) iconEl.textContent = {'done':'✔️', 'error':'❌', 'streaming':'🕒'}[data.status] || '';
-                
-                if (data.status !== 'streaming') {
-                    const timerEl = document.getElementById(`batch-timer-${msgIndex}-${actualDraftIdx}`);
-                    if (timerEl) timerEl.textContent = `(${data.duration}s)`;
+                if (this.draftSwitcher.activeMsgIndex === msgIndex) {
+                    const iconEl = document.getElementById(`tb-draft-icon-${actualDraftIdx}`);
+                    if (iconEl) iconEl.textContent = {'done':'✔️', 'error':'❌', 'streaming':'🕒'}[data.status] || '';
+                    
+                    if (data.status !== 'streaming') {
+                        const timerEl = document.getElementById(`tb-timer-${actualDraftIdx}`);
+                        if (timerEl) timerEl.textContent = `(${data.duration}s)`;
+                    }
                 }
             });
         } finally {
@@ -437,9 +439,8 @@ export class UIManager {
             document.getElementById('btn-send').classList.remove('hidden');
             document.getElementById('btn-retry').classList.remove('hidden');
 
-            const currentSwitcher = document.getElementById(`switcher-${msgIndex}`);
-            if (currentSwitcher) {
-                currentSwitcher.replaceWith(this.draftSwitcher.buildSwitcherDOM(msgIndex, this.state.history[msgIndex], false));
+            if (this.draftSwitcher.activeMsgIndex === msgIndex) {
+                this.draftSwitcher.renderSwitcher(msgIndex, false);
             }
             this.summaryManager.updateSummaryMeter();
             this.autoSave();
@@ -473,8 +474,11 @@ export class UIManager {
             this.container.appendChild(btn);
         }
 
+        let lastAsstIndex = -1;
         this.state.history.forEach((turn, idx) => {
             if (idx < startIndex) return; 
+            
+            if (turn.role === 'assistant' && !turn.isHidden) lastAsstIndex = idx;
 
             if (idx === this.state.contextBoundaryIndex + 1 && this.state.contextBoundaryIndex >= 0) {
                 const divider = document.createElement('div');
@@ -490,6 +494,12 @@ export class UIManager {
             this.container.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
         } else if (!this.isUserScrolledUp) {
             this.scrollToBottom();
+        }
+
+        if (lastAsstIndex !== -1) {
+            this.draftSwitcher.renderSwitcher(lastAsstIndex, false);
+        } else {
+            this.draftSwitcher.hide();
         }
 
         this.summaryManager.updateSummaryMeter();
@@ -510,6 +520,15 @@ export class UIManager {
 
         const bubble = document.createElement('div');
         bubble.className = 'turn-bubble';
+        
+        if (role === 'assistant') {
+            bubble.style.cursor = 'pointer';
+            bubble.addEventListener('click', (e) => {
+                // Ignore clicks on internal action buttons/inputs
+                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SPAN' && e.target.classList.contains('action-icons')) return;
+                this.draftSwitcher.renderSwitcher(index);
+            });
+        }
 
         // System Role
         if (role === 'system') {
@@ -539,7 +558,8 @@ export class UIManager {
             btnHide.className = 'hide-toggle';
             if (msg.isHidden) btnHide.classList.add('active');
             btnHide.title = msg.isHidden ? "Unhide from context" : "Hide from context";
-            btnHide.addEventListener('click', () => {
+            btnHide.addEventListener('click', (e) => {
+                e.stopPropagation();
                 msg.isHidden = !msg.isHidden;
                 btnHide.textContent = msg.isHidden ? '🙈' : '👁️';
                 btnHide.title = msg.isHidden ? "Unhide from context" : "Hide from context";
@@ -554,7 +574,8 @@ export class UIManager {
             const btnEdit = document.createElement('span');
             btnEdit.textContent = '✏️';
             btnEdit.title = "Edit";
-            btnEdit.addEventListener('click', () => {
+            btnEdit.addEventListener('click', (e) => {
+                e.stopPropagation();
                 document.getElementById('edit-message-content').value = msg.meta.displayInput || '';
                 document.getElementById('btn-edit-save').dataset.idx = index;
                 document.getElementById('edit-modal').classList.remove('hidden');
@@ -564,7 +585,8 @@ export class UIManager {
             const btnDelete = document.createElement('span');
             btnDelete.textContent = '🗑️';
             btnDelete.title = "Delete";
-            btnDelete.addEventListener('click', () => {
+            btnDelete.addEventListener('click', (e) => {
+                e.stopPropagation();
                 if (confirm("Delete this message?")) {
                     this.state.deleteTurn(index);
                     this.state.buildPromptPayload(); 
@@ -695,10 +717,6 @@ export class UIManager {
             const content = activeDraft.content;
             const reasoning = activeDraft.reasoning;
 
-            if (msg.isBatch && msg.drafts.length > 1 && isLatestMessage) {
-                wrapper.appendChild(this.draftSwitcher.buildSwitcherDOM(index, msg, isStreaming));
-            }
-
             if (!isStreaming) {
                 const actionBar = document.createElement('div');
                 actionBar.className = 'action-bar';
@@ -719,7 +737,8 @@ export class UIManager {
                     btnThink.textContent = '🧠';
                     btnThink.className = 'think-toggle';
                     btnThink.title = "Toggle Thinking";
-                    btnThink.addEventListener('click', () => {
+                    btnThink.addEventListener('click', (e) => {
+                        e.stopPropagation();
                         const rDiv = document.getElementById(`reasoning-block-${index}`);
                         if (rDiv) {
                             rDiv.classList.toggle('hidden');
@@ -734,7 +753,8 @@ export class UIManager {
                 btnHide.className = 'hide-toggle';
                 if (msg.isHidden) btnHide.classList.add('active');
                 btnHide.title = msg.isHidden ? "Unhide from context" : "Hide from context";
-                btnHide.addEventListener('click', () => {
+                btnHide.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     msg.isHidden = !msg.isHidden;
                     btnHide.textContent = msg.isHidden ? '🙈' : '👁️';
                     btnHide.title = msg.isHidden ? "Unhide from context" : "Hide from context";
@@ -755,7 +775,8 @@ export class UIManager {
                 btnMd.className = 'md-toggle';
                 btnMd.title = "Toggle Markdown";
                 if (TextRenderer.shouldUseMarkdown(content || '', activeDraft.markdownOverride)) btnMd.classList.add('active');
-                btnMd.addEventListener('click', () => {
+                btnMd.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     const currentDraft = this.state.history[index].drafts[this.state.history[index].activeDraftIndex];
                     const currentlyOn = TextRenderer.shouldUseMarkdown(currentDraft.content, currentDraft.markdownOverride);
                     currentDraft.markdownOverride = !currentlyOn;
@@ -767,13 +788,14 @@ export class UIManager {
                 const btnCopy = document.createElement('span');
                 btnCopy.textContent = '📋';
                 btnCopy.title = "Copy";
-                btnCopy.addEventListener('click', () => navigator.clipboard.writeText(this.state.getContent(index)));
+                btnCopy.addEventListener('click', (e) => { e.stopPropagation(); navigator.clipboard.writeText(this.state.getContent(index)); });
                 iconsDiv.appendChild(btnCopy);
 
                 const btnEdit = document.createElement('span');
                 btnEdit.textContent = '✏️';
                 btnEdit.title = "Edit";
-                btnEdit.addEventListener('click', () => {
+                btnEdit.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     document.getElementById('edit-message-content').value = this.state.getContent(index);
                     document.getElementById('btn-edit-save').dataset.idx = index;
                     document.getElementById('edit-modal').classList.remove('hidden');
@@ -784,7 +806,8 @@ export class UIManager {
                 btnUsage.id = `btn-usage-${index}`;
                 btnUsage.textContent = '📊';
                 btnUsage.title = "Token Usage";
-                btnUsage.addEventListener('click', () => {
+                btnUsage.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     const currentDraft = this.state.history[index].drafts[this.state.history[index].activeDraftIndex];
                     if (currentDraft.usage) {
                         document.getElementById('usage-prompt').textContent = currentDraft.usage.prompt_tokens || 0;
@@ -818,7 +841,8 @@ export class UIManager {
                     const btnPrompt = document.createElement('span');
                     btnPrompt.textContent = '🔍';
                     btnPrompt.title = "View Prompt Payload";
-                    btnPrompt.addEventListener('click', () => {
+                    btnPrompt.addEventListener('click', (e) => {
+                        e.stopPropagation();
                         document.getElementById('prompt-payload-content').textContent = JSON.stringify(this.state.lastRawPayload, null, 2);
                         document.getElementById('prompt-modal').classList.remove('hidden');
                     });
@@ -828,7 +852,8 @@ export class UIManager {
                 const btnDelete = document.createElement('span');
                 btnDelete.textContent = '🗑️';
                 btnDelete.title = "Delete";
-                btnDelete.addEventListener('click', () => {
+                btnDelete.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     if (confirm("Delete this message?")) {
                         this.state.deleteTurn(index);
                         this.state.buildPromptPayload(); 

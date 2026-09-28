@@ -5,9 +5,9 @@ export class TokenCalculator {
     static getUsageStats(state, settings) {
         const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
         
-        const memCost = Math.ceil(state.systemPrompt.trim().length / charsRatio);
-        const anCost = Math.ceil(state.anoteContent.trim().length / charsRatio);
-        const sumCost = state.summary.trim() ? Math.ceil((state.summary.trim().length + 20) / charsRatio) : 0;
+        const memCost = state.disableMemory ? 0 : Math.ceil(state.systemPrompt.trim().length / charsRatio);
+        const anCost = state.disableMemory ? 0 : Math.ceil(state.anoteContent.trim().length / charsRatio);
+        const sumCost = (state.disableSummary || !state.summary.trim()) ? 0 : Math.ceil((state.summary.trim().length + 20) / charsRatio);
         
         const maxResp = parseInt(settings.maxTokens, 10);
         const maxContext = parseInt(settings.contextLength, 10);

@@ -23,6 +23,8 @@
         </div>
     </header>
 
+    <div id="sticky-draft-toolbar" class="hidden"></div>
+
     <main id="output-container"></main>
 
     <button id="btn-jump-bottom" class="fab hidden">⬇️</button>
@@ -340,7 +342,10 @@
                     <div class="setting-row column" style="height: 100%;">
                         <div style="display:flex; justify-content:space-between; align-items:center; width: 100%;">
                             <span class="label-text">Memory (System Prompt)</span>
-                            <button id="btn-open-memory-history" class="secondary" style="font-size:0.85em; padding: 2px 6px;">History 🕒</button>
+                            <div style="display:flex; align-items:center; gap: 8px;">
+                                <label style="font-size: 0.85em; cursor:pointer;"><input type="checkbox" id="set-memory-disabled"> Disable</label>
+                                <button id="btn-open-memory-history" class="secondary" style="font-size:0.85em; padding: 2px 6px;">History 🕒</button>
+                            </div>
                         </div>
                         <textarea id="set-system-prompt" style="flex: 1; width: 100%; resize: none; min-height: 250px;" placeholder="You are a helpful AI..."></textarea>
                     </div>
@@ -378,7 +383,10 @@
 
                 <div id="tab-summary" class="tab-pane" style="flex: 1;">
                     <div class="setting-row column" style="height: 100%;">
-                        <span class="label-text">Current Summary</span>
+                        <div style="display:flex; justify-content:space-between; align-items:center; width: 100%;">
+                            <span class="label-text">Current Summary</span>
+                            <label style="font-size: 0.85em; cursor:pointer;"><input type="checkbox" id="set-summary-disabled"> Disable</label>
+                        </div>
                         <textarea id="set-summary-content" style="flex: 1; resize: none; min-height: 250px;" placeholder="The story so far..."></textarea>
                     </div>
                 </div>
