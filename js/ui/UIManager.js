@@ -354,14 +354,23 @@ export class UIManager {
         this.state.history.push(...popped);
 
         const count = modelList.length;
-        const overrides = modelList.map(m => ({ enabled: true, model: m }));
+        
+        // Job 0 always uses settings.model, while overrides[0..n] apply to subsequent jobs.
+        const originalModel = settings.model;
+        settings.model = modelList[0];
+        const overrides = modelList.slice(1).map(m => ({ enabled: true, model: m }));
         
         this.activeBatch = new ParallelGenerationBatch(payloadObj.messages, count, overrides);
+        settings.model = originalModel; // Restore default model
+
         const draftOffset = targetMsg.drafts.length;
         
-        // 3. Mark message as batch, append draft slots, and point active to new draft
+        // 3. Mark message as batch, append draft slots, and assign their chosen models
         targetMsg.isBatch = true;
         this.state.appendBatchDrafts(msgIndex, count);
+        for (let i = 0; i < count; i++) {
+            targetMsg.drafts[draftOffset + i].model = modelList[i];
+        }
         this.state.setActiveDraft(msgIndex, draftOffset);
 
         // 4. Update UI
