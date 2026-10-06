@@ -64,6 +64,16 @@ export class AppSettings {
 
         this.recentAdditionalDrafts = []; // Array of Arrays of strings e.g. [["gemma-4"], ["modelA", "modelB"]]
 
+        // Image Generation Settings
+        this.imgApiUrl = 'https://api.openai.com/v1';
+        this.imgApiKey = '';
+        this.imgModelList = 'dall-e-3\ndall-e-2';
+        this.imgParallelCount = 1;
+        this.imgModelOverrides = ['', '', '', ''];
+        this.imgPrompts = "::variables\n{{appearance}}=A detailed character.\n{{style}}=Digital art, highly detailed.\n\n::Protagonist\nDescribe the protagonist's current appearance and emotion based on the text context.\nBase Appearance: {{appearance}}\nContext: {{context}}\n\nOutput JSON format: {\"prompts\": [\"visual description for image generator\"]}";
+        this.imgMaxDimension = 512;
+        this.imgQuality = 0.8;
+
         // GitHub Sync State
         this.githubPAT = '';
         this.encryptionKey = '';
@@ -103,6 +113,15 @@ export class AppSettings {
             if (!this.highlightList) this.highlightList = '';
             if (!this.highlightTurnCount) this.highlightTurnCount = 3;
             if (!Array.isArray(this.recentAdditionalDrafts)) this.recentAdditionalDrafts = [];
+
+            if (!this.imgApiUrl) this.imgApiUrl = 'https://api.openai.com/v1';
+            if (this.imgApiKey === undefined) this.imgApiKey = '';
+            if (!this.imgModelList) this.imgModelList = 'dall-e-3\ndall-e-2';
+            if (!this.imgParallelCount) this.imgParallelCount = 1;
+            if (!Array.isArray(this.imgModelOverrides)) this.imgModelOverrides = ['', '', '', ''];
+            if (!this.imgPrompts) this.imgPrompts = "::variables\n{{appearance}}=A detailed character.\n{{style}}=Digital art, highly detailed.\n\n::Protagonist\nDescribe the protagonist's current appearance and emotion based on the text context.\nBase Appearance: {{appearance}}\nContext: {{context}}\n\nOutput JSON format: {\"prompts\": [\"visual description for image generator\"]}";
+            if (!this.imgMaxDimension) this.imgMaxDimension = 512;
+            if (!this.imgQuality) this.imgQuality = 0.8;
 
             if (!this.gistMapping) this.gistMapping = {};
             

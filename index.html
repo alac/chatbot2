@@ -11,7 +11,10 @@
 </head>
 <body>
     <header id="top-nav">
-        <div class="logo">AI Prototype</div>
+        <div id="avatar-container" class="avatar-container" title="Hold for Avatar Menu">
+            <div id="avatar-placeholder">AI</div>
+            <img id="avatar-main-img" class="hidden" src="" alt="Avatar">
+        </div>
         <div id="summary-meter-container" class="hidden" title="Click for details">
             <div id="summary-meter-fill"></div>
             <span id="summary-meter-text">0%</span>
@@ -88,6 +91,7 @@
                     <option value="tab-tool-aggregate">3. Draft Aggregator</option>
                     <option value="tab-tool-highlight">4. Slop Highlight</option>
                     <option value="tab-tool-batch-edit">5. Batch Edit</option>
+                    <option value="tab-tool-image">6. Image Generation</option>
                 </select>
                 <button id="btn-close-tools" class="close-btn">&times;</button>
             </div>
@@ -221,6 +225,104 @@
                         <span id="batch-edit-feedback" style="font-size: 0.9em; font-weight: bold; color: var(--accent);">Will affect 0 messages.</span>
                         <button id="btn-batch-edit-apply" class="primary">Apply Changes</button>
                     </div>
+                </div>
+
+                <div id="tab-tool-image" class="tab-pane" style="flex:1;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span style="font-weight:bold;">Image Generation</span>
+                        <div style="display:flex; gap:8px;">
+                            <button id="btn-image-prompts-toggle" class="secondary">Prompts</button>
+                            <button id="btn-image-settings-toggle" class="secondary">⚙️ Settings</button>
+                        </div>
+                    </div>
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px;">Trigger a dynamic generation based on the recent context and configured templates.</p>
+                    <div id="image-presets-container" style="display:flex; flex-direction:column; gap:8px; overflow-y:auto;">
+                        <!-- Presets injected here -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Prompts Editor Modal -->
+    <div id="image-prompts-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="max-height: 90vh; width: 700px;">
+            <div class="modal-header">
+                <h2>Edit Image Prompts & Variables</h2>
+                <button id="btn-close-image-prompts" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 8px;">
+                <p style="font-size: 0.85em; color: var(--text-muted);">
+                    Format templates with <code>::ProfileName</code> headers.<br>
+                    Use <code>::variables</code> to define custom values injected globally (e.g., <code>{{style}}=Watercolor</code>).<br>
+                    The <code>{{context}}</code> tag automatically injects the latest text history.
+                </p>
+                <textarea id="image-prompts-textarea" style="flex:1; min-height: 350px; font-family: monospace; padding: 10px;"></textarea>
+            </div>
+            <div style="padding: 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:flex-end;">
+                <button id="btn-save-image-prompts" class="primary">Save Prompts</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Settings Modal -->
+    <div id="image-settings-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="max-height: 90vh; width: 600px;">
+            <div class="modal-header">
+                <h2>Image API Settings</h2>
+                <button id="btn-close-image-settings" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column;">
+                <div class="setting-row column">
+                    <span class="label-text">Image API Endpoint</span>
+                    <input type="text" id="set-img-api-url" placeholder="https://api.openai.com/v1" style="width: 100%;">
+                </div>
+                <div class="setting-row column" style="margin-top:8px;">
+                    <span class="label-text">Image API Key</span>
+                    <input type="password" id="set-img-api-key" placeholder="sk-..." style="width: 100%;">
+                </div>
+                <div class="setting-row column" style="margin-top:8px;">
+                    <span class="label-text">Available Models (One per line)</span>
+                    <textarea id="set-img-model-list" style="width:100%; min-height:80px;"></textarea>
+                </div>
+                <hr>
+                <div class="setting-row">
+                    <span class="label-text">Maximum Canvas Dimension (Downscaling)</span>
+                    <input type="number" id="set-img-max-dim" min="256" max="2048" step="128" value="512" style="width: 80px;">
+                </div>
+                <div class="setting-row" style="margin-top:8px;">
+                    <span class="label-text">Number of Parallel Images</span>
+                    <select id="set-img-parallel-count" style="width: 80px;">
+                        <option value="1">1</option><option value="2">2</option>
+                        <option value="3">3</option><option value="4">4</option>
+                    </select>
+                </div>
+                <div id="img-parallel-rows-container" style="margin-top:8px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Avatar Lightbox Modal -->
+    <div id="lightbox-modal" class="modal hidden" style="z-index: 200;">
+        <div style="position: absolute; top: 16px; right: 16px; display: flex; gap: 12px; z-index: 201;">
+            <button id="btn-download-lightbox" class="secondary" style="background: rgba(0,0,0,0.5); border: 1px solid #fff; color: #fff;">💾 Download</button>
+            <button id="btn-close-lightbox" class="close-btn" style="color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">&times;</button>
+        </div>
+        <img id="lightbox-img" src="" style="max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+    </div>
+
+    <!-- Avatar Selector Modal -->
+    <div id="avatar-selector-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="max-height: 80vh; width: 600px;">
+            <div class="modal-header">
+                <h2>Select Avatar</h2>
+                <button id="btn-close-avatar-sel" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 16px;">
+                <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px;">Pin an image to the top bar. Unpinning will default to showing the latest generated image.</p>
+                <div id="avatar-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px;">
+                    <!-- Filled by JS -->
                 </div>
             </div>
         </div>

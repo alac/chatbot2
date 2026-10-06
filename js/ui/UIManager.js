@@ -21,6 +21,9 @@ import { CloudSyncUI } from './CloudSyncUI.js';
 import { SlotManager } from './SlotManager.js';
 import { RemoteManagerUI } from './RemoteManagerUI.js';
 
+import { ImageGenManager } from './ImageGenManager.js';
+import { AvatarManager } from './AvatarManager.js';
+
 export class UIManager {
     constructor() {
         this.state = new StoryState();
@@ -58,6 +61,9 @@ export class UIManager {
         this.cloudSyncUI = new CloudSyncUI(this);
         this.slotManager = new SlotManager(this);
         this.remoteManagerUI = new RemoteManagerUI(this);
+
+        this.imageGenManager = new ImageGenManager(this);
+        this.avatarManager = new AvatarManager(this);
 
         this.bindEvents();
         this.initApp();
@@ -177,7 +183,6 @@ export class UIManager {
         document.getElementById('btn-abort').classList.remove('hidden');
         this.isUserScrolledUp = false;
 
-        // Temporarily pop target message so it's not included in its own payload
         let tempMsg = null;
         if (targetIndex !== null) {
             tempMsg = this.state.history.pop();
@@ -257,7 +262,6 @@ export class UIManager {
             }
         }, 100);
 
-        // Save state immediately before sending the network request
         this.autoSave();
 
         try {
@@ -330,7 +334,6 @@ export class UIManager {
             }
             
             this.summaryManager.updateSummaryMeter();
-
             if (!this.isUserScrolledUp) this.scrollToBottom();
             this.autoSave();
         }
@@ -339,12 +342,10 @@ export class UIManager {
     async generateAdditionalDrafts(msgIndex, modelList) {
         if (this.activeBatch) return;
 
-        // 1. Show Cancel/Stop button
         document.getElementById('btn-send').classList.add('hidden');
         document.getElementById('btn-retry').classList.add('hidden');
         document.getElementById('btn-abort').classList.remove('hidden');
 
-        // 2. Extract context up to msgIndex
         const popped = this.state.history.splice(msgIndex + 1);
         const targetMsg = this.state.history.pop(); 
         
@@ -354,26 +355,19 @@ export class UIManager {
         this.state.history.push(...popped);
 
         const count = modelList.length;
-        
-        // Job 0 always uses settings.model, while overrides[0..n] apply to subsequent jobs.
         const originalModel = settings.model;
         settings.model = modelList[0];
         const overrides = modelList.slice(1).map(m => ({ enabled: true, model: m }));
         
         this.activeBatch = new ParallelGenerationBatch(payloadObj.messages, count, overrides);
-        settings.model = originalModel; // Restore default model
+        settings.model = originalModel;
 
         const draftOffset = targetMsg.drafts.length;
-        
-        // 3. Mark message as batch, append draft slots, and assign their chosen models
         targetMsg.isBatch = true;
         this.state.appendBatchDrafts(msgIndex, count);
-        for (let i = 0; i < count; i++) {
-            targetMsg.drafts[draftOffset + i].model = modelList[i];
-        }
+        for (let i = 0; i < count; i++) targetMsg.drafts[draftOffset + i].model = modelList[i];
         this.state.setActiveDraft(msgIndex, draftOffset);
 
-        // 4. Update UI
         this.draftSwitcher.renderSwitcher(msgIndex, true);
         this.draftSwitcher.switchDraftExplicit(msgIndex, draftOffset);
 
@@ -432,7 +426,6 @@ export class UIManager {
                 if (this.draftSwitcher.activeMsgIndex === msgIndex) {
                     const iconEl = document.getElementById(`tb-draft-icon-${actualDraftIdx}`);
                     if (iconEl) iconEl.textContent = {'done':'✔️', 'error':'❌', 'streaming':'🕒'}[data.status] || '';
-                    
                     if (data.status !== 'streaming') {
                         const timerEl = document.getElementById(`tb-timer-${actualDraftIdx}`);
                         if (timerEl) timerEl.textContent = `(${data.duration}s)`;
@@ -442,8 +435,6 @@ export class UIManager {
         } finally {
             if (this.batchTimerInterval) clearInterval(this.batchTimerInterval);
             this.activeBatch = null;
-            
-            // 5. Restore standard Send/Retry buttons
             document.getElementById('btn-abort').classList.add('hidden');
             document.getElementById('btn-send').classList.remove('hidden');
             document.getElementById('btn-retry').classList.remove('hidden');
@@ -486,9 +477,7 @@ export class UIManager {
         let lastAsstIndex = -1;
         this.state.history.forEach((turn, idx) => {
             if (idx < startIndex) return; 
-            
             if (turn.role === 'assistant' && !turn.isHidden) lastAsstIndex = idx;
-
             if (idx === this.state.contextBoundaryIndex + 1 && this.state.contextBoundaryIndex >= 0) {
                 const divider = document.createElement('div');
                 divider.className = 'context-divider';
@@ -533,13 +522,11 @@ export class UIManager {
         if (role === 'assistant') {
             bubble.style.cursor = 'pointer';
             bubble.addEventListener('click', (e) => {
-                // Ignore clicks on internal action buttons/inputs
                 if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SPAN' && e.target.classList.contains('action-icons')) return;
                 this.draftSwitcher.renderSwitcher(index);
             });
         }
 
-        // System Role
         if (role === 'system') {
             const contentDiv = document.createElement('div');
             contentDiv.className = 'turn-content';
@@ -549,14 +536,12 @@ export class UIManager {
             contentDiv.appendChild(spanContent);
             bubble.appendChild(contentDiv);
         }
-        // Aggregation Request Role
         else if (role === 'aggregation') {
             const header = document.createElement('div');
             header.className = 'aggregation-header';
             header.innerHTML = `<span>🛠️ Aggregation Request</span>`;
             bubble.appendChild(header);
 
-            // Action Controls
             const actionBar = document.createElement('div');
             actionBar.className = 'action-bar';
             const iconsDiv = document.createElement('div');
@@ -619,6 +604,144 @@ export class UIManager {
             spanContent.textContent = msg.meta.displayInput || '';
             contentDiv.appendChild(spanContent);
             
+            bubble.appendChild(contentDiv);
+        }
+        else if (role === 'gallery') {
+            const header = document.createElement('div');
+            header.className = 'gallery-header';
+            header.innerHTML = `<span>🎨 Image: ${msg.galleryData.promptTitle}</span>`;
+            bubble.appendChild(header);
+
+            const actionBar = document.createElement('div');
+            actionBar.className = 'action-bar';
+            
+            const iconsDiv = document.createElement('div');
+            iconsDiv.className = 'action-icons';
+
+            const btnHide = document.createElement('span');
+            btnHide.textContent = msg.isHidden ? '🙈' : '👁️';
+            btnHide.className = 'hide-toggle';
+            if (msg.isHidden) btnHide.classList.add('active');
+            btnHide.title = "Toggle Preview";
+            btnHide.addEventListener('click', (e) => {
+                e.stopPropagation();
+                msg.isHidden = !msg.isHidden;
+                btnHide.textContent = msg.isHidden ? '🙈' : '👁️';
+                if (msg.isHidden) wrapper.classList.add('hidden-msg');
+                else wrapper.classList.remove('hidden-msg');
+                this.autoSave();
+            });
+            iconsDiv.appendChild(btnHide);
+
+            const btnRetry = document.createElement('span');
+            btnRetry.textContent = '🔄';
+            btnRetry.title = 'Regenerate';
+            btnRetry.addEventListener('click', () => {
+                if (msg.galleryData.status !== 'prompting' && msg.galleryData.status !== 'generating') {
+                    this.imageGenManager.retryGallery(index);
+                }
+            });
+            iconsDiv.appendChild(btnRetry);
+
+            const btnDelete = document.createElement('span');
+            btnDelete.textContent = '🗑️';
+            btnDelete.title = 'Delete';
+            btnDelete.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm("Delete this gallery?")) {
+                    this.state.deleteTurn(index);
+                    if (this.avatarManager) this.avatarManager.updateAvatarDisplay();
+                    this.renderAll();
+                    this.autoSave();
+                }
+            });
+            iconsDiv.appendChild(btnDelete);
+
+            actionBar.appendChild(iconsDiv);
+            bubble.appendChild(actionBar);
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'gallery-content turn-content';
+
+            if (msg.galleryData.status !== 'done' && msg.galleryData.status !== 'error') {
+                const statusEl = document.createElement('div');
+                statusEl.className = 'gallery-status';
+                statusEl.innerHTML = `<span class="streaming-indicator"></span> ${msg.galleryData.statusText}`;
+                
+                const btnAbort = document.createElement('button');
+                btnAbort.className = 'danger';
+                btnAbort.style.marginTop = '8px';
+                btnAbort.textContent = 'Stop';
+                btnAbort.onclick = () => this.imageGenManager.abortGallery(index);
+
+                contentDiv.appendChild(statusEl);
+                contentDiv.appendChild(btnAbort);
+            } else {
+                if (msg.galleryData.images && msg.galleryData.images.length > 0) {
+                    const imgObj = msg.galleryData.images[msg.galleryData.activeImageIndex];
+                    
+                    const imgEl = document.createElement('img');
+                    imgEl.src = imgObj.dataUrl;
+                    imgEl.className = 'gallery-img';
+                    imgEl.onclick = () => this.avatarManager.openLightbox(imgObj.dataUrl);
+
+                    const navRow = document.createElement('div');
+                    navRow.className = 'gallery-nav';
+                    
+                    const btnPrev = document.createElement('button');
+                    btnPrev.innerHTML = '◀';
+                    btnPrev.onclick = () => {
+                        msg.galleryData.activeImageIndex = (msg.galleryData.activeImageIndex - 1 + msg.galleryData.images.length) % msg.galleryData.images.length;
+                        this.renderAll();
+                        this.autoSave();
+                    };
+
+                    const lblCount = document.createElement('span');
+                    lblCount.textContent = `${msg.galleryData.activeImageIndex + 1} of ${msg.galleryData.images.length}`;
+
+                    const btnNext = document.createElement('button');
+                    btnNext.innerHTML = '▶';
+                    btnNext.onclick = () => {
+                        msg.galleryData.activeImageIndex = (msg.galleryData.activeImageIndex + 1) % msg.galleryData.images.length;
+                        this.renderAll();
+                        this.autoSave();
+                    };
+
+                    navRow.appendChild(btnPrev);
+                    navRow.appendChild(lblCount);
+                    navRow.appendChild(btnNext);
+
+                    const actionsRow = document.createElement('div');
+                    actionsRow.className = 'gallery-actions';
+                    
+                    const btnPin = document.createElement('button');
+                    btnPin.textContent = '📌 Set Avatar';
+                    btnPin.onclick = () => this.avatarManager.pinAvatar(imgObj.id);
+
+                    const btnPrompt = document.createElement('button');
+                    btnPrompt.textContent = '📝 View Prompt';
+                    const promptCode = document.createElement('pre');
+                    promptCode.className = 'hidden';
+                    promptCode.style.fontSize = '0.8em';
+                    promptCode.style.whiteSpace = 'pre-wrap';
+                    promptCode.style.marginTop = '8px';
+                    promptCode.textContent = msg.galleryData.imagePrompt || '';
+                    btnPrompt.onclick = () => promptCode.classList.toggle('hidden');
+
+                    actionsRow.appendChild(btnPin);
+                    actionsRow.appendChild(btnPrompt);
+
+                    contentDiv.appendChild(imgEl);
+                    contentDiv.appendChild(navRow);
+                    contentDiv.appendChild(actionsRow);
+                    contentDiv.appendChild(promptCode);
+                } else {
+                    const errEl = document.createElement('p');
+                    errEl.style.color = 'var(--danger)';
+                    errEl.textContent = msg.galleryData.statusText || 'No images generated.';
+                    contentDiv.appendChild(errEl);
+                }
+            }
             bubble.appendChild(contentDiv);
         }
         else if (role === 'choices') {
@@ -945,6 +1068,7 @@ export class UIManager {
         }
         this.historyOffset = 0;
         this.state.buildPromptPayload();
+        if (this.avatarManager) this.avatarManager.updateAvatarDisplay();
         this.renderAll();
     }
 }

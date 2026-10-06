@@ -1,6 +1,6 @@
 console.log("Service worker is active - should enable PWA functionality");
 
-const cacheName = 'chtbt2-20ac76a3'; // Updated hash to force the new SW to install
+const cacheName = 'chtbt2-e7dec43c'; // Updated hash to force the new SW to install
 
 // Files to cache for offline use
 const filesToCache = [
@@ -9,6 +9,7 @@ const filesToCache = [
     './manifest.json',
     './js/main.js',
     './js/api/GithubClient.js',
+    './js/api/ImageClient.js',
     './js/api/OpenAIClient.js',
     './js/data/names.js',
     './js/state/AppSettings.js',
@@ -18,11 +19,13 @@ const filesToCache = [
     './js/sync/CloudPayloadCodec.js',
     './js/sync/SyncEngine.js',
     './js/ui/ApplyEditsManager.js',
+    './js/ui/AvatarManager.js',
     './js/ui/BatchEditManager.js',
     './js/ui/BrainstormManager.js',
     './js/ui/CloudSyncUI.js',
     './js/ui/DraftMergeManager.js',
     './js/ui/DraftSwitcher.js',
+    './js/ui/ImageGenManager.js',
     './js/ui/MemoryHistoryManager.js',
     './js/ui/NotesManager.js',
     './js/ui/QuickRepliesManager.js',
@@ -38,6 +41,7 @@ const filesToCache = [
     './js/utils/CryptoUtils.js',
     './js/utils/DiceRoller.js',
     './js/utils/HashUtils.js',
+    './js/utils/ImageOptimizer.js',
     './js/utils/NameGenerator.js',
     './js/utils/TokenCalculator.js',
     './js/utils/diff.js',

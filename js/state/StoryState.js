@@ -34,6 +34,8 @@ export class StoryState {
         // Notes Kanban Board
         this.notes = [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
 
+        this.pinnedAvatarId = null;
+        
         // Undo Snapshots for Batch Operations
         this.undoSnapshot = null;
         this.isSnapshotActive = false;
@@ -65,6 +67,7 @@ export class StoryState {
             this.nameCountFemale = 3;
             this.aggregationHistory = [];
             this.notes = [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
+            this.pinnedAvatarId = null;
         }
     }
 
@@ -337,7 +340,7 @@ export class StoryState {
         }
 
         for (let i = this.history.length - 1; i >= 0; i--) {
-            if (this.history[i].role === 'choices' || skipIndices.has(i) || this.history[i].isHidden) continue;
+            if (this.history[i].role === 'choices' || this.history[i].role === 'gallery' || skipIndices.has(i) || this.history[i].isHidden) continue;
 
             let msgContent = this.getContent(i);
             msgContent = settings.applyRegexes(msgContent, 'outgoing');
@@ -442,11 +445,24 @@ export class StoryState {
         this.notes = data.notes || [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
         this.disableMemory = data.disableMemory || false;
         this.disableSummary = data.disableSummary || false;
+        this.pinnedAvatarId = data.pinnedAvatarId || null;
     }
 
-    exportData() {
+    exportData(forSync = false) {
+        const exportedHistory = this.history.map(m => {
+            if (forSync && m.role === 'gallery') {
+                const clone = structuredClone(m);
+                if (clone.galleryData && clone.galleryData.images) {
+                    // Blank out the heavy dataUrls for cloud sync, keep local IndexedDB intact
+                    clone.galleryData.images.forEach(img => img.dataUrl = ""); 
+                }
+                return clone;
+            }
+            return m;
+        });
+
         return { 
-            history: this.history, 
+            history: exportedHistory, 
             redoStack: this.redoStack, 
             contextBoundaryIndex: this.contextBoundaryIndex,
             summary: this.summary,
@@ -465,23 +481,27 @@ export class StoryState {
             aggregationHistory: this.aggregationHistory,
             notes: this.notes,
             disableMemory: this.disableMemory,
-            disableSummary: this.disableSummary
+            disableSummary: this.disableSummary,
+            pinnedAvatarId: this.pinnedAvatarId
         };
     }
 
     cleanState() {
         // 1. Clear the redo stack
         this.redoStack = [];
-        
         // 2. Trim ALL messages down to just their single active draft
         this.trimOldDrafts(0);
-        
-        // 3. Clear out all AI "thinking/reasoning" strings
+        // 3. Clear out all AI "thinking/reasoning" strings and unselected gallery images
         this.history.forEach(msg => {
             if (msg.drafts) {
-                msg.drafts.forEach(d => {
-                    d.reasoning = '';
-                });
+                msg.drafts.forEach(d => { d.reasoning = ''; });
+            }
+            if (msg.role === 'gallery' && msg.galleryData && msg.galleryData.images) {
+                const activeIdx = msg.galleryData.activeImageIndex || 0;
+                if (msg.galleryData.images.length > 0 && msg.galleryData.images[activeIdx]) {
+                    msg.galleryData.images = [msg.galleryData.images[activeIdx]];
+                    msg.galleryData.activeImageIndex = 0;
+                }
             }
         });
     }
