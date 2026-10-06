@@ -219,7 +219,7 @@ export class CloudSyncUI {
 
         const filenames = Object.keys(data.files);
         const mainFilename = filenames.find(f => !f.includes('_assets'));
-        const assetFilename = filenames.find(f => f.includes('_assets'));
+        const assetFilename = filenames.find(f => f.includes('_assets') || f.endsWith('.assets'));
 
         if (!mainFilename) throw new Error("Main file missing from Gist");
 

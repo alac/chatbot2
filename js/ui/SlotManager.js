@@ -27,7 +27,7 @@ export class SlotManager {
                     for (const filename of filenames) {
                         let extractedId = null;
                         if (filename === 'settings_sync.json') extractedId = 'settings';
-                        else if (filename.startsWith('slot_') && filename.endsWith('.json')) {
+                        else if (filename.startsWith('slot_') && filename.endsWith('.json') && !filename.includes('_assets')) {
                             extractedId = filename.substring(5, filename.length - 5);
                         }
                         
