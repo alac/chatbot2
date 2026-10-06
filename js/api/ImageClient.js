@@ -8,9 +8,12 @@ export class ImageClient {
         const payload = {
             model: settings.model,
             messages: messages,
-            temperature: 0.7,
-            response_format: { type: "json_object" }
+            temperature: 0.7
         };
+        // Only append JSON format if hitting official OpenAI, otherwise rely on prompt adherence
+        if (settings.apiUrl.includes('api.openai.com')) {
+            payload.response_format = { type: "json_object" };
+        }
         
         const response = await fetch(endpoint, {
             method: 'POST',

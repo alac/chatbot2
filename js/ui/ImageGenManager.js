@@ -6,6 +6,7 @@ export class ImageGenManager {
     constructor(app) {
         this.app = app;
         this.abortControllers = new Map();
+        this.timers = new Map();
         this.bindEvents();
     }
 
@@ -53,7 +54,7 @@ export class ImageGenManager {
         }
 
         parts.forEach(p => {
-            const lines = p.trim().split('\n');
+            const lines = p.trim().split(/\r?\n/);
             const title = lines.shift().trim();
             
             const btn = document.createElement('button');
@@ -84,7 +85,7 @@ export class ImageGenManager {
         const container = document.getElementById('img-parallel-rows-container');
         container.innerHTML = '';
         const count = parseInt(document.getElementById('set-img-parallel-count').value) || 1;
-        const modelNames = settings.imgModelList.split('\n').map(m => m.trim()).filter(m => m);
+        const modelNames = settings.imgModelList.split(/\r?\n/).map(m => m.trim()).filter(m => m);
 
         for (let i = 0; i < count; i++) {
             const row = document.createElement('div');
@@ -127,14 +128,42 @@ export class ImageGenManager {
         document.getElementById('image-settings-modal').classList.add('hidden');
     }
 
+    extractJson(text) {
+        if (!text) return null;
+        let clean = text.trim();
+
+        // Find JSON objects { ... }
+        const firstBrace = clean.indexOf('{');
+        const lastBrace = clean.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            try {
+                return JSON.parse(clean.substring(firstBrace, lastBrace + 1));
+            } catch (e) {}
+        }
+
+        // Find JSON arrays [ ... ]
+        const firstBracket = clean.indexOf('[');
+        const lastBracket = clean.lastIndexOf(']');
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+            try {
+                return JSON.parse(clean.substring(firstBracket, lastBracket + 1));
+            } catch (e) {}
+        }
+
+        return null;
+    }
+
     async executeGallery(promptTitle, rawPromptTpl) {
         let sysPrompt = rawPromptTpl;
-        const varsMatch = settings.imgPrompts.match(/::variables\n([\s\S]*?)(?=\n\n::|$)/i);
+
+        // Parse ::variables block
+        const parts = (settings.imgPrompts || "").split('::');
         const vars = {};
-        if (varsMatch) {
-            varsMatch[1].split('\n').forEach(l => {
+        const varPart = parts.find(p => p.trim().toLowerCase().startsWith('variables'));
+        if (varPart) {
+            varPart.trim().split(/\r?\n/).slice(1).forEach(l => {
                 const idx = l.indexOf('=');
-                if (idx !== -1) vars[l.substring(0, idx).trim()] = l.substring(idx+1).trim();
+                if (idx !== -1) vars[l.substring(0, idx).trim()] = l.substring(idx + 1).trim();
             });
         }
         
@@ -142,14 +171,15 @@ export class ImageGenManager {
             sysPrompt = sysPrompt.replaceAll(k, v);
         }
 
+        // Pull the last 2 Assistant messages for context
         const contextMessages = [];
         let cCount = 0;
-        for (let i = this.app.state.history.length-1; i>=0 && cCount<2; i--) {
+        for (let i = this.app.state.history.length - 1; i >= 0 && cCount < 2; i--) {
             const m = this.app.state.history[i];
-            if(m.role === 'assistant' || m.role === 'user') {
+            if (m.role === 'assistant') {
                 let text = this.app.state.getContent(i);
                 text = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
-                contextMessages.unshift(`${m.role}: ${text}`);
+                contextMessages.unshift(`Assistant: ${text}`);
                 cCount++;
             }
         }
@@ -169,7 +199,7 @@ export class ImageGenManager {
                 style: vars['{{style}}'] || '',
                 imagePrompt: null,
                 status: 'prompting',
-                statusText: 'Generating image prompt...',
+                statusText: 'Generating image prompt (elapsed: 0s)...',
                 activeImageIndex: 0,
                 images: [],
                 startTime: Date.now()
@@ -189,7 +219,7 @@ export class ImageGenManager {
         if (!msg || msg.role !== 'gallery') return;
         
         msg.galleryData.status = msg.galleryData.imagePrompt ? 'generating' : 'prompting';
-        msg.galleryData.statusText = msg.galleryData.imagePrompt ? 'Regenerating images...' : 'Regenerating prompt...';
+        msg.galleryData.statusText = msg.galleryData.imagePrompt ? 'Regenerating images (elapsed: 0s)...' : 'Regenerating prompt (elapsed: 0s)...';
         msg.galleryData.startTime = Date.now();
         msg.galleryData.images = [];
         msg.galleryData.activeImageIndex = 0;
@@ -206,6 +236,10 @@ export class ImageGenManager {
             controller.abort();
             this.abortControllers.delete(msgIndex);
         }
+        if (this.timers.has(msgIndex)) {
+            clearInterval(this.timers.get(msgIndex));
+            this.timers.delete(msgIndex);
+        }
         const msg = this.app.state.history[msgIndex];
         if (msg && msg.role === 'gallery') {
             msg.galleryData.status = msg.galleryData.images.length > 0 ? 'done' : 'error';
@@ -217,36 +251,67 @@ export class ImageGenManager {
     async _runGeneration(msgIndex, signal, skipPrompt = false) {
         const msg = this.app.state.history[msgIndex];
         const data = msg.galleryData;
+        const count = settings.imgParallelCount || 1;
         const updateUI = () => { if(this.app.state.history[msgIndex] === msg) this.app.renderAll(); };
+
+        data._completed = 0;
+        data._total = count;
+
+        // Start active 1-second ticking status line
+        if (this.timers.has(msgIndex)) clearInterval(this.timers.get(msgIndex));
+        this.timers.set(msgIndex, setInterval(() => {
+            const elapsed = Math.round((Date.now() - data.startTime) / 1000);
+            if (data.status === 'prompting') {
+                data.statusText = `Generating image prompt (elapsed: ${elapsed}s)...`;
+            } else if (data.status === 'generating') {
+                data.statusText = `Generating images (elapsed: ${elapsed}s, ${data._completed} of ${data._total})...`;
+            }
+            updateUI();
+        }, 1000));
 
         try {
             if (!skipPrompt) {
                 const messages = [{ role: 'system', content: data.sysPrompt }];
                 const resultText = await ImageClient.generateImagePrompt(messages);
-                let parsed = { prompts: [""] };
-                try {
-                    parsed = JSON.parse(resultText);
-                    if (!parsed.prompts) parsed = JSON.parse(resultText.replace(/```json/gi, '').replace(/```/g, ''));
-                } catch(e) { parsed.prompts = [resultText]; }
 
-                data.imagePrompt = (parsed.prompts[0] || parsed.visual_prompts?.[0] || resultText) + (data.style ? `\nStyle: ${data.style}` : '');
+                let extractedPrompt = "";
+                const parsed = this.extractJson(resultText);
+
+                if (parsed) {
+                    if (Array.isArray(parsed)) {
+                        extractedPrompt = parsed[0] || "";
+                    } else if (Array.isArray(parsed.prompts)) {
+                        extractedPrompt = parsed.prompts[0] || "";
+                    } else if (Array.isArray(parsed.visual_prompts)) {
+                        extractedPrompt = parsed.visual_prompts[0] || "";
+                    } else if (typeof parsed.prompt === 'string') {
+                        extractedPrompt = parsed.prompt;
+                    } else if (typeof parsed.prompts === 'string') {
+                        extractedPrompt = parsed.prompts;
+                    }
+                }
+
+                // Fallback: If no valid JSON container found, strip markdown fencing/think tags cleanly
+                if (!extractedPrompt) {
+                    extractedPrompt = resultText
+                        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+                        .replace(/```(?:json)?/gi, '')
+                        .replace(/```/g, '')
+                        .trim();
+                }
+
+                data.imagePrompt = extractedPrompt + (data.style ? `\nStyle: ${data.style}` : '');
             }
 
             if (signal.aborted) throw new Error('Aborted');
 
             data.status = 'generating';
-            const count = settings.imgParallelCount || 1;
-            const primaryModel = settings.imgModelOverrides[0] || settings.imgModelList.split('\n')[0] || 'dall-e-3';
-
+            const primaryModel = settings.imgModelOverrides[0] || settings.imgModelList.split(/\r?\n/)[0] || 'dall-e-3';
             const promises = [];
-            let completed = 0;
 
             for (let i = 0; i < count; i++) {
                 const model = settings.imgModelOverrides[i] || primaryModel;
                 
-                data.statusText = `Generating images (elapsed: ${Math.round((Date.now()-data.startTime)/1000)}s, ${completed} of ${count})...`;
-                updateUI();
-
                 const p = ImageClient.generateImage(data.imagePrompt, model, signal)
                     .then(async (url) => {
                         const optimized = await ImageOptimizer.optimize(url, settings.imgMaxDimension, settings.imgQuality);
@@ -255,8 +320,7 @@ export class ImageGenManager {
                             dataUrl: optimized,
                             model: model
                         });
-                        completed++;
-                        data.statusText = `Generating images (elapsed: ${Math.round((Date.now()-data.startTime)/1000)}s, ${completed} of ${count})...`;
+                        data._completed++;
                         if (this.app.avatarManager) this.app.avatarManager.updateAvatarDisplay();
                         updateUI();
                     }).catch(err => {
@@ -274,6 +338,10 @@ export class ImageGenManager {
             data.statusText = err.message;
         } finally {
             this.abortControllers.delete(msgIndex);
+            if (this.timers.has(msgIndex)) {
+                clearInterval(this.timers.get(msgIndex));
+                this.timers.delete(msgIndex);
+            }
             updateUI();
             this.app.autoSave();
         }

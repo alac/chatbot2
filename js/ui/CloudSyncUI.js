@@ -117,7 +117,7 @@ export class CloudSyncUI {
             return { text: '⚠️ Conflict', class: 'conflict', action: 'CONFLICT' };
         }
 
-        // V2 Fast-Forward Detection
+        // V2/V3 Fast-Forward Detection
         const evalResult = SyncEngine.evaluate(currentLocalHash, lastSyncedHash, localHistory, remoteHead, null);
         
         if (evalResult === 'SYNCED') return { text: '✔️ Synced', class: 'synced', action: 'SYNCED' };
@@ -134,19 +134,67 @@ export class CloudSyncUI {
 
         const descriptionWithHash = `${baseDescription} | hash:${computedHash}`;
         
-        // Use Codec to pack into V3 with Compression
-        const contentStr = await CloudPayloadCodec.pack(rawData, settings.encryptionKey, {
+        let mainData = structuredClone(rawData);
+        let assetData = null;
+
+        // Auto-extract gallery images into a sidecar asset bundle so we don't blow up the main Gist
+        let stateObj = mainData.history ? mainData : (mainData.data && mainData.data.history ? mainData.data : null);
+        if (stateObj) {
+            assetData = { images: {} };
+            stateObj.history.forEach(msg => {
+                if (msg.role === 'gallery' && msg.galleryData && msg.galleryData.images) {
+                    msg.galleryData.images.forEach(img => {
+                        if (img.dataUrl) {
+                            assetData.images[img.id] = img.dataUrl;
+                            img.dataUrl = ""; // Strip heavy string from main file
+                        }
+                    });
+                }
+            });
+            if (Object.keys(assetData.images).length === 0) assetData = null;
+        }
+
+        const contentStr = await CloudPayloadCodec.pack(mainData, settings.encryptionKey, {
             head: computedHash,
             history: syncHistory
         });
         
+        const filesPayload = {
+            [filename]: { content: contentStr }
+        };
+
+        if (assetData) {
+            const assetFilename = filename.replace('.json', '_assets.json');
+            const assetContentStr = await CloudPayloadCodec.pack(assetData, settings.encryptionKey, { head: computedHash });
+            filesPayload[assetFilename] = { content: assetContentStr };
+        }
+
         const gistId = settings.gistMapping[id];
         let res;
         
+        // We use fetch directly here to pass the multi-file object, bypassing single-file limits
         if (gistId) {
-            res = await GithubClient.updateGist(gistId, filename, contentStr, settings.githubPAT, descriptionWithHash);
+            const patchRes = await fetch(`https://api.github.com/gists/${gistId}`, {
+                method: 'PATCH',
+                headers: { 
+                    'Authorization': `Bearer ${settings.githubPAT}`, 
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({ description: descriptionWithHash, files: filesPayload })
+            });
+            if (!patchRes.ok) throw new Error(`GitHub API Error: ${patchRes.status}`);
+            res = await patchRes.json();
         } else {
-            res = await GithubClient.createGist(filename, contentStr, descriptionWithHash, settings.githubPAT);
+            const postRes = await fetch('https://api.github.com/gists', {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${settings.githubPAT}`, 
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({ description: descriptionWithHash, public: false, files: filesPayload })
+            });
+            if (!postRes.ok) throw new Error(`GitHub API Error: ${postRes.status}`);
+            res = await postRes.json();
             settings.gistMapping[id] = res.id;
             settings.save();
         }
@@ -158,16 +206,65 @@ export class CloudSyncUI {
         if (!this.isLoggedIn()) throw new Error("Not logged in");
         if (!cloudGist) return null;
 
-        const contentStr = await GithubClient.getGist(cloudGist.id, settings.githubPAT);
-        
-        // Codec handles V1, V2, and V3 decompression automatically
-        const result = await CloudPayloadCodec.unpack(contentStr, settings.encryptionKey);
-        
-        // Ensure we still use the Gist's system timestamp as a fallback
+        // Fetch the full Gist metadata to locate all related files
+        const res = await fetch(`https://api.github.com/gists/${cloudGist.id}?_t=${Date.now()}`, {
+            headers: { 
+                'Authorization': `Bearer ${settings.githubPAT}`, 
+                'Accept': 'application/vnd.github.v3+json' 
+            },
+            cache: 'no-store'
+        });
+        if (!res.ok) throw new Error(`GitHub API Error: ${res.status}`);
+        const data = await res.json();
+
+        const filenames = Object.keys(data.files);
+        const mainFilename = filenames.find(f => !f.includes('_assets'));
+        const assetFilename = filenames.find(f => f.includes('_assets'));
+
+        if (!mainFilename) throw new Error("Main file missing from Gist");
+
+        // Helper to securely grab raw content, bypassing GitHub's 1MB JSON truncation
+        const getFileContent = async (fileObj) => {
+            if (fileObj.truncated && fileObj.raw_url) {
+                const rawRes = await fetch(fileObj.raw_url);
+                if (!rawRes.ok) throw new Error(`GitHub Raw Fetch Error: ${rawRes.status}`);
+                return await rawRes.text();
+            }
+            return fileObj.content;
+        };
+
+        const mainContentStr = await getFileContent(data.files[mainFilename]);
+        const result = await CloudPayloadCodec.unpack(mainContentStr, settings.encryptionKey);
+
         if (!result.timestamp) {
             result.timestamp = new Date(cloudGist.updated_at).getTime();
         }
-        
+
+        // Rehydrate Image Assets if they exist in the companion bundle
+        if (assetFilename && result.data) {
+            let stateObj = result.data.history ? result.data : (result.data.data && result.data.data.history ? result.data.data : null);
+            if (stateObj) {
+                try {
+                    const assetContentStr = await getFileContent(data.files[assetFilename]);
+                    const assetResult = await CloudPayloadCodec.unpack(assetContentStr, settings.encryptionKey);
+                    if (assetResult.data && assetResult.data.images) {
+                        const bundle = assetResult.data;
+                        stateObj.history.forEach(msg => {
+                            if (msg.role === 'gallery' && msg.galleryData && msg.galleryData.images) {
+                                msg.galleryData.images.forEach(img => {
+                                    if (bundle.images[img.id]) {
+                                        img.dataUrl = bundle.images[img.id];
+                                    }
+                                });
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.warn("Failed to unpack asset bundle", e);
+                }
+            }
+        }
+
         return result;
     }
 
@@ -207,9 +304,13 @@ export class CloudSyncUI {
                 const msgCount = dataObj && dataObj.history ? dataObj.history.length : 0;
                 if (msgCount > 0) {
                     dataObj.history.slice(-2).forEach(msg => {
-                        let content = msg.drafts?.[msg.activeDraftIndex || 0]?.content || "No content";
-                        if (content.length > 200) content = content.substring(0, 200) + '...';
-                        html += `<div class="conflict-msg ${msg.role}"><div class="conflict-msg-role">${msg.role}</div><div>${content}</div></div>`;
+                        if (msg.role === 'gallery') {
+                            html += `<div class="conflict-msg ${msg.role}"><div class="conflict-msg-role">🖼️ Gallery</div><div>[Image Gallery: ${msg.galleryData.promptTitle}]</div></div>`;
+                        } else {
+                            let content = msg.drafts?.[msg.activeDraftIndex || 0]?.content || "No content";
+                            if (content.length > 200) content = content.substring(0, 200) + '...';
+                            html += `<div class="conflict-msg ${msg.role}"><div class="conflict-msg-role">${msg.role}</div><div>${content}</div></div>`;
+                        }
                     });
                 } else {
                     html += `<div style="text-align:center; opacity:0.5;">No messages.</div>`;

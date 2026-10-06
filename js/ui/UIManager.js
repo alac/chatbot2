@@ -720,6 +720,15 @@ export class UIManager {
 
                     const btnPrompt = document.createElement('button');
                     btnPrompt.textContent = '📝 View Prompt';
+
+                    const btnDownload = document.createElement('button');
+                    btnDownload.textContent = '💾 Download';
+                    btnDownload.onclick = () => {
+                        const a = document.createElement('a');
+                        a.href = imgObj.dataUrl;
+                        a.download = `image_${Date.now()}.jpg`;
+                        a.click();
+                    };
                     const promptCode = document.createElement('pre');
                     promptCode.className = 'hidden';
                     promptCode.style.fontSize = '0.8em';
@@ -730,6 +739,7 @@ export class UIManager {
 
                     actionsRow.appendChild(btnPin);
                     actionsRow.appendChild(btnPrompt);
+                    actionsRow.appendChild(btnDownload);
 
                     contentDiv.appendChild(imgEl);
                     contentDiv.appendChild(navRow);

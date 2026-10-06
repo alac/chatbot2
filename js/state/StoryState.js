@@ -486,6 +486,31 @@ export class StoryState {
         };
     }
 
+    exportAssetBundle() {
+        const bundle = { images: {} };
+        this.history.forEach(msg => {
+            if (msg.role === 'gallery' && msg.galleryData && msg.galleryData.images) {
+                msg.galleryData.images.forEach(img => {
+                    if (img.dataUrl) bundle.images[img.id] = img.dataUrl;
+                });
+            }
+        });
+        return bundle;
+    }
+
+    importAssetBundle(bundle) {
+        if (!bundle || !bundle.images) return;
+        this.history.forEach(msg => {
+            if (msg.role === 'gallery' && msg.galleryData && msg.galleryData.images) {
+                msg.galleryData.images.forEach(img => {
+                    if (bundle.images[img.id]) {
+                        img.dataUrl = bundle.images[img.id];
+                    }
+                });
+            }
+        });
+    }
+
     cleanState() {
         // 1. Clear the redo stack
         this.redoStack = [];
