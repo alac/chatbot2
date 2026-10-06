@@ -697,7 +697,11 @@ export class UIManager {
                     };
 
                     const lblCount = document.createElement('span');
-                    lblCount.textContent = `${msg.galleryData.activeImageIndex + 1} of ${msg.galleryData.images.length}`;
+                    lblCount.style.fontSize = '0.9em';
+                    const modelName = imgObj.model ? imgObj.model.split('/').pop() : '';
+                    lblCount.textContent = modelName 
+                        ? `${modelName} (${msg.galleryData.activeImageIndex + 1} of ${msg.galleryData.images.length})` 
+                        : `${msg.galleryData.activeImageIndex + 1} of ${msg.galleryData.images.length}`;
 
                     const btnNext = document.createElement('button');
                     btnNext.innerHTML = '▶';
