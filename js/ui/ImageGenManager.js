@@ -311,8 +311,12 @@ export class ImageGenManager {
 
             for (let i = 0; i < count; i++) {
                 const model = settings.imgModelOverrides[i] || primaryModel;
+                let tempPrompt = data.imagePrompt
+                if (model == "step-image-edit-2") {
+                    tempPrompt = tempPrompt.slice(0, 512); 
+                }
                 
-                const p = ImageClient.generateImage(data.imagePrompt, model, signal)
+                const p = ImageClient.generateImage(tempPrompt, model, signal)
                     .then(async (url) => {
                         const optimized = await ImageOptimizer.optimize(url, settings.imgMaxDimension, settings.imgQuality);
                         data.images.push({
