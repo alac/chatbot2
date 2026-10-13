@@ -31,8 +31,7 @@ export class FlagCollectorManager {
                             <thead>
                                 <tr>
                                     <th style="width: 40px; text-align:center;">Keep</th>
-                                    <th>Flagged Sentence</th>
-                                    <th style="width: 35%;">Tags & Notes</th>
+                                    <th>Flag Details</th>
                                 </tr>
                             </thead>
                             <tbody id="fc-tbody"></tbody>
@@ -142,19 +141,17 @@ export class FlagCollectorManager {
             const modelsString = Array.from(flag.models).join(', ');
             const tagsNotesString = flag.tagsAndNotes.join('\n');
 
-            let warningHtml = !isFound ? `<div style="color:var(--danger); font-size: 0.85em; font-weight:bold; margin-top:4px;">⚠️ Not found in recent context</div>` : '';
+            let warningHtml = !isFound ? `<div style="color:var(--danger); font-size: 0.85em; font-weight:bold; margin-bottom:6px;">⚠️ Not found in recent context</div>` : '';
 
             tr.innerHTML = `
-                <td style="text-align:center;">
+                <td style="text-align:center; padding-top: 12px;">
                     <input type="checkbox" class="fc-checkbox" data-id="${index}" ${shouldCheck ? 'checked' : ''}>
                 </td>
-                <td style="white-space: pre-wrap;">
-                    ${flag.originalSentence.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                <td style="white-space: pre-wrap; padding: 12px 8px;">
+                    <div style="margin-bottom: 8px; font-weight: 500; line-height: 1.4;">${flag.originalSentence.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
                     ${warningHtml}
-                </td>
-                <td style="white-space: pre-wrap;">
-                    <div class="fc-models">${modelsString}</div>
-                    <div style="margin-top: 4px; color: var(--text-main);">${tagsNotesString.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                    <div class="fc-models" style="margin-bottom: 2px;">${modelsString}</div>
+                    <div style="color: var(--text-main); font-size: 0.9em; opacity: 0.85;">${tagsNotesString.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
                 </td>
             `;
 
