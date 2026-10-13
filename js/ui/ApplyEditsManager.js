@@ -72,18 +72,31 @@ export class ApplyEditsManager {
                 selectFilter.appendChild(opt);
             }
 
-            const regex = /(<edit>\s*<old>([\s\S]*?)<\/old>\s*<new>([\s\S]*?)<\/new>\s*<reasoning>([\s\S]*?)<\/reasoning>\s*<\/edit>)/gi;
-            let match;
-            while ((match = regex.exec(draft.content)) !== null) {
-                const oldText = match[2].trim();
-                const newText = match[3].trim(); // Empty string handled safely here
+            const blockRegex = /<edit>([\s\S]*?)<\/edit>/gi;
+            let blockMatch;
+            while ((blockMatch = blockRegex.exec(draft.content)) !== null) {
+                const rawMatch = blockMatch[0];
+                const blockContent = blockMatch[1];
+                
+                const oldMatch = blockContent.match(/<old>([\s\S]*?)<\/old>/i);
+                const newMatch = blockContent.match(/<new>([\s\S]*?)<\/new>/i);
+                const reasoningMatch = blockContent.match(/<reasoning>([\s\S]*?)<\/reasoning>/i);
+                const sentenceMatch = blockContent.match(/<sentence>([\s\S]*?)<\/sentence>/i);
+                
+                if (!oldMatch || !newMatch || !reasoningMatch) continue;
+
+                const oldText = oldMatch[1].trim();
+                const newText = newMatch[1].trim(); // Empty string handled safely here
+                const reasoning = reasoningMatch[1].trim();
+                const sentenceText = sentenceMatch ? sentenceMatch[1].trim() : oldText;
 
                 this.extractedEdits.push({
                     id: editIdCounter++,
-                    rawMatch: match[1],
+                    rawMatch: rawMatch,
                     oldText: oldText,
                     newText: newText,
-                    reasoning: match[4].trim(),
+                    reasoning: reasoning,
+                    sentenceText: sentenceText,
                     sourceDraftIndex: idx,
                     sourceDraftLabel: draftLabel,
                     modelId: shortModel,
@@ -370,8 +383,8 @@ export class ApplyEditsManager {
                                 // Match <flag> ... </flag> or <fix> ... </fix>
                                 const flagRegex = /<(flag|fix)>\s*<sentence>([\s\S]*?)<\/sentence>[\s\S]*?<\/\1>/gi;
                                 d.content = d.content.replace(flagRegex, (match, tagName, sentenceContent) => {
-                                    // If this flag corresponds exactly to the old text we just edited out
-                                    if (sentenceContent.trim() === edit.oldText) {
+                                    // Strip if it matches the explicit <sentence> OR falls back to matching <old>
+                                    if (sentenceContent.trim() === edit.sentenceText) {
                                         return ''; // Erase the flag block
                                     }
                                     return match; // Keep it
@@ -420,8 +433,10 @@ export class ApplyEditsManager {
         const edit = this.currentEditEditing;
         const newText = document.getElementById('edit-edit-textarea').value;
         
-        const newRawMatch = `<edit>\n<old>${edit.oldText}</old>\n<new>${newText}</new>\n<reasoning>${edit.reasoning}</reasoning>\n</edit>`;
-        
+        const sentenceTag = (edit.sentenceText && edit.sentenceText !== edit.oldText) 
+            ? `<sentence>${edit.sentenceText}</sentence>\n` 
+            : '';
+        const newRawMatch = `<edit>\n${sentenceTag}<old>${edit.oldText}</old>\n<new>${newText}</new>\n<reasoning>${edit.reasoning}</reasoning>\n</edit>`;
         const msgIdx = this.app.state.history.length - 1;
         const msg = this.app.state.history[msgIdx];
         if (msg && msg.drafts[edit.sourceDraftIndex]) {
