@@ -133,6 +133,11 @@ export class ApplyEditsManager {
             for (let i = scanHistory.length - 1; i >= 0; i--) {
                 const content = this.app.state.getContent(startIndexOffset + i);
                 
+                // Skip meta-responses that are just listing edits/flags/fixes so we don't apply the edit to the tool output itself
+                if (/<(?:flag|edit|fix)[>\s]/i.test(content)) {
+                    continue;
+                }
+
                 const oldIdx = content.indexOf(edit.oldText);
                 
                 // Fix for "".indexOf("") returning 0
@@ -355,16 +360,16 @@ export class ApplyEditsManager {
                 const updatedContent = targetContent.substring(0, edit.startIndex) + edit.newText + targetContent.substring(edit.endIndex);
                 this.app.state.editTurn(edit.targetMessageIdx, updatedContent);
 
-                // 2. Strip used <flag> tags out of recent context
+                // 2. Strip used <flag> (or <fix>) tags out of recent context
                 const flagSearchRange = Math.max(0, this.app.state.history.length - 8);
                 for (let i = this.app.state.history.length - 1; i >= flagSearchRange; i--) {
                     const msg = this.app.state.history[i];
                     if (msg.role === 'assistant') {
                         msg.drafts.forEach(d => {
                             if (d.content) {
-                                // Match <flag> ... </flag>
-                                const flagRegex = /<flag>\s*<sentence>([\s\S]*?)<\/sentence>[\s\S]*?<\/flag>/gi;
-                                d.content = d.content.replace(flagRegex, (match, sentenceContent) => {
+                                // Match <flag> ... </flag> or <fix> ... </fix>
+                                const flagRegex = /<(flag|fix)>\s*<sentence>([\s\S]*?)<\/sentence>[\s\S]*?<\/\1>/gi;
+                                d.content = d.content.replace(flagRegex, (match, tagName, sentenceContent) => {
                                     // If this flag corresponds exactly to the old text we just edited out
                                     if (sentenceContent.trim() === edit.oldText) {
                                         return ''; // Erase the flag block
