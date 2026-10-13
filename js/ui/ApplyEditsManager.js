@@ -134,7 +134,7 @@ export class ApplyEditsManager {
                 const content = this.app.state.getContent(startIndexOffset + i);
                 
                 // Skip meta-responses that are just listing edits/flags/fixes so we don't apply the edit to the tool output itself
-                if (/<(?:flag|edit|fix)[>\s]/i.test(content)) {
+                if (/<(?:flag|fix)[>\s]/i.test(content)) {
                     continue;
                 }
 
