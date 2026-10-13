@@ -33,6 +33,17 @@ export class ApplyEditsManager {
         });
     }
 
+    // Helper to prevent overcounting on re-opens
+    hashCode(str) {
+        let hash = 0;
+        for (let i = 0, len = str.length; i < len; i++) {
+            let chr = str.charCodeAt(i);
+            hash = (hash << 5) - hash + chr;
+            hash |= 0;
+        }
+        return hash.toString();
+    }
+
     openApplyEdits() {
         if (this.app.state.history.length === 0) return alert("No messages available.");
         const lastMsg = this.app.state.history[this.app.state.history.length - 1];
@@ -45,9 +56,12 @@ export class ApplyEditsManager {
         const draftsToScan = lastMsg.isBatch ? lastMsg.drafts : [lastMsg.drafts[lastMsg.activeDraftIndex]];
 
         let editIdCounter = 0;
+        let concatDraftString = "";
 
         draftsToScan.forEach((draft, idx) => {
             if (!draft.content) return;
+            concatDraftString += draft.content;
+
             const shortModel = draft.model ? draft.model.split('/').pop() : 'Unknown';
             const draftLabel = `V${idx+1} | ${shortModel}`;
             
@@ -62,8 +76,7 @@ export class ApplyEditsManager {
             let match;
             while ((match = regex.exec(draft.content)) !== null) {
                 const oldText = match[2].trim();
-                const newText = match[3].trim();
-                if (oldText === newText) continue;
+                const newText = match[3].trim(); // Empty string handled safely here
 
                 this.extractedEdits.push({
                     id: editIdCounter++,
@@ -73,6 +86,7 @@ export class ApplyEditsManager {
                     reasoning: match[4].trim(),
                     sourceDraftIndex: idx,
                     sourceDraftLabel: draftLabel,
+                    modelId: shortModel,
                     status: 'invalid',
                     score: 99999999,
                     targetMessageIdx: -1,
@@ -87,6 +101,21 @@ export class ApplyEditsManager {
 
         this.evaluateEditsStatus();
         this.buildEditGroups();
+
+        // Check if we should log these as new proposals (Track Win Rate)
+        const currentHash = this.hashCode(concatDraftString);
+        if (currentHash !== settings.applyEditStatsLastHash) {
+            settings.applyEditStatsLastHash = currentHash;
+            
+            this.extractedEdits.forEach(edit => {
+                if (edit.status !== 'invalid') {
+                    if (!settings.applyEditStats[edit.modelId]) settings.applyEditStats[edit.modelId] = { proposed: 0, applied: 0 };
+                    settings.applyEditStats[edit.modelId].proposed++;
+                }
+            });
+            settings.save();
+        }
+
         this.renderApplyEditsList();
         document.getElementById('apply-edits-modal').classList.remove('hidden');
     }
@@ -105,8 +134,10 @@ export class ApplyEditsManager {
                 const content = this.app.state.getContent(startIndexOffset + i);
                 
                 const oldIdx = content.indexOf(edit.oldText);
-                const newIdx = content.indexOf(edit.newText);
-                const newIsSubOfOld = edit.oldText.includes(edit.newText);
+                
+                // Fix for "".indexOf("") returning 0
+                const newIdx = edit.newText === "" ? -1 : content.indexOf(edit.newText);
+                const newIsSubOfOld = edit.newText !== "" && edit.oldText.includes(edit.newText);
                 
                 if (oldIdx !== -1) {
                     edit.status = 'apply';
@@ -276,6 +307,16 @@ export class ApplyEditsManager {
 
         edit.isCollapsed = edit.isCollapsed !== undefined ? edit.isCollapsed : this.aeSettings.collapseReasoning;
         
+        // Calculate Win Rate Display
+        let winRateStr = "";
+        if (settings.applyEditStats && settings.applyEditStats[edit.modelId]) {
+            const stats = settings.applyEditStats[edit.modelId];
+            if (stats.proposed > 0) {
+                const pct = Math.round((stats.applied / stats.proposed) * 100);
+                winRateStr = `<span style="color:var(--accent); font-weight:normal;"> (${pct}% win rate • ${stats.applied}/${stats.proposed})</span>`;
+            }
+        }
+
         card.innerHTML = `
             <div class="ae-reasoning-block">
                 <span class="ae-reasoning-label">Reasoning ${edit.isCollapsed ? '[+]' : '[-]'}:</span>
@@ -286,7 +327,7 @@ export class ApplyEditsManager {
                 <div class="ae-diff-col">${preCtx}${diffs.newHtml}${postCtx}</div>
             </div>
             <div class="ae-footer">
-                <span style="font-size:0.75em; color:var(--text-muted);">${edit.sourceDraftLabel}</span>
+                <span style="font-size:0.75em; color:var(--text-muted);">${edit.sourceDraftLabel}${winRateStr}</span>
                 <div class="ae-footer-actions">
                     ${statusHtml}
                     ${buttonsHtml}
@@ -308,9 +349,39 @@ export class ApplyEditsManager {
                 this.openEditEditModal(edit, preCtx, postCtx);
             });
             card.querySelector('.apply-btn').addEventListener('click', () => {
+                
+                // 1. Apply the Edit Replacement
                 const targetContent = this.app.state.getContent(edit.targetMessageIdx);
                 const updatedContent = targetContent.substring(0, edit.startIndex) + edit.newText + targetContent.substring(edit.endIndex);
                 this.app.state.editTurn(edit.targetMessageIdx, updatedContent);
+
+                // 2. Strip used <flag> tags out of recent context
+                const flagSearchRange = Math.max(0, this.app.state.history.length - 8);
+                for (let i = this.app.state.history.length - 1; i >= flagSearchRange; i--) {
+                    const msg = this.app.state.history[i];
+                    if (msg.role === 'assistant') {
+                        msg.drafts.forEach(d => {
+                            if (d.content) {
+                                // Match <flag> ... </flag>
+                                const flagRegex = /<flag>\s*<sentence>([\s\S]*?)<\/sentence>[\s\S]*?<\/flag>/gi;
+                                d.content = d.content.replace(flagRegex, (match, sentenceContent) => {
+                                    // If this flag corresponds exactly to the old text we just edited out
+                                    if (sentenceContent.trim() === edit.oldText) {
+                                        return ''; // Erase the flag block
+                                    }
+                                    return match; // Keep it
+                                });
+                            }
+                        });
+                    }
+                }
+
+                // 3. Increment Win Rate for this model
+                if (!settings.applyEditStats[edit.modelId]) settings.applyEditStats[edit.modelId] = { proposed: 0, applied: 0 };
+                settings.applyEditStats[edit.modelId].applied++;
+                settings.save();
+
+                // 4. Update UI
                 this.app.state.buildPromptPayload(); 
                 this.app.renderAll();
                 this.app.autoSave();
@@ -363,6 +434,11 @@ export class ApplyEditsManager {
         
         edit.rawMatch = newRawMatch;
         edit.newText = newText;
+        
+        // Update hash since we've rewritten the raw draft text to modify the proposal
+        let concatDraftString = "";
+        msg.drafts.forEach(d => concatDraftString += d.content);
+        settings.applyEditStatsLastHash = this.hashCode(concatDraftString);
         
         this.evaluateEditsStatus();
         this.renderApplyEditsList();

@@ -388,3 +388,12 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .floating-edit-btn { position: fixed; z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.4); padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 0.9em; transform: translate(-50%, -100%); margin-top: -10px; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 0.2s, margin-top 0.2s, bottom 0.2s; }
 .floating-edit-btn.visible { opacity: 1; pointer-events: auto; margin-top: -15px; }
 .md-block { display: contents; }
+
+/* Flag Collector UI */
+.fc-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+.fc-table th, .fc-table td { border: 1px solid var(--border); padding: 8px; text-align: left; vertical-align: top; }
+.fc-table th { background: rgba(0,0,0,0.2); color: var(--text-muted); font-weight: bold; }
+.fc-table tr:hover { background: rgba(255,255,255,0.02); }
+.fc-row-unfound { opacity: 0.6; }
+.fc-checkbox { width: 18px; height: 18px; cursor: pointer; }
+.fc-models { font-size: 0.85em; color: var(--accent); font-weight: bold; }

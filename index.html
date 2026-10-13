@@ -92,6 +92,8 @@
                     <option value="tab-tool-highlight">4. Slop Highlight</option>
                     <option value="tab-tool-batch-edit">5. Batch Edit</option>
                     <option value="tab-tool-image">6. Image Generation</option>
+                    <option value="tab-tool-collect">7. Flag Collector</option>
+                </select>
                 </select>
                 <button id="btn-close-tools" class="close-btn">&times;</button>
             </div>
@@ -225,6 +227,12 @@
                         <span id="batch-edit-feedback" style="font-size: 0.9em; font-weight: bold; color: var(--accent);">Will affect 0 messages.</span>
                         <button id="btn-batch-edit-apply" class="primary">Apply Changes</button>
                     </div>
+                </div>
+
+                <div id="tab-tool-collect" class="tab-pane" style="flex:1;">
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Consolidate and review &lt;flag&gt; tags from the latest assistant drafts. Choose which flags to keep, and generate a unified draft for the final fix pass.</p>
+                    <div id="tool-collect-status" style="margin-bottom: 12px; font-size: 0.9em; color: var(--accent);">No drafts analyzed yet.</div>
+                    <button id="btn-tool-collect-launch" class="primary" style="padding: 12px; font-size: 1.1em;">Launch Flag Collector</button>
                 </div>
 
                 <div id="tab-tool-image" class="tab-pane" style="flex:1;">

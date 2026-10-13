@@ -48,6 +48,12 @@ export class ToolsManager {
             document.getElementById(id).addEventListener('change', () => this.saveHighlightSettings());
         });
         document.getElementById('tool-hl-list').addEventListener('input', () => this.saveHighlightSettings());
+        
+        // 5. Flag Collector
+        document.getElementById('btn-tool-collect-launch').addEventListener('click', () => {
+            document.getElementById('tools-modal').classList.add('hidden');
+            this.app.flagCollectorManager.open();
+        });
     }
 
     saveHighlightSettings() {
@@ -61,8 +67,6 @@ export class ToolsManager {
     }
 
     openToolsMenu() {
-        document.getElementById('quick-menu').classList.add('hidden');
-        
         // Load persist states
         document.getElementById('tool-dice-notation').value = settings.diceNotation;
         document.getElementById('tool-names-theme').value = this.app.state.nameTheme;

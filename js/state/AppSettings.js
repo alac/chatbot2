@@ -78,6 +78,10 @@ export class AppSettings {
         this.githubPAT = '';
         this.encryptionKey = '';
         this.gistMapping = {};
+        
+        // Anti-slop / Edit Tracking
+        this.applyEditStats = {}; 
+        this.applyEditStatsLastHash = "";
 
         this.lastEdited = 0;
         this.lastSyncedHash = null;
@@ -125,6 +129,9 @@ export class AppSettings {
 
             if (!this.gistMapping) this.gistMapping = {};
             
+            if (!this.applyEditStats) this.applyEditStats = {};
+            if (!this.applyEditStatsLastHash) this.applyEditStatsLastHash = "";
+            
             const syncSaved = localStorage.getItem('ai_proto_settings_sync');
             if (syncSaved) {
                 const parsed = JSON.parse(syncSaved);
@@ -171,6 +178,7 @@ export class AppSettings {
         delete payload.lastEdited;
         delete payload.lastSyncedHash;
         delete payload.syncHistory;
+        delete payload.applyEditStatsLastHash;
         return payload;
     }
 
