@@ -36,7 +36,7 @@ export class TrashExplorerManager {
                 </div>
                 
                 <div class="modal-body" style="padding: 16px; flex: 1; overflow-y: auto; display:flex; flex-direction:column; gap: 12px; background: var(--bg-main);">
-                    <div id="trash-reasoning-block" class="thinking-block hidden" style="margin: 0;"></div>
+                    <div id="trash-reasoning-block" class="thinking-block hidden" style="margin: 0; min-height: 150px"></div>
                     <div id="trash-content-block" class="turn-content" style="line-height: 1.5; white-space: pre-wrap; word-break: break-word;"></div>
                 </div>
             </div>
