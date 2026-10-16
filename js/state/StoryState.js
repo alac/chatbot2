@@ -39,6 +39,8 @@ export class StoryState {
         // Undo Snapshots for Batch Operations
         this.undoSnapshot = null;
         this.isSnapshotActive = false;
+
+        this.trash = [];
     }
 
     clear(resetSettings = false) {
@@ -50,6 +52,8 @@ export class StoryState {
         
         this.undoSnapshot = null;
         this.isSnapshotActive = false;
+        
+        this.trash = [];
 
         if (resetSettings) {
             this.disableMemory = false;
@@ -133,6 +137,70 @@ export class StoryState {
 
     // --- END NOTES METHODS ---
 
+    pushToTrash(turn) {
+        if (!turn || !turn.drafts) return;
+        if (['gallery', 'choices', 'aggregation'].includes(turn.role)) return;
+
+        // Iterate backwards so draft 1 is pushed after draft 2, placing it higher (newer) in unshift
+        for (let i = turn.drafts.length - 1; i >= 0; i--) {
+            const d = turn.drafts[i];
+            if (!d.content && !d.reasoning) continue;
+            
+            this.trash.unshift({
+                id: Math.random().toString(36).substr(2, 9),
+                role: turn.role,
+                model: d.model || '',
+                content: d.content || '',
+                reasoning: d.reasoning || '',
+                duration: d.duration || 0,
+                deletedAt: Date.now()
+            });
+        }
+        this.trash = this.trash.slice(0, 20); // Keep max 20 flat drafts
+    }
+
+    flushRedoToTrash() {
+        for (const item of this.redoStack) {
+            if (item && item.type !== 'snapshot' && item.drafts) {
+                this.pushToTrash(item);
+            }
+        }
+        this.redoStack = [];
+        this.undoSnapshot = null;
+        this.isSnapshotActive = false;
+    }
+
+    restoreFromTrash(trashIndex) {
+        const item = this.trash[trashIndex];
+        if (!item) return -1;
+        this.trash.splice(trashIndex, 1);
+        
+        this.flushRedoToTrash();
+
+        this.history.push({
+            role: item.role,
+            isHidden: false,
+            isBatch: false,
+            activeDraftIndex: 0,
+            wasSummarized: false,
+            extractedChoices: null,
+            meta: { model: item.model },
+            drafts: [{
+                model: item.model,
+                content: item.content,
+                reasoning: item.reasoning,
+                status: 'done',
+                duration: item.duration || 0,
+                markdownOverride: null,
+                usage: null,
+                isStale: false
+            }]
+        });
+        
+        this.trimOldDrafts();
+        return this.history.length - 1;
+    }
+
     addTurn(role, content, reasoning = '', meta = {}) {
         this.history.push({ 
             role, 
@@ -144,9 +212,7 @@ export class StoryState {
             meta: meta,
             drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0, markdownOverride: null, usage: null, isStale: false }]
         });
-        this.redoStack = []; 
-        this.undoSnapshot = null;
-        this.isSnapshotActive = false;
+        this.flushRedoToTrash();
         this.trimOldDrafts();
     }
 
@@ -165,9 +231,7 @@ export class StoryState {
             meta: {},
             drafts: drafts
         });
-        this.redoStack = [];
-        this.undoSnapshot = null;
-        this.isSnapshotActive = false;
+        this.flushRedoToTrash();
         this.trimOldDrafts();
     }
 
@@ -274,7 +338,10 @@ export class StoryState {
     }
 
     deleteTurn(index) {
-        if (index >= 0 && index < this.history.length) this.history.splice(index, 1);
+        if (index >= 0 && index < this.history.length) {
+            this.pushToTrash(this.history[index]);
+            this.history.splice(index, 1);
+        }
     }
 
     editTurn(index, newContent) {
@@ -282,7 +349,7 @@ export class StoryState {
             const msg = this.history[index];
             msg.drafts[msg.activeDraftIndex].content = newContent;
             // Purposely NOT setting msg.isBatch = false so parallel drafts remain accessible
-            this.redoStack = []; 
+            this.flushRedoToTrash(); 
         }
     }
 
@@ -436,6 +503,8 @@ export class StoryState {
         this.anoteUnit = data.anoteUnit !== undefined ? data.anoteUnit : "message";
         this.anoteDepth = data.anoteDepth !== undefined ? data.anoteDepth : 0;
         this.anoteHistory = data.anoteHistory || [];
+        
+        this.trash = data.trash || [];
 
         this.nameTheme = data.nameTheme !== undefined ? data.nameTheme : "fantasy";
         this.nameCountMale = data.nameCountMale !== undefined ? data.nameCountMale : 3;
@@ -475,6 +544,7 @@ export class StoryState {
             anoteUnit: this.anoteUnit,
             anoteDepth: this.anoteDepth,
             anoteHistory: this.anoteHistory,
+            trash: this.trash,
             nameTheme: this.nameTheme,
             nameCountMale: this.nameCountMale,
             nameCountFemale: this.nameCountFemale,

@@ -93,7 +93,7 @@
                     <option value="tab-tool-batch-edit">5. Batch Edit</option>
                     <option value="tab-tool-image">6. Image Generation</option>
                     <option value="tab-tool-collect">7. Flag Collector</option>
-                </select>
+                    <option value="tab-tool-trash">8. Trash Explorer</option>
                 </select>
                 <button id="btn-close-tools" class="close-btn">&times;</button>
             </div>
@@ -233,6 +233,13 @@
                     <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Consolidate and review &lt;flag&gt; tags from the latest assistant drafts. Choose which flags to keep, and generate a unified draft for the final fix pass.</p>
                     <div id="tool-collect-status" style="margin-bottom: 12px; font-size: 0.9em; color: var(--accent);">No drafts analyzed yet.</div>
                     <button id="btn-tool-collect-launch" class="primary" style="padding: 12px; font-size: 1.1em;">Launch Flag Collector</button>
+                </div>
+
+                <div id="tab-tool-trash" class="tab-pane" style="flex:1;">
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">View and restore recently deleted drafts and messages. (Holds up to 20 items).</p>
+                    <div style="display:flex; justify-content:center; align-items:center; flex:1; min-height: 150px;">
+                        <button id="btn-tool-trash-launch" class="primary" style="padding: 12px; font-size: 1.1em;">Launch Trash Explorer</button>
+                    </div>
                 </div>
 
                 <div id="tab-tool-image" class="tab-pane" style="flex:1;">

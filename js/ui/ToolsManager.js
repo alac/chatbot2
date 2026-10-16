@@ -54,6 +54,12 @@ export class ToolsManager {
             document.getElementById('tools-modal').classList.add('hidden');
             this.app.flagCollectorManager.open();
         });
+
+        // 6. Trash Explorer
+        document.getElementById('btn-tool-trash-launch').addEventListener('click', () => {
+            document.getElementById('tools-modal').classList.add('hidden');
+            this.app.trashExplorerManager.open();
+        });
     }
 
     saveHighlightSettings() {
