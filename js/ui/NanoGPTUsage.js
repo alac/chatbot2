@@ -34,18 +34,28 @@ export class NanoGPTUsage {
         if (!force && now - this.lastFetchTime < 4000) return;
         if (this.isFetching) return;
 
-        let origin = 'https://nano-gpt.com';
-        try {
-            const parsed = new URL(settings.apiUrl);
-            origin = parsed.origin;
-        } catch (e) {}
+        // 1. Force the official API Gateway which has CORS enabled
+        let origin = 'https://api.nano-gpt.com';
+        let endpointPath = '/api/subscription/v1/usage';
 
-        const endpoint = `${origin.replace(/\/$/, '')}/api/subscription/v1/usage`;
+        if (settings.apiUrl) {
+            try {
+                const parsed = new URL(settings.apiUrl);
+                // 2. If you are using a 3rd party proxy (not nano-gpt), respect the proxy
+                if (!parsed.hostname.includes('nano-gpt.com') && !parsed.hostname.includes('nanogpt')) {
+                    origin = parsed.origin;
+                    endpointPath = parsed.pathname.replace(/\/v1\/?$/, '/subscription/usage');
+                }
+            } catch (e) {}
+        }
+
+        const endpoint = `${origin}${endpointPath}`;
 
         this.isFetching = true;
         this.lastFetchTime = now;
 
         try {
+            // 3. ONLY send Authorization. Other headers (x-api-key) trigger CORS preflight rejection.
             const response = await fetch(endpoint, {
                 method: 'GET',
                 headers: {
