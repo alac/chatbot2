@@ -1,9 +1,11 @@
 import { settings } from '../state/AppSettings.js'; 
 import { OpenAIClient } from '../api/OpenAIClient.js';
+import { FavoritesManager } from './FavoritesManager.js';
 
 export class SettingsMenu {
     constructor(uiManager) {
         this.uiManager = uiManager;
+        this.favoritesManager = new FavoritesManager();
         this.globalModal = document.getElementById('settings-modal');
         this.chatModal = document.getElementById('chat-settings-modal');
         this.choicesModal = document.getElementById('choices-settings-modal');
@@ -50,8 +52,7 @@ export class SettingsMenu {
 
         document.getElementById('btn-fetch-models').addEventListener('click', () => this.handleFetchModels());
         document.getElementById('btn-manage-favorites').addEventListener('click', () => {
-            document.getElementById('favorites-container').classList.toggle('hidden');
-            this.renderFavoritesList();
+            this.favoritesManager.open(this.cachedFetchedModels || settings.favoriteModels);
         });
         
         document.getElementById('btn-toggle-anote-history').addEventListener('click', () => {
@@ -165,7 +166,6 @@ export class SettingsMenu {
             }
 
             this.updateAllModelDropdowns();
-            this.renderFavoritesList();
             btn.textContent = "Success!";
         } catch (e) {
             alert(e.message);
@@ -218,28 +218,6 @@ export class SettingsMenu {
             let qrTxtField = document.getElementById(`qr-override-txt-${i}`);
             if (qrTxtField) createOptions(document.getElementById(`qr-model-select-${i}`), qrTxtField.value, true);
         }
-    }
-
-    renderFavoritesList() {
-        const listDiv = document.getElementById('favorites-list');
-        listDiv.innerHTML = '';
-        const list = this.cachedFetchedModels || settings.favoriteModels;
-        const sortedList = [...new Set(list)].sort();
-
-        sortedList.forEach(m => {
-            const row = document.createElement('div');
-            row.className = 'favorite-item';
-            const label = document.createElement('span'); label.textContent = m;
-            const checkbox = document.createElement('input'); checkbox.type = 'checkbox';
-            checkbox.checked = settings.favoriteModels.includes(m);
-            checkbox.addEventListener('change', (e) => {
-                if (e.target.checked && !settings.favoriteModels.includes(m)) settings.favoriteModels.push(m);
-                else settings.favoriteModels = settings.favoriteModels.filter(f => f !== m);
-                settings.save();
-                this.updateAllModelDropdowns();
-            });
-            row.appendChild(label); row.appendChild(checkbox); listDiv.appendChild(row);
-        });
     }
 
     renderBatchRows() {

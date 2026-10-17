@@ -53,6 +53,11 @@ export class DraftSwitcher {
         toolbar.classList.remove('hidden');
         toolbar.innerHTML = '';
 
+        // Determine if switching is allowed
+        const isLatestUser = this.app.state.history.length > 0 && 
+            this.app.state.history[this.app.state.history.length - 1].role === 'user';
+        const switchDisabledTitle = isLatestUser ? "Draft switching disabled: the latest message is a user prompt." : "";
+
         const draftSwitcherContent = document.createElement('div');
         draftSwitcherContent.className = 'draft-switcher';
 
@@ -64,11 +69,18 @@ export class DraftSwitcher {
         const btnPrevDraft = document.createElement('button');
         btnPrevDraft.textContent = '◀';
         btnPrevDraft.onclick = () => this.switchDraft(index, -1);
-        if (msg.drafts.length <= 1) btnPrevDraft.disabled = true;
+        if (msg.drafts.length <= 1 || isLatestUser) {
+            btnPrevDraft.disabled = true;
+            if (isLatestUser) btnPrevDraft.title = switchDisabledTitle;
+        }
 
         // Draft Selector
         const select = document.createElement('select');
         select.id = `tb-draft-select`;
+        if (isLatestUser) {
+            select.disabled = true;
+            select.title = switchDisabledTitle;
+        }
         
         const activeBatchStartIdx = msg.drafts.length - (this.app.activeBatch ? this.app.activeBatch.jobs.length : 0);
 
@@ -93,7 +105,10 @@ export class DraftSwitcher {
         const btnNextDraft = document.createElement('button');
         btnNextDraft.textContent = '▶';
         btnNextDraft.onclick = () => this.switchDraft(index, 1);
-        if (msg.drafts.length <= 1) btnNextDraft.disabled = true;
+        if (msg.drafts.length <= 1 || isLatestUser) {
+            btnNextDraft.disabled = true;
+            if (isLatestUser) btnNextDraft.title = switchDisabledTitle;
+        }
 
         // Add Drafts
         const btnAdd = document.createElement('button');

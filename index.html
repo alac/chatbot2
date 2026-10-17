@@ -580,10 +580,6 @@
                         <input type="text" id="set-model" placeholder="Model ID..." style="flex:1;">
                         <button id="btn-manage-favorites" class="secondary" title="Manage Favorites">⭐</button>
                     </div>
-                    <div id="favorites-container" class="hidden">
-                        <h3>Favorites</h3>
-                        <div id="favorites-list"></div>
-                    </div>
                 </div>
 
                 <div id="tab-batch" class="tab-pane">
@@ -1164,6 +1160,26 @@
             
             <div class="modal-body mh-diff-body" style="padding: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column;">
                 <div id="mh-diff-container" class="mh-diff-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Favorites Manager Modal -->
+    <div id="favorites-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="max-height: 90vh; width: 600px; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <h2>Manage Favorite Models</h2>
+                <button id="btn-close-favorites" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 12px; flex: 1; overflow:hidden;">
+                <div style="display:flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <input type="text" id="fav-search-input" placeholder="Search models..." style="flex:1; min-width: 150px;">
+                    <button id="btn-fav-toggle-only" class="secondary">⭐ Starred Only</button>
+                    <button id="btn-fav-clear-all" class="danger">Clear All</button>
+                </div>
+                <div id="favorites-list-container" style="flex: 1; overflow-y: auto; background: var(--bg-main); border: 1px solid var(--border); border-radius: 4px; padding: 8px;">
+                    <!-- Populated by JS -->
+                </div>
             </div>
         </div>
     </div>
