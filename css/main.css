@@ -62,6 +62,28 @@ header { display: flex; justify-content: space-between; align-items: center; pad
 .avatar-grid-item:hover { transform: scale(1.05); }
 .avatar-grid-item.pinned { border-color: var(--accent); box-shadow: 0 0 10px rgba(59,130,246,0.5); }
 
+/* NanoGPT Usage Meter */
+.nanogpt-meter {
+    width: 4px;
+    height: 34px;
+    background: #ffffff;
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.4);
+}
+#nanogpt-meter-fill {
+    width: 100%;
+    height: 0%;
+    background: var(--danger);
+    transition: height 0.3s ease;
+}
+
 /* Summary Meter */
 #summary-meter-container { display: flex; align-items: center; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; padding: 0; position: relative; width: 120px; height: 34px; overflow: hidden; cursor: pointer; flex: 1; max-width: 200px; }
 #summary-meter-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(59, 130, 246, 0.4); width: 0%; transition: width 0.3s; z-index: 1;}

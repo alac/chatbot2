@@ -509,6 +509,7 @@ export class SettingsMenu {
         document.documentElement.setAttribute('data-theme', settings.theme);
         this.uiManager.state.buildPromptPayload(); 
         this.uiManager.renderAll(); 
+        if (this.uiManager.nanoGPTUsage) this.uiManager.nanoGPTUsage.update(true);
 
         this.globalModal.classList.add('hidden');
     }

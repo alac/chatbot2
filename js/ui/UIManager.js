@@ -25,6 +25,7 @@ import { RemoteManagerUI } from './RemoteManagerUI.js';
 
 import { ImageGenManager } from './ImageGenManager.js';
 import { AvatarManager } from './AvatarManager.js';
+import { NanoGPTUsage } from './NanoGPTUsage.js';
 
 export class UIManager {
     constructor() {
@@ -68,6 +69,7 @@ export class UIManager {
 
         this.imageGenManager = new ImageGenManager(this);
         this.avatarManager = new AvatarManager(this);
+        this.nanoGPTUsage = new NanoGPTUsage();
 
         this.bindEvents();
         this.initApp();
@@ -90,6 +92,7 @@ export class UIManager {
         });
 
         this.summaryManager.updateSummaryMeter();
+        this.nanoGPTUsage.update();
     }
 
     bindEvents() {
@@ -338,6 +341,7 @@ export class UIManager {
             }
             
             this.summaryManager.updateSummaryMeter();
+            this.nanoGPTUsage.update();
             if (!this.isUserScrolledUp) this.scrollToBottom();
             this.autoSave();
         }
