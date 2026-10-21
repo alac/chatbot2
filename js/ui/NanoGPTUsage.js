@@ -4,6 +4,7 @@ export class NanoGPTUsage {
     constructor() {
         this.container = document.getElementById('nanogpt-meter');
         this.fill = document.getElementById('nanogpt-meter-fill');
+        this.timeFill = document.getElementById('nanogpt-time-fill');
         this.lastFetchTime = 0;
         this.isFetching = false;
         this.bindEvents();
@@ -84,15 +85,34 @@ export class NanoGPTUsage {
                 ? weekly.percentUsed 
                 : (weekly.used / (weekly.used + (weekly.remaining || 0)));
 
-            const clampedHeight = Math.min(100, Math.max(0, percent * 100));
-            this.fill.style.height = `${clampedHeight}%`;
+            const tokenPercentClamped = Math.min(100, Math.max(0, percent * 100));
+            this.fill.style.height = `${tokenPercentClamped}%`;
+
+            // Calculate weekly time elapsed (1 week = 604,800,000 ms)
+            let timePercent = 0;
+            const weekMs = 7 * 86400000;
+            if (weekly.resetAt) {
+                const msRemaining = Math.max(0, weekly.resetAt - Date.now());
+                const fractionElapsed = Math.min(1, Math.max(0, 1 - (msRemaining / weekMs)));
+                timePercent = fractionElapsed * 100;
+                if (this.timeFill) {
+                    this.timeFill.style.height = `${timePercent}%`;
+                }
+            }
 
             const usedStr = this.formatTokens(weekly.used || 0);
             const totalStr = this.formatTokens((weekly.used || 0) + (weekly.remaining || 0));
-            const pctStr = (percent * 100).toFixed(1);
+            const tokenPctStr = tokenPercentClamped.toFixed(1);
+            const timePctStr = timePercent.toFixed(1);
             const resetStr = weekly.resetAt ? ` • Resets in ${this.formatTimeRemaining(weekly.resetAt)}` : '';
+            
+            // Pacing verdict
+            const pacingDiff = tokenPercentClamped - timePercent;
+            let pacingVerdict = 'Pacing Normal';
+            if (pacingDiff > 5) pacingVerdict = `Burning Fast (+${pacingDiff.toFixed(0)}%)`;
+            else if (pacingDiff < -5) pacingVerdict = `Under Quota (${pacingDiff.toFixed(0)}%)`;
 
-            this.container.title = `NanoGPT Weekly Usage: ${usedStr} / ${totalStr} (${pctStr}%)${resetStr}\nClick to refresh`;
+            this.container.title = `NanoGPT Pacing: ${pacingVerdict}\nTokens: ${usedStr} / ${totalStr} (${tokenPctStr}%)\nWeek Elapsed: ${timePctStr}%${resetStr}\nClick to refresh`;
             this.container.classList.remove('hidden');
         } catch (err) {
             this.container.classList.add('hidden');
