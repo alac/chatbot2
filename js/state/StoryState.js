@@ -41,6 +41,24 @@ export class StoryState {
         this.isSnapshotActive = false;
 
         this.trash = [];
+        this.editLog = [];
+    }
+
+    recordEdit(oldText, newText, source = 'manual') {
+        const oldT = oldText.trim();
+        const newT = newText.trim();
+        if (!oldT && !newT) return;
+        if (oldT === newT) return;
+        
+        this.editLog.push({ old: oldText, new: newText, source, timestamp: Date.now() });
+    }
+
+    clearEditLog() {
+        this.editLog = [];
+    }
+
+    getEditLogAsJsonl() {
+        return this.editLog.map(entry => JSON.stringify({ slop: entry.old, human: entry.new })).join('\n');
     }
 
     clear(resetSettings = false) {
@@ -54,6 +72,7 @@ export class StoryState {
         this.isSnapshotActive = false;
         
         this.trash = [];
+        this.editLog = [];
 
         if (resetSettings) {
             this.disableMemory = false;
@@ -505,6 +524,7 @@ export class StoryState {
         this.anoteHistory = data.anoteHistory || [];
         
         this.trash = data.trash || [];
+        this.editLog = data.editLog || [];
 
         this.nameTheme = data.nameTheme !== undefined ? data.nameTheme : "fantasy";
         this.nameCountMale = data.nameCountMale !== undefined ? data.nameCountMale : 3;
@@ -545,6 +565,7 @@ export class StoryState {
             anoteDepth: this.anoteDepth,
             anoteHistory: this.anoteHistory,
             trash: this.trash,
+            editLog: this.editLog,
             nameTheme: this.nameTheme,
             nameCountMale: this.nameCountMale,
             nameCountFemale: this.nameCountFemale,

@@ -142,12 +142,14 @@ export class SurgicalEditManager {
         
         const newActiveText = document.getElementById('surgical-edit-textarea').value;
         const before = rawBlocks.slice(0, startP).join('');
+        const activeOriginal = rawBlocks.slice(startP, endP + 1).join('');
         const after = rawBlocks.slice(endP + 1).join('');
         
         const finalContent = before + newActiveText + after;
         
         const currentContent = this.uiManager.state.getContent(msgIndex);
         if (finalContent !== currentContent) {
+            this.uiManager.state.recordEdit(activeOriginal, newActiveText, 'surgical');
             this.uiManager.state.editTurn(msgIndex, finalContent);
             this.uiManager.renderAll();
             this.uiManager.autoSave();

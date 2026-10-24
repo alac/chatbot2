@@ -18,6 +18,7 @@ import { SurgicalEditManager } from './SurgicalEditManager.js';
 import { BatchEditManager } from './BatchEditManager.js';
 import { FlagCollectorManager } from './FlagCollectorManager.js';
 import { TrashExplorerManager } from './TrashExplorerManager.js';
+import { EditLogManager } from './EditLogManager.js';
 
 import { CloudSyncUI } from './CloudSyncUI.js';
 import { SlotManager } from './SlotManager.js';
@@ -63,6 +64,7 @@ export class UIManager {
         this.batchEditManager = new BatchEditManager(this);
         this.flagCollectorManager = new FlagCollectorManager(this);
         this.trashExplorerManager = new TrashExplorerManager(this);
+        this.editLogManager = new EditLogManager(this);
         this.cloudSyncUI = new CloudSyncUI(this);
         this.slotManager = new SlotManager(this);
         this.remoteManagerUI = new RemoteManagerUI(this);

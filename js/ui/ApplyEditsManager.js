@@ -371,6 +371,8 @@ export class ApplyEditsManager {
                 // 1. Apply the Edit Replacement
                 const targetContent = this.app.state.getContent(edit.targetMessageIdx);
                 const updatedContent = targetContent.substring(0, edit.startIndex) + edit.newText + targetContent.substring(edit.endIndex);
+                
+                this.app.state.recordEdit(edit.oldText, edit.newText, 'apply_edits');
                 this.app.state.editTurn(edit.targetMessageIdx, updatedContent);
 
                 // 2. Strip used <flag> (or <fix>) tags out of recent context

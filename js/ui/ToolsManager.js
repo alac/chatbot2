@@ -60,6 +60,12 @@ export class ToolsManager {
             document.getElementById('tools-modal').classList.add('hidden');
             this.app.trashExplorerManager.open();
         });
+
+        // 7. Edit Log
+        document.getElementById('btn-tool-editlog-launch').addEventListener('click', () => {
+            document.getElementById('tools-modal').classList.add('hidden');
+            this.app.editLogManager.open();
+        });
     }
 
     saveHighlightSettings() {
