@@ -1,6 +1,6 @@
 console.log("Service worker is active - should enable PWA functionality");
 
-const cacheName = 'chtbt2-43edf225'; // Updated hash to force the new SW to install
+const cacheName = 'chtbt2-eff6b6be'; // Updated hash to force the new SW to install
 
 // Files to cache for offline use
 const filesToCache = [
@@ -10,6 +10,7 @@ const filesToCache = [
     './js/main.js',
     './js/api/GithubClient.js',
     './js/api/ImageClient.js',
+    './js/api/LocalRewriterEngine.js',
     './js/api/OpenAIClient.js',
     './js/data/names.js',
     './js/state/AppSettings.js',
@@ -34,6 +35,8 @@ const filesToCache = [
     './js/ui/NotesManager.js',
     './js/ui/QuickRepliesManager.js',
     './js/ui/RemoteManagerUI.js',
+    './js/ui/RewriterManager.js',
+    './js/ui/SelectionToolbarManager.js',
     './js/ui/SettingsMenu.js',
     './js/ui/SlotManager.js',
     './js/ui/SummaryManager.js',
@@ -50,6 +53,7 @@ const filesToCache = [
     './js/utils/NameGenerator.js',
     './js/utils/TokenCalculator.js',
     './js/utils/diff.js',
+    './js/utils/textUtils.js',
     './css/main.css'
 ];
 

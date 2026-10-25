@@ -300,8 +300,7 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 
 @media (max-width: 768px) {
     .hide-mobile { display: none !important; }
-    .floating-edit-btn { top: auto !important; bottom: 80px !important; left: 50% !important; transform: translateX(-50%) !important; margin-top: 0 !important; }
-    .floating-edit-btn.visible { margin-top: 0 !important; bottom: 95px !important; }
+    .floating-toolbar { top: auto !important; bottom: 85px !important; left: 50% !important; transform: translateX(-50%) !important; margin-top: 0 !important; }
     .modal-content { width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; }
     .setting-row { flex-wrap: wrap; }
     .setting-row select, .setting-row input[type="text"], .setting-row input[type="password"] { max-width: 100%; flex: 1; }
@@ -421,9 +420,15 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .btn-add-col { flex-shrink: 0; width: 50px; height: 100%; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.1); border: 2px dashed var(--border); border-radius: 8px; cursor: pointer; font-size: 24px; color: var(--text-muted); transition: all 0.2s; }
 .btn-add-col:hover { background: rgba(255,255,255,0.05); color: var(--text-main); border-color: var(--text-muted); }
 
-.floating-edit-btn { position: fixed; z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.4); padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 0.9em; transform: translate(-50%, -100%); margin-top: -10px; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 0.2s, margin-top 0.2s, bottom 0.2s; }
-.floating-edit-btn.visible { opacity: 1; pointer-events: auto; margin-top: -15px; }
+.floating-toolbar { position: fixed; z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.4); border-radius: 20px; display: flex; transform: translate(-50%, -100%); margin-top: -15px; transition: opacity 0.2s; }
+.floating-toolbar button { padding: 6px 16px; font-weight: bold; font-size: 0.9em; box-shadow: none; }
 .md-block { display: contents; }
+
+/* Rewriter UI */
+.rw-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.rw-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.85em; font-weight: bold; color: var(--text-muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.rw-content { font-size: 0.95em; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+.rw-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
 
 /* Flag Collector UI */
 .fc-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }

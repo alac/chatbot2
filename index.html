@@ -103,6 +103,7 @@
                     <option value="tab-tool-collect">7. Flag Collector</option>
                     <option value="tab-tool-trash">8. Trash Explorer</option>
                     <option value="tab-tool-editlog">9. Edit Log</option>
+                    <option value="tab-tool-rewriter">10. Local Rewriter</option>
                 </select>
                 <button id="btn-close-tools" class="close-btn">&times;</button>
             </div>
@@ -256,6 +257,28 @@
                     <div style="display:flex; justify-content:center; align-items:center; flex:1; min-height: 150px;">
                         <button id="btn-tool-editlog-launch" class="primary" style="padding: 12px; font-size: 1.1em;">Launch Edit Log</button>
                     </div>
+                </div>
+
+                <div id="tab-tool-rewriter" class="tab-pane" style="flex:1;">
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px;">Run a local WebGPU model to automatically detect and rewrite AI slop phrases. Models are downloaded and cached in your browser.</p>
+                    
+                    <div class="setting-row column">
+                        <span class="label-text">Select Model</span>
+                        <select id="tool-rewriter-model" style="width: 100%;">
+                            <option value="alac/flan-t5-deslop-onnx">flan-t5-deslop-onnx (Recommended)</option>
+                            <option value="alac/flan-t5-deslopV2-onnx">flan-t5-deslopV2-onnx (Experimental)</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display:flex; gap: 8px; margin-top: 12px;">
+                        <button id="btn-tool-rewriter-load" class="primary" style="flex:1;">Load Model</button>
+                        <button id="btn-tool-rewriter-unload" class="danger" style="flex:1;" disabled>Unload / Free Memory</button>
+                    </div>
+                    
+                    <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.2); border-radius: 3px; margin-top: 12px; overflow: hidden;">
+                        <div id="rewriter-progress-fill" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.1s;"></div>
+                    </div>
+                    <div id="rewriter-status-text" style="font-size: 0.85em; color: var(--text-muted); margin-top: 6px; text-align: center;">Status: Waiting to load model...</div>
                 </div>
 
                 <div id="tab-tool-image" class="tab-pane" style="flex:1;">
@@ -1018,6 +1041,24 @@
     <!-- Hidden input for JSON Imports (Notes, etc.) -->
     <input type="file" id="import-notes-file" class="hidden" accept=".json">
 
+    <!-- Rewrite Modal -->
+    <div id="rewrite-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="max-height: 90vh; width: 700px; background: var(--bg-panel); display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <h2>Rewrite Section</h2>
+                <button id="btn-close-rewrite" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 12px; padding: 16px; overflow-y:auto; flex:1; background: var(--bg-main);">
+                <div style="font-size: 0.85em; color: var(--text-muted); font-weight: bold; text-transform: uppercase;">Original Sentence(s)</div>
+                <div id="rewrite-original-text" style="padding: 12px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; font-size: 0.95em; line-height: 1.4; color: var(--text-muted);"></div>
+                <hr style="margin: 4px 0;">
+                <div id="rewrite-iterations-container" style="display:flex; flex-direction:column; gap: 12px;">
+                    <!-- Cards injected by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Token Usage Modal -->
     <div id="usage-modal" class="modal hidden">
         <div class="modal-content" style="width: 350px;">
@@ -1036,8 +1077,11 @@
         </div>
     </div>
 
-    <!-- Floating Edit Button -->
-    <button id="floating-edit-btn" class="primary floating-edit-btn">✏️ Edit Section</button>
+    <!-- Floating Selection Toolbar -->
+    <div id="floating-selection-toolbar" class="floating-toolbar hidden">
+        <button id="btn-float-edit" class="primary" style="border-radius: 20px 0 0 20px; border-right: 1px solid rgba(255,255,255,0.2);">✏️ Edit</button>
+        <button id="btn-float-rewrite" class="primary" style="border-radius: 0 20px 20px 0;">🪄 Rewrite</button>
+    </div>
 
     <!-- Surgical Edit Modal -->
     <div id="surgical-edit-modal" class="modal hidden" style="z-index: 105;">

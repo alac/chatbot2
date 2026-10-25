@@ -56,6 +56,7 @@ export class AppSettings {
         
         // Tools Menu Global Persistence
         this.diceNotation = "1d20";
+        this.rewriterModel = 'alac/flan-t5-deslop-onnx'; // NEW
         this.highlightEnabled = false;
         this.highlightBg = '#7f1d1d';
         this.highlightFg = '#ffffff';
@@ -110,6 +111,7 @@ export class AppSettings {
             }
 
             if (!this.diceNotation) this.diceNotation = "1d20";
+            if (!this.rewriterModel) this.rewriterModel = 'alac/flan-t5-deslop-onnx';
             
             if (this.highlightEnabled === undefined) this.highlightEnabled = false;
             if (!this.highlightBg) this.highlightBg = '#7f1d1d';

@@ -16,6 +16,8 @@ import { MemoryHistoryManager } from './MemoryHistoryManager.js';
 import { NotesManager } from './NotesManager.js';
 import { SurgicalEditManager } from './SurgicalEditManager.js';
 import { BatchEditManager } from './BatchEditManager.js';
+import { SelectionToolbarManager } from './SelectionToolbarManager.js';
+import { RewriterManager } from './RewriterManager.js';
 import { FlagCollectorManager } from './FlagCollectorManager.js';
 import { TrashExplorerManager } from './TrashExplorerManager.js';
 import { EditLogManager } from './EditLogManager.js';
@@ -62,6 +64,8 @@ export class UIManager {
         this.notesManager = new NotesManager(this);
         this.surgicalEditManager = new SurgicalEditManager(this);
         this.batchEditManager = new BatchEditManager(this);
+        this.selectionToolbarManager = new SelectionToolbarManager(this);
+        this.rewriterManager = new RewriterManager(this);
         this.flagCollectorManager = new FlagCollectorManager(this);
         this.trashExplorerManager = new TrashExplorerManager(this);
         this.editLogManager = new EditLogManager(this);
