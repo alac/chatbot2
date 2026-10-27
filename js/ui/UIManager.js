@@ -883,9 +883,12 @@ export class UIManager {
                 
                 const metaSpan = document.createElement('span');
                 metaSpan.id = `meta-span-${index}`;
+                const msgNumber = `#${index + 1}`;
                 if (activeDraft.model) {
                     const shortModel = activeDraft.model.split('/').pop();
-                    metaSpan.textContent = `${shortModel} • ${activeDraft.isStale ? '[X]' : activeDraft.duration + 's'}`;
+                    metaSpan.textContent = `${msgNumber} • ${shortModel} • ${activeDraft.isStale ? '[X]' : activeDraft.duration + 's'}`;
+                } else {
+                    metaSpan.textContent = msgNumber;
                 }
                 actionBar.appendChild(metaSpan);
 

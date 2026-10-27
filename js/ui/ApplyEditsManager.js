@@ -134,8 +134,14 @@ export class ApplyEditsManager {
     }
 
     evaluateEditsStatus() {
-        const scanHistory = this.app.state.history.slice(-11, -1); 
-        const startIndexOffset = Math.max(0, this.app.state.history.length - 11);
+        // Collect up to 10 visible message indices backwards (excluding the latest message which has the edits)
+        const visibleIndices = [];
+        for (let i = this.app.state.history.length - 2; i >= 0; i--) {
+            if (!this.app.state.history[i].isHidden) {
+                visibleIndices.push(i);
+                if (visibleIndices.length >= 10) break;
+            }
+        }
 
         this.extractedEdits.forEach(edit => {
             edit.status = 'invalid';
@@ -143,8 +149,8 @@ export class ApplyEditsManager {
             edit.startIndex = -1;
             edit.endIndex = -1;
 
-            for (let i = scanHistory.length - 1; i >= 0; i--) {
-                const content = this.app.state.getContent(startIndexOffset + i);
+            for (const msgIdx of visibleIndices) {
+                const content = this.app.state.getContent(msgIdx);
                 
                 // Skip meta-responses that are just listing edits/flags/fixes so we don't apply the edit to the tool output itself
                 if (/<(?:flag|fix)[>\s]/i.test(content)) {
@@ -159,17 +165,17 @@ export class ApplyEditsManager {
                 
                 if (oldIdx !== -1) {
                     edit.status = 'apply';
-                    edit.targetMessageIdx = startIndexOffset + i;
+                    edit.targetMessageIdx = msgIdx;
                     edit.startIndex = oldIdx;
                     edit.endIndex = oldIdx + edit.oldText.length;
-                    edit.score = i * 100000 + oldIdx;
+                    edit.score = msgIdx * 100000 + oldIdx;
                     break;
                 } else if (newIdx !== -1 && !newIsSubOfOld) {
                     edit.status = 'applied';
-                    edit.targetMessageIdx = startIndexOffset + i;
+                    edit.targetMessageIdx = msgIdx;
                     edit.startIndex = newIdx;
                     edit.endIndex = newIdx + edit.newText.length;
-                    edit.score = i * 100000 + newIdx;
+                    edit.score = msgIdx * 100000 + newIdx;
                     break;
                 }
             }
