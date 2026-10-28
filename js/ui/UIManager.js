@@ -22,6 +22,7 @@ import { FlagCollectorManager } from './FlagCollectorManager.js';
 import { TrashExplorerManager } from './TrashExplorerManager.js';
 import { EditLogManager } from './EditLogManager.js';
 import { TimelineManager } from './TimelineManager.js';
+import { DirectorManager } from './DirectorManager.js';
 
 import { CloudSyncUI } from './CloudSyncUI.js';
 import { SlotManager } from './SlotManager.js';
@@ -78,6 +79,7 @@ export class UIManager {
         this.avatarManager = new AvatarManager(this);
         this.nanoGPTUsage = new NanoGPTUsage();
         this.timelineManager = new TimelineManager(this);
+        this.directorManager = new DirectorManager(this);
 
         this.bindEvents();
         this.initApp();
@@ -479,7 +481,7 @@ export class UIManager {
             startIndex = Math.max(0, this.state.contextBoundaryIndex - settings.visibleOutOfContext - this.historyOffset);
         }
 
-        if (startIndex > 0) {
+        if (startIndex > 0 && !(this.directorManager && this.directorManager.isActive)) {
             const btn = document.createElement('div');
             btn.className = 'load-older-btn';
             btn.textContent = `▲ Load Older Messages (${startIndex} hidden)`;
@@ -914,6 +916,18 @@ export class UIManager {
                 }
                 actionBar.appendChild(metaSpan);
 
+                if (this.directorManager && this.directorManager.isActive && msg._originIndex !== undefined) {
+                    const dirSpan = document.createElement('span');
+                    dirSpan.style.fontSize = "0.85em";
+                    dirSpan.style.marginLeft = "8px";
+                    if (msg._isTargetTurn) {
+                        dirSpan.innerHTML = '<strong style="color:#fb923c;">[🎬 Target]</strong>';
+                    } else {
+                        dirSpan.innerHTML = `<span style="color:var(--text-muted);">[Original #${msg._originIndex + 1}]</span>`;
+                    }
+                    actionBar.appendChild(dirSpan);
+                }
+
                 const iconsDiv = document.createElement('div');
                 iconsDiv.className = 'action-icons';
 
@@ -1034,6 +1048,15 @@ export class UIManager {
                     iconsDiv.appendChild(btnPrompt);
                 }
 
+                const btnDirector = document.createElement('span');
+                btnDirector.textContent = '🎬';
+                btnDirector.title = "Director Mode (Sandbox Revision)";
+                btnDirector.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.directorManager.enter(index);
+                });
+                iconsDiv.appendChild(btnDirector);
+
                 const btnDelete = document.createElement('span');
                 btnDelete.textContent = '🗑️';
                 btnDelete.title = "Delete";
@@ -1114,6 +1137,7 @@ export class UIManager {
     }
 
     async autoSave() {
+        if (this.directorManager && this.directorManager.isActive) return;
         await this.storage.saveSlot(this.activeSlot, this.activeSlotName, this.activeSlotDesc, this.state.exportData());
         localStorage.setItem('last_active_slot', this.activeSlot);
         if (this.slotManager) this.slotManager.refreshSlotList();

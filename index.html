@@ -11,6 +11,15 @@
 </head>
 <body>
     <header id="top-nav">
+        <!-- Director Mode Alternate Header -->
+        <div id="director-nav-group" class="director-nav-group hidden" style="flex:1; display:flex; justify-content:space-between; align-items:center;">
+            <span id="director-badge" class="director-badge" style="font-weight:bold; color:var(--text-main); background:rgba(249, 115, 22, 0.2); border:1px solid #fb923c; padding:4px 12px; border-radius:6px;">🎬 Turn #N</span>
+            <div style="display:flex; gap:8px;">
+                <button id="btn-director-settings" class="secondary" title="Director Settings">⚙️</button>
+                <button id="btn-director-exit" class="primary" style="background:#fb923c; border-color:#fb923c;">Exit / Review</button>
+            </div>
+        </div>
+
         <div id="avatar-container" class="avatar-container" title="Hold for Avatar Menu">
             <div id="avatar-placeholder">AI</div>
             <img id="avatar-main-img" class="hidden" src="" alt="Avatar">
@@ -1244,6 +1253,59 @@
                 </div>
                 <div id="favorites-list-container" style="flex: 1; overflow-y: auto; background: var(--bg-main); border: 1px solid var(--border); border-radius: 4px; padding: 8px;">
                     <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Director Mode Settings Modal -->
+    <div id="director-settings-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="max-height: 90vh; width: 600px;">
+            <div class="modal-header">
+                <h2>Director Mode Settings</h2>
+                <button id="btn-close-director-settings" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 12px;">
+                <div class="setting-row">
+                    <span class="label-text">Prior Context (Turns)</span>
+                    <input type="number" id="dir-set-prior" min="0" max="100" style="width: 80px;">
+                </div>
+                <div class="setting-row">
+                    <span class="label-text">Post Context (Turns)</span>
+                    <input type="number" id="dir-set-post" min="0" max="100" style="width: 80px;">
+                </div>
+                <div class="setting-row">
+                    <span class="label-text">Include Main Summary</span>
+                    <input type="checkbox" id="dir-set-summary">
+                </div>
+                <hr style="margin:4px 0;">
+                <div class="setting-row">
+                    <span class="label-text">Override System Prompt</span>
+                    <input type="checkbox" id="dir-set-override">
+                </div>
+                <textarea id="dir-set-prompt" style="flex:1; min-height: 150px; font-family: inherit; padding: 8px; resize:none;" placeholder="System prompt for the editor..."></textarea>
+            </div>
+            <div style="padding: 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:flex-end;">
+                <button id="btn-save-director-settings" class="primary">Save & Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Director Mode Review Modal -->
+    <div id="director-review-modal" class="modal hidden" style="z-index: 110;">
+        <div class="modal-content" style="max-height: 95vh; width: 900px; max-width: 95vw; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <h2>Review Revisions</h2>
+                <button id="btn-close-director-review" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; padding:0; flex:1; overflow:hidden;">
+                <div id="director-review-diffs" style="flex:1; overflow-y:auto; padding: 16px; display:flex; flex-direction:column; gap:16px; background:var(--bg-main);"></div>
+            </div>
+            <div style="padding: 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:space-between; gap: 12px;">
+                <button id="btn-dir-review-discard" class="danger">Discard All</button>
+                <div style="display:flex; gap:8px;">
+                    <button id="btn-dir-review-keep-editing" class="secondary">Keep Editing</button>
+                    <button id="btn-dir-review-commit" class="primary">Accept & Commit</button>
                 </div>
             </div>
         </div>
