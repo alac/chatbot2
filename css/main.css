@@ -304,8 +304,37 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     .modal-content { width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; }
     .setting-row { flex-wrap: wrap; }
     .setting-row select, .setting-row input[type="text"], .setting-row input[type="password"] { max-width: 100%; flex: 1; }
-    header { flex-wrap: wrap; }
-    .nav-controls { flex: 1; justify-content: flex-end; }
+    header { padding: 6px 8px; gap: 4px; }
+    .nav-controls { gap: 4px; align-items: center; }
+
+    /* Hide emojis and line-breaks on Chat & App settings buttons */
+    #btn-chat-settings .btn-emoji,
+    #btn-settings .btn-emoji,
+    #btn-chat-settings .icon,
+    #btn-settings .icon {
+        display: none !important;
+    }
+    #btn-chat-settings br,
+    #btn-settings br {
+        display: none !important;
+    }
+
+    /* Tighten buttons to single-line text on mobile */
+    #btn-chat-settings,
+    #btn-settings {
+        display: inline-flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 5px 7px !important;
+        font-size: 0.8em !important;
+        min-width: 0 !important;
+        height: 32px;
+    }
+
+    .quick-btn { min-width: 0 !important; padding: 6px 8px !important; font-size: 0.8em !important; }
+    .quick-btn .icon { display: none !important; }
+    #btn-open-timeline { padding: 4px 6px; font-size: 1em; height: 32px; }
 }
 
 .quick-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 8px !important; font-size: 0.7em !important; line-height: 1; min-width: 50px; }
@@ -440,6 +469,7 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .fc-models { font-size: 0.85em; color: var(--accent); font-weight: bold; }
 
 /* --- BEGIN TIMELINE & MARKERS --- */
+#btn-open-timeline { padding: 4px 8px; font-size: 1.1em; display: inline-flex; align-items: center; justify-content: center; }
 .timeline-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 340px; max-width: 100vw; background: var(--bg-panel); border-left: 1px solid var(--border); transform: translateX(100%); transition: transform 0.3s ease; z-index: 200; display: flex; flex-direction: column; box-shadow: -4px 0 15px rgba(0,0,0,0.3); }
 .timeline-drawer.open { transform: translateX(0); }
 .timeline-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199; display: none; }
@@ -467,4 +497,22 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 @keyframes pulse-bg { 0% { background-color: var(--accent); } 100% { background-color: transparent; } }
 .pulse-highlight { animation: pulse-bg 2s ease-out; }
 /* --- END TIMELINE & MARKERS --- */
+
+/* --- TIMELINE SEARCH & EDIT ADDITIONS --- */
+.timeline-search { display: flex; align-items: center; padding: 8px 12px; background: var(--bg-main); border-bottom: 1px solid var(--border); gap: 6px; }
+.timeline-search input { flex: 1; padding: 6px; font-size: 0.9em; }
+.timeline-search-clear { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2em; padding: 0 4px; }
+.timeline-search-clear:hover { color: var(--text-main); }
+
+.marker-edit-form { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.marker-edit-form .edit-type-label { font-size: 0.8em; color: var(--text-muted); font-weight: bold; text-transform: uppercase; }
+.tag-input-group { display: flex; gap: 4px; }
+.tag-input-group input { flex: 1; min-width: 0; }
+.btn-open-tags { padding: 0 8px; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }
+
+#tag-picker-modal { z-index: 250; } /* Ensure it floats above the marker modal */
+.tag-picker-grid { display: flex; flex-wrap: wrap; gap: 8px; max-height: 40vh; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.1); border-radius: 6px; border: 1px solid var(--border); }
+.tag-picker-chip { padding: 6px 12px; border-radius: 16px; background: var(--bg-panel); border: 1px solid var(--border); cursor: pointer; font-size: 0.9em; user-select: none; transition: all 0.2s; }
+.tag-picker-chip:hover { border-color: var(--text-muted); }
+.tag-picker-chip.selected { background: rgba(59, 130, 246, 0.2); border-color: var(--accent); color: var(--accent); font-weight: bold; }
 
