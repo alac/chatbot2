@@ -1,6 +1,7 @@
 // BEGIN FILE: js/ui/DirectorManager.js
 import { StoryState } from '../state/StoryState.js';
 import { diffWords } from '../utils/diff.js';
+import { settings } from '../state/AppSettings.js';
 
 export class DirectorManager {
     constructor(app) {
@@ -8,6 +9,10 @@ export class DirectorManager {
         this.isActive = false;
         this.mainStoryState = null;
         
+        this.targetIndex = -1;
+        this.currentSessionPrior = 0;
+        this.currentSessionPost = 0;
+
         // Default Director Settings
         this.settings = {
             priorContextCount: 3,
@@ -39,15 +44,31 @@ export class DirectorManager {
         // Settings Modal
         document.getElementById('btn-close-director-settings').addEventListener('click', () => document.getElementById('director-settings-modal').classList.add('hidden'));
         document.getElementById('btn-save-director-settings').addEventListener('click', () => {
-            this.settings.priorContextCount = parseInt(document.getElementById('dir-set-prior').value) || 0;
-            this.settings.postContextCount = parseInt(document.getElementById('dir-set-post').value) || 0;
+            const newPrior = parseInt(document.getElementById('dir-set-prior').value) || 0;
+            const newPost = parseInt(document.getElementById('dir-set-post').value) || 0;
+            const boundsChanged = (newPrior !== this.currentSessionPrior || newPost !== this.currentSessionPost);
+
+            this.settings.priorContextCount = newPrior;
+            this.settings.postContextCount = newPost;
             this.settings.includeSummary = document.getElementById('dir-set-summary').checked;
             this.settings.overrideSystemPrompt = document.getElementById('dir-set-override').checked;
             this.settings.customSystemPrompt = document.getElementById('dir-set-prompt').value;
             this.saveSettings();
             
             if (this.isActive) {
-                // Update active sandbox properties if modified mid-session
+                // If user changed turn counts mid-session, warn and offer to kick out
+                if (boundsChanged) {
+                    const shouldExit = confirm(
+                        "Context window bounds (prior/post turns) cannot be applied to an ongoing session without restarting it.\n\nDiscard this session and exit Director Mode now so you can start fresh with the new context?"
+                    );
+                    if (shouldExit) {
+                        document.getElementById('director-settings-modal').classList.add('hidden');
+                        this.discard();
+                        return;
+                    }
+                }
+
+                // Update active sandbox properties that can safely change live
                 this.app.state.disableSummary = !this.settings.includeSummary;
                 if (this.settings.overrideSystemPrompt) {
                     this.app.state.systemPrompt = this.settings.customSystemPrompt;
@@ -86,6 +107,10 @@ export class DirectorManager {
 
     enter(targetIndex) {
         if (this.isActive) return;
+
+        this.targetIndex = targetIndex;
+        this.currentSessionPrior = this.settings.priorContextCount;
+        this.currentSessionPost = this.settings.postContextCount;
 
         this.mainStoryState = this.app.state;
         const mainHistory = this.mainStoryState.history;
@@ -227,6 +252,7 @@ export class DirectorManager {
         this.app.state = this.mainStoryState;
         this.isActive = false;
         this.mainStoryState = null;
+        this.targetIndex = -1;
 
         // Restore Header UI
         document.getElementById('director-nav-group').classList.add('hidden');
@@ -234,7 +260,9 @@ export class DirectorManager {
         document.getElementById('nanogpt-meter').classList.remove('hidden');
         document.querySelector('.nav-controls').classList.remove('hidden');
         
-        if (settings.trackSummary) document.getElementById('summary-meter-container').classList.remove('hidden');
+        if (settings.trackSummary) {
+            document.getElementById('summary-meter-container').classList.remove('hidden');
+        }
 
         this.app.state.buildPromptPayload();
         this.app.renderAll();
