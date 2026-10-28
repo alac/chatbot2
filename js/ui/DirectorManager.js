@@ -136,6 +136,15 @@ export class DirectorManager {
         // Render
         this.app.state.buildPromptPayload();
         this.app.renderAll();
+
+        // Scroll directly to target turn
+        const localTargetIndex = targetIndex - startIdx;
+        setTimeout(() => {
+            const targetEl = document.getElementById(`turn-wrapper-${localTargetIndex}`);
+            if (targetEl) {
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 50);
     }
 
     exit() {

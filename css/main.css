@@ -521,3 +521,8 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .director-nav-group.hidden { display: none !important; }
+
+.director-target-bubble {
+    border: 2px solid #fb923c !important;
+    box-shadow: 0 0 12px rgba(251, 146, 60, 0.25);
+}

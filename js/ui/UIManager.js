@@ -477,11 +477,13 @@ export class UIManager {
         this.container.className = `${settings.displayMode}-mode`;
 
         let startIndex = 0;
-        if (settings.visibleOutOfContext !== -1) {
+        if (this.directorManager && this.directorManager.isActive) {
+            startIndex = 0;
+        } else if (settings.visibleOutOfContext !== -1) {
             startIndex = Math.max(0, this.state.contextBoundaryIndex - settings.visibleOutOfContext - this.historyOffset);
         }
 
-        if (startIndex > 0 && !(this.directorManager && this.directorManager.isActive)) {
+        if (startIndex > 0) {
             const btn = document.createElement('div');
             btn.className = 'load-older-btn';
             btn.textContent = `▲ Load Older Messages (${startIndex} hidden)`;
@@ -536,6 +538,9 @@ export class UIManager {
 
         const bubble = document.createElement('div');
         bubble.className = 'turn-bubble';
+        if (this.directorManager && this.directorManager.isActive && msg._isTargetTurn) {
+            bubble.classList.add('director-target-bubble');
+        }
         
         if (role === 'assistant') {
             bubble.style.cursor = 'pointer';
@@ -1048,14 +1053,16 @@ export class UIManager {
                     iconsDiv.appendChild(btnPrompt);
                 }
 
-                const btnDirector = document.createElement('span');
-                btnDirector.textContent = '🎬';
-                btnDirector.title = "Director Mode (Sandbox Revision)";
-                btnDirector.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.directorManager.enter(index);
-                });
-                iconsDiv.appendChild(btnDirector);
+                if (!this.directorManager || !this.directorManager.isActive) {
+                    const btnDirector = document.createElement('span');
+                    btnDirector.textContent = '🎬';
+                    btnDirector.title = "Director Mode (Sandbox Revision)";
+                    btnDirector.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.directorManager.enter(index);
+                    });
+                    iconsDiv.appendChild(btnDirector);
+                }
 
                 const btnDelete = document.createElement('span');
                 btnDelete.textContent = '🗑️';
