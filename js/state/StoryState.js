@@ -229,6 +229,7 @@ export class StoryState {
             wasSummarized: false,
             extractedChoices: null,
             meta: meta,
+            markers: [],
             drafts: [{ model: meta.model || '', content, reasoning, status: 'done', duration: meta.duration || 0, markdownOverride: null, usage: null, isStale: false }]
         });
         this.flushRedoToTrash();
@@ -248,6 +249,7 @@ export class StoryState {
             wasSummarized: false,
             extractedChoices: null,
             meta: {},
+            markers: [],
             drafts: drafts
         });
         this.flushRedoToTrash();
@@ -502,6 +504,7 @@ export class StoryState {
             if(m.wasSummarized === undefined) m.wasSummarized = false;
             if(m.isHidden === undefined) m.isHidden = false;
             if(!m.meta) m.meta = {};
+            if(!m.markers) m.markers = [];
             if(m.drafts) {
                 m.drafts.forEach(d => {
                     if (d.isStale === undefined) d.isStale = false;

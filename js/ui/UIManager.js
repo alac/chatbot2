@@ -21,6 +21,7 @@ import { RewriterManager } from './RewriterManager.js';
 import { FlagCollectorManager } from './FlagCollectorManager.js';
 import { TrashExplorerManager } from './TrashExplorerManager.js';
 import { EditLogManager } from './EditLogManager.js';
+import { TimelineManager } from './TimelineManager.js';
 
 import { CloudSyncUI } from './CloudSyncUI.js';
 import { SlotManager } from './SlotManager.js';
@@ -76,6 +77,7 @@ export class UIManager {
         this.imageGenManager = new ImageGenManager(this);
         this.avatarManager = new AvatarManager(this);
         this.nanoGPTUsage = new NanoGPTUsage();
+        this.timelineManager = new TimelineManager(this);
 
         this.bindEvents();
         this.initApp();
@@ -541,6 +543,26 @@ export class UIManager {
             });
         }
 
+        // --- ADD MARKER PILLS RENDERER HERE ---
+        if (msg.markers && msg.markers.length > 0) {
+            const markersDiv = document.createElement('div');
+            markersDiv.className = 'turn-markers';
+            msg.markers.forEach(mk => {
+                const badge = document.createElement('span');
+                badge.className = `marker-pill ${mk.type}`;
+                const icon = mk.type === 'interval_start' ? '▶' : mk.type === 'interval_end' ? '⏹' : '📍';
+                badge.textContent = `${icon} ${mk.name}`;
+                badge.title = mk.tags ? `Tags: ${mk.tags.join(', ')}` : '';
+                badge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.timelineManager.openMarkerModal(index);
+                });
+                markersDiv.appendChild(badge);
+            });
+            bubble.appendChild(markersDiv);
+        }
+        // --- END MARKER PILLS ---
+
         if (role === 'system') {
             const contentDiv = document.createElement('div');
             contentDiv.className = 'turn-content';
@@ -595,6 +617,19 @@ export class UIManager {
             btnDelete.title = "Delete";
             btnDelete.addEventListener('click', (e) => {
                 e.stopPropagation();
+                
+                // --- DELETION GUARD START ---
+                if (msg.markers && msg.markers.length > 0) {
+                    const action = prompt("This message has story markers.\nType 'prev' to shift them up,\n'next' to shift them down,\n'drop' to delete them entirely.", "drop");
+                    if (action === null) return; // Cancelled
+                    if (action.trim().toLowerCase() === 'prev' && index > 0) {
+                        this.state.history[index - 1].markers.push(...msg.markers);
+                    } else if (action.trim().toLowerCase() === 'next' && index < this.state.history.length - 1) {
+                        this.state.history[index + 1].markers.push(...msg.markers);
+                    }
+                }
+                // --- DELETION GUARD END ---
+
                 if (confirm("Delete this message?")) {
                     this.state.deleteTurn(index);
                     this.state.buildPromptPayload(); 
@@ -603,7 +638,16 @@ export class UIManager {
                 }
             });
             iconsDiv.appendChild(btnDelete);
-            
+
+            const btnMarker = document.createElement('span');
+            btnMarker.textContent = '📍';
+            btnMarker.title = "Manage Story Markers";
+            btnMarker.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.timelineManager.openMarkerModal(index);
+            });
+            iconsDiv.appendChild(btnMarker);            
+
             actionBar.appendChild(document.createElement('span')); 
             actionBar.appendChild(iconsDiv);
             bubble.appendChild(actionBar);
