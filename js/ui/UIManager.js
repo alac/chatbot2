@@ -617,19 +617,6 @@ export class UIManager {
             btnDelete.title = "Delete";
             btnDelete.addEventListener('click', (e) => {
                 e.stopPropagation();
-                
-                // --- DELETION GUARD START ---
-                if (msg.markers && msg.markers.length > 0) {
-                    const action = prompt("This message has story markers.\nType 'prev' to shift them up,\n'next' to shift them down,\n'drop' to delete them entirely.", "drop");
-                    if (action === null) return; // Cancelled
-                    if (action.trim().toLowerCase() === 'prev' && index > 0) {
-                        this.state.history[index - 1].markers.push(...msg.markers);
-                    } else if (action.trim().toLowerCase() === 'next' && index < this.state.history.length - 1) {
-                        this.state.history[index + 1].markers.push(...msg.markers);
-                    }
-                }
-                // --- DELETION GUARD END ---
-
                 if (confirm("Delete this message?")) {
                     this.state.deleteTurn(index);
                     this.state.buildPromptPayload(); 
@@ -638,16 +625,7 @@ export class UIManager {
                 }
             });
             iconsDiv.appendChild(btnDelete);
-
-            const btnMarker = document.createElement('span');
-            btnMarker.textContent = '📍';
-            btnMarker.title = "Manage Story Markers";
-            btnMarker.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.timelineManager.openMarkerModal(index);
-            });
-            iconsDiv.appendChild(btnMarker);            
-
+            
             actionBar.appendChild(document.createElement('span')); 
             actionBar.appendChild(iconsDiv);
             bubble.appendChild(actionBar);
@@ -1061,6 +1039,19 @@ export class UIManager {
                 btnDelete.title = "Delete";
                 btnDelete.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    
+                    // --- DELETION GUARD START ---
+                    if (msg.markers && msg.markers.length > 0) {
+                        const action = prompt("This message has story markers.\nType 'prev' to shift them up,\n'next' to shift them down,\n'drop' to delete them entirely.", "drop");
+                        if (action === null) return; // Cancelled
+                        if (action.trim().toLowerCase() === 'prev' && index > 0) {
+                            this.state.history[index - 1].markers.push(...msg.markers);
+                        } else if (action.trim().toLowerCase() === 'next' && index < this.state.history.length - 1) {
+                            this.state.history[index + 1].markers.push(...msg.markers);
+                        }
+                    }
+                    // --- DELETION GUARD END ---
+
                     if (confirm("Delete this message?")) {
                         this.state.deleteTurn(index);
                         this.state.buildPromptPayload(); 
@@ -1069,6 +1060,15 @@ export class UIManager {
                     }
                 });
                 iconsDiv.appendChild(btnDelete);
+
+                const btnMarker = document.createElement('span');
+                btnMarker.textContent = '📍';
+                btnMarker.title = "Manage Story Markers";
+                btnMarker.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.timelineManager.openMarkerModal(index);
+                });
+                iconsDiv.appendChild(btnMarker);    
 
                 actionBar.appendChild(iconsDiv);
                 bubble.appendChild(actionBar);
