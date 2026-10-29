@@ -174,6 +174,7 @@ export class SlotManager {
             if (this.uiManager.activeSlot === id) {
                 this.uiManager.activeSlotName = rawSlot.name;
                 this.uiManager.activeSlotDesc = rawSlot.description;
+                this.uiManager.updateDocumentTitle();
             }
         }
     }
@@ -454,7 +455,10 @@ export class SlotManager {
                 const slot = await this.uiManager.storage.loadSlot(this.selectedSlotId);
                 const newName = prompt("Enter slot name:", slot?.name || `Slot ${this.selectedSlotId}`);
                 if (newName !== null) {
-                    if (this.selectedSlotId === this.uiManager.activeSlot) this.uiManager.activeSlotName = newName;
+                    if (this.selectedSlotId === this.uiManager.activeSlot) {
+                        this.uiManager.activeSlotName = newName;
+                        this.uiManager.updateDocumentTitle();
+                    }
                     await this.uiManager.storage.saveSlot(this.selectedSlotId, newName, slot?.description || "", slot?.data || this.uiManager.state.exportData());
                     this.refreshSlotList();
                 }

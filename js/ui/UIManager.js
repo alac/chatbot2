@@ -1140,6 +1140,10 @@ export class UIManager {
         this.container.appendChild(wrapper);
     }
 
+    updateDocumentTitle() {
+        document.title = `✍️ ${this.activeSlotName || `Slot ${this.activeSlot}`}`;
+    }
+
     scrollToBottom() {
         this.container.scrollTop = this.container.scrollHeight;
         document.getElementById('btn-jump-bottom').classList.add('hidden');
@@ -1177,6 +1181,7 @@ export class UIManager {
         this.historyOffset = 0;
         this.state.buildPromptPayload();
         if (this.avatarManager) this.avatarManager.updateAvatarDisplay();
+        this.updateDocumentTitle();
         this.renderAll();
     }
 }
