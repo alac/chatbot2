@@ -27,7 +27,6 @@ export class TimelineGeneratorManager {
                     break;
                 }
             }
-            // If no markers found, start at 1. Otherwise start at the message after the last marker.
             const startVal = lastMarkerMsg === -1 ? 1 : Math.min(this.app.state.history.length, lastMarkerMsg + 2);
             document.getElementById('tg-start-idx').value = startVal;
             document.getElementById('tg-end-idx').value = this.app.state.history.length;
@@ -145,7 +144,6 @@ export class TimelineGeneratorManager {
     }
 
     async startGeneration() {
-        // 1. Gather config
         const startIdx = parseInt(document.getElementById('tg-start-idx').value) - 1; // 0-based
         const endIdx = parseInt(document.getElementById('tg-end-idx').value) - 1; // 0-based
         const chunkSize = parseInt(document.getElementById('tg-chunk-size').value);
@@ -159,7 +157,26 @@ export class TimelineGeneratorManager {
             return alert("Invalid range selected.");
         }
 
-        // 2. Prep UI
+        // Filter eligible turns (skip hidden and non-story cards)
+        const eligibleTurns = [];
+        for (let i = 0; i < this.app.state.history.length; i++) {
+            const turn = this.app.state.history[i];
+            if (turn.isHidden || turn.role === 'gallery' || turn.role === 'choices') continue;
+            eligibleTurns.push({
+                index: i,
+                turnNum: i + 1,
+                content: this.app.state.getContent(i)
+            });
+        }
+
+        const targetTurns = eligibleTurns.filter(t => t.index >= startIdx && t.index <= endIdx);
+        const totalTarget = targetTurns.length;
+
+        if (totalTarget === 0) {
+            return alert("No visible narrative messages found in the selected range.");
+        }
+
+        // Prep UI
         document.getElementById('tools-modal').classList.add('hidden');
         document.getElementById('tg-run-modal').classList.remove('hidden');
         
@@ -174,7 +191,7 @@ export class TimelineGeneratorManager {
         this.parsedMarkers = [];
         this.abortController = new AbortController();
 
-        // 3. Scan for existing open intervals prior to the startIdx
+        // Scan for existing open intervals prior to startIdx
         const openIntervals = {};
         for (let i = 0; i < startIdx; i++) {
             const msg = this.app.state.history[i];
@@ -188,28 +205,6 @@ export class TimelineGeneratorManager {
             });
         }
 
-        // 4. Collect eligible visible turns (preserving true 1-based indices)
-        const eligibleTurns = [];
-        for (let i = 0; i < this.app.state.history.length; i++) {
-            const turn = this.app.state.history[i];
-            // Skip hidden turns and interactive/asset cards
-            if (turn.isHidden || turn.role === 'gallery' || turn.role === 'choices') continue;
-            eligibleTurns.push({
-                index: i,
-                turnNum: i + 1,
-                content: this.app.state.getContent(i)
-            });
-        }
-
-        const targetTurns = eligibleTurns.filter(t => t.index >= startIdx && t.index <= endIdx);
-        const totalTarget = targetTurns.length;
-
-        if (totalTarget === 0) {
-            alert("No visible narrative messages found in the selected range.");
-            this.closeRunModal();
-            return;
-        }
-
         let accumulatedStream = "";
         let turnCursor = 0;
 
@@ -220,7 +215,6 @@ export class TimelineGeneratorManager {
                 const chunkEndCursor = Math.min(totalTarget, turnCursor + chunkSize);
                 const chunkTurns = targetTurns.slice(turnCursor, chunkEndCursor);
 
-                // Calculate overlap using eligible turns preceding this chunk
                 let overlapTurns = [];
                 if (overlap > 0) {
                     const firstChunkTurnIndex = chunkTurns[0].index;
@@ -229,7 +223,6 @@ export class TimelineGeneratorManager {
                         .slice(-overlap);
                 }
 
-                // Build prompt payload
                 let payloadText = "";
                 
                 const openArr = Object.values(openIntervals);
@@ -262,20 +255,35 @@ export class TimelineGeneratorManager {
 
                 const chunkHeader = `\n--- CHUNK: Turns #${chunkTurns[0].turnNum} to #${chunkTurns[chunkTurns.length - 1].turnNum} ---\n`;
                 document.getElementById('tg-run-status').textContent = `Processing turns #${chunkTurns[0].turnNum} to #${chunkTurns[chunkTurns.length - 1].turnNum}...`;
-                
+
                 const streamEl = document.getElementById('tg-run-stream');
                 this.activeJob = new GenerationJob();
 
                 await this.activeJob.start(messages, () => {
-                    streamEl.value = accumulatedStream + chunkHeader + this.activeJob.rawContent;
+                    // Buffer 1: Display (Thoughts + Actual Content)
+                    let displayChunk = "";
+                    if (this.activeJob.finalReasoning) {
+                        displayChunk += `<think>\n${this.activeJob.finalReasoning}\n</think>\n\n`;
+                    }
+                    displayChunk += this.activeJob.finalContent;
+
+                    streamEl.value = accumulatedStream + chunkHeader + displayChunk;
                     streamEl.scrollTop = streamEl.scrollHeight;
+
+                    // Buffer 2: Output Parser (Stripped of thinking tokens)
                     this.parseStream(this.activeJob.finalContent);
                 });
 
                 if (this.abortController.signal.aborted) break;
 
                 this.finalizeChunk(this.activeJob.finalContent, openIntervals, chunkTurns[0].turnNum);
-                accumulatedStream += chunkHeader + this.activeJob.rawContent + "\n";
+
+                let finishedChunkDisplay = "";
+                if (this.activeJob.finalReasoning) {
+                    finishedChunkDisplay += `<think>\n${this.activeJob.finalReasoning}\n</think>\n\n`;
+                }
+                finishedChunkDisplay += this.activeJob.finalContent;
+                accumulatedStream += chunkHeader + finishedChunkDisplay + "\n";
 
                 turnCursor = chunkEndCursor;
                 const pct = Math.round((turnCursor / totalTarget) * 100);
@@ -296,23 +304,27 @@ export class TimelineGeneratorManager {
         
         const count = this.parsedMarkers.length;
         document.getElementById('tg-run-status').textContent = `Finished. Found ${count} markers.`;
+        
+        // Authoritative re-render using persistent markers with interactivity enabled
+        this.renderReviewPane(this.parsedMarkers, true);
+
         if (count > 0 && document.getElementById('btn-tg-tab-stream').classList.contains('primary')) {
-            this.switchTab('review'); // Auto-switch to review if markers exist
+            this.switchTab('review');
         }
     }
 
     // --- PARSING & REVIEW UI ---
 
-    // Parses string live and renders to the Review pane immediately
     parseStream(text) {
+        // Strip thinking blocks so musings don't become phantom markers
+        const cleanText = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '');
         const regex = /<marker\s+([^>]+)>([\s\S]*?)<\/marker>/gi;
         const localMarkers = [];
         let match;
 
-        while ((match = regex.exec(text)) !== null) {
+        while ((match = regex.exec(cleanText)) !== null) {
             const attrStr = match[1];
             const name = match[2].trim();
-            
             const msgMatch = attrStr.match(/msg="(\d+)"/i);
             const typeMatch = attrStr.match(/type="([^"]+)"/i);
             const idMatch = attrStr.match(/id="([^"]+)"/i);
@@ -321,7 +333,7 @@ export class TimelineGeneratorManager {
             if (msgMatch && typeMatch) {
                 localMarkers.push({
                     name: name,
-                    msgNum: parseInt(msgMatch[1]), // 1-based
+                    msgNum: parseInt(msgMatch[1]),
                     type: typeMatch[1].toLowerCase(),
                     intervalId: idMatch ? idMatch[1] : null,
                     tags: tagsMatch ? tagsMatch[1].split(',').map(t=>t.trim()).filter(t=>t) : [],
@@ -331,16 +343,15 @@ export class TimelineGeneratorManager {
             }
         }
 
-        // Just blindly overwrite the review pane with whatever is fully processed + live local chunk
         const fullDisplayList = [...this.parsedMarkers, ...localMarkers];
-        this.renderReviewPane(fullDisplayList);
+        this.renderReviewPane(fullDisplayList, false); // Read-only while streaming
     }
 
-    // Commits a chunk to the persistent list and tracks open interval states
     finalizeChunk(text, openIntervalsTracker, chunkStartIdx) {
+        const cleanText = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '');
         const regex = /<marker\s+([^>]+)>([\s\S]*?)<\/marker>/gi;
         let match;
-        while ((match = regex.exec(text)) !== null) {
+        while ((match = regex.exec(cleanText)) !== null) {
             const attrStr = match[1];
             const name = match[2].trim();
             const msgMatch = attrStr.match(/msg="(\d+)"/i);
@@ -360,14 +371,10 @@ export class TimelineGeneratorManager {
                 uid: Math.random().toString(36).substr(2, 9)
             };
 
-            // Namespace the ID to prevent global hallucination collisions across disparate chunks,
-            // unless it's closing an interval we specifically know is open.
             if (marker.intervalId) {
                 if (marker.type === 'interval_end' && openIntervalsTracker[marker.intervalId]) {
-                    // Valid close, keep ID intact so they link
                     delete openIntervalsTracker[marker.intervalId];
                 } else if (marker.type === 'interval_start') {
-                    // Namespace it to this chunk just in case
                     marker.intervalId = `c${chunkStartIdx}_${marker.intervalId}`;
                     openIntervalsTracker[marker.intervalId] = marker;
                 }
@@ -377,7 +384,7 @@ export class TimelineGeneratorManager {
         }
     }
 
-    renderReviewPane(displayList) {
+    renderReviewPane(displayList, isInteractive = false) {
         const container = document.getElementById('tg-run-review');
         container.innerHTML = '';
         
@@ -390,20 +397,21 @@ export class TimelineGeneratorManager {
             cb.type = 'checkbox';
             cb.className = 'tg-marker-checkbox';
             cb.checked = mk.selected;
+            cb.disabled = !isInteractive;
 
             cb.addEventListener('change', (e) => {
                 mk.selected = e.target.checked;
                 if (mk.selected) card.classList.remove('unselected');
                 else card.classList.add('unselected');
                 
-                // Pairing logic for intervals
+                // Pair unselections for intervals
                 if (mk.intervalId) {
                     displayList.forEach(otherMk => {
                         if (otherMk.intervalId === mk.intervalId && otherMk !== mk) {
                             otherMk.selected = mk.selected;
                         }
                     });
-                    this.renderReviewPane(displayList); // Re-render to show paired unchecks
+                    this.renderReviewPane(displayList, true);
                 }
             });
 
@@ -424,6 +432,7 @@ export class TimelineGeneratorManager {
             }
 
             card.addEventListener('click', (e) => {
+                if (!isInteractive) return;
                 if (e.target !== cb) {
                     cb.checked = !cb.checked;
                     cb.dispatchEvent(new Event('change'));
@@ -441,12 +450,11 @@ export class TimelineGeneratorManager {
         let appliedCount = 0;
 
         toApply.forEach(mk => {
-            const arrIndex = mk.msgNum - 1; // absolute 1-based back to 0-based history index
+            const arrIndex = mk.msgNum - 1;
             if (arrIndex >= 0 && arrIndex < this.app.state.history.length) {
                 const msg = this.app.state.history[arrIndex];
                 if (!msg.markers) msg.markers = [];
                 
-                // Add the cleaned marker
                 msg.markers.push({
                     id: Math.random().toString(36).substr(2, 9),
                     type: mk.type,

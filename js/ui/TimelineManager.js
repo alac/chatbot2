@@ -521,17 +521,32 @@ export class TimelineManager {
                 item.appendChild(title);
                 item.appendChild(meta);
 
+                const footer = document.createElement('div');
+                footer.className = 'timeline-item-footer';
+
+                const tagDiv = document.createElement('div');
+                tagDiv.className = 'timeline-item-tags';
                 if (mk.tags && mk.tags.length > 0) {
-                    const tagDiv = document.createElement('div');
-                    tagDiv.className = 'timeline-item-tags';
                     mk.tags.forEach(t => {
                         const pill = document.createElement('span');
                         pill.className = 'tag-pill';
                         pill.textContent = t;
                         tagDiv.appendChild(pill);
                     });
-                    item.appendChild(tagDiv);
                 }
+                footer.appendChild(tagDiv);
+
+                const btnDel = document.createElement('button');
+                btnDel.className = 'timeline-item-delete';
+                btnDel.textContent = '🗑️';
+                btnDel.title = 'Delete marker';
+                btnDel.onclick = (e) => {
+                    e.stopPropagation(); // Prevent jumping to message
+                    this.deleteMarkerFromDrawer(idx, mk);
+                };
+                footer.appendChild(btnDel);
+
+                item.appendChild(footer);
 
                 list.appendChild(item);
             });
@@ -572,6 +587,52 @@ export class TimelineManager {
                 setTimeout(() => wrapper.classList.remove('pulse-highlight'), 2000);
             }
         }, 100);
+    }
+
+    deleteMarkerFromDrawer(msgIdx, mk) {
+        const msg = this.app.state.history[msgIdx];
+        if (!msg || !msg.markers) return;
+
+        if (!confirm(`Delete marker "${mk.name}" at Turn #${msgIdx + 1}?`)) return;
+
+        // Check if there is an associated interval partner
+        let partnerInfo = null;
+        if (mk.intervalId && mk.intervalId !== 'manual') {
+            for (let i = 0; i < this.app.state.history.length; i++) {
+                const otherMsg = this.app.state.history[i];
+                if (!otherMsg.markers) continue;
+                const pIdx = otherMsg.markers.findIndex(m => m.intervalId === mk.intervalId && m.id !== mk.id);
+                if (pIdx !== -1) {
+                    partnerInfo = {
+                        msgIndex: i,
+                        markerIndex: pIdx,
+                        marker: otherMsg.markers[pIdx]
+                    };
+                    break;
+                }
+            }
+        }
+
+        if (partnerInfo) {
+            const partnerRole = partnerInfo.marker.type === 'interval_start' ? 'Start' : 'End';
+            const partnerMsgNum = partnerInfo.msgIndex + 1;
+            if (confirm(`This is part of an interval. Delete the matching ${partnerRole} marker at Turn #${partnerMsgNum} as well?`)) {
+                const partnerMsg = this.app.state.history[partnerInfo.msgIndex];
+                if (partnerMsg && partnerMsg.markers) {
+                    partnerMsg.markers.splice(partnerInfo.markerIndex, 1);
+                }
+            }
+        }
+
+        // Remove the target marker
+        const targetIdx = msg.markers.findIndex(m => m.id === mk.id);
+        if (targetIdx !== -1) {
+            msg.markers.splice(targetIdx, 1);
+        }
+
+        this.app.renderAll();
+        this.app.autoSave();
+        this.renderDrawer();
     }
 }
 // END FILE: js/ui/TimelineManager.js
