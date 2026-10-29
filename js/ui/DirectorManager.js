@@ -152,7 +152,7 @@ export class DirectorManager {
         document.getElementById('avatar-container').classList.add('hidden');
         document.getElementById('nanogpt-meter').classList.add('hidden');
         document.getElementById('summary-meter-container').classList.add('hidden');
-        document.querySelector('.nav-controls').classList.add('hidden');
+        document.getElementById('btn-open-timeline').classList.add('hidden');
         
         const dirGroup = document.getElementById('director-nav-group');
         document.getElementById('director-badge').textContent = `🎬 Turn #${targetIndex + 1}`;
@@ -258,7 +258,7 @@ export class DirectorManager {
         document.getElementById('director-nav-group').classList.add('hidden');
         document.getElementById('avatar-container').classList.remove('hidden');
         document.getElementById('nanogpt-meter').classList.remove('hidden');
-        document.querySelector('.nav-controls').classList.remove('hidden');
+        document.getElementById('btn-open-timeline').classList.remove('hidden');
         
         if (settings.trackSummary) {
             document.getElementById('summary-meter-container').classList.remove('hidden');

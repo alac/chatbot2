@@ -15,7 +15,7 @@
         <div id="director-nav-group" class="director-nav-group hidden" style="flex:1; display:flex; justify-content:space-between; align-items:center;">
             <span id="director-badge" class="director-badge" style="font-weight:bold; color:var(--text-main); background:rgba(249, 115, 22, 0.2); border:1px solid #fb923c; padding:4px 12px; border-radius:6px;">🎬 Turn #N</span>
             <div style="display:flex; gap:8px;">
-                <button id="btn-director-settings" class="secondary" title="Director Settings">⚙️</button>
+                <button id="btn-director-settings" class="secondary" title="Director Settings">🎛️</button>
                 <button id="btn-director-exit" class="primary" style="background:#fb923c; border-color:#fb923c;">Exit / Review</button>
             </div>
         </div>
@@ -508,6 +508,9 @@
                 <button id="btn-close-chat-settings" class="close-btn">&times;</button>
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column;">
+                <div id="chat-settings-dir-warning" class="hidden" style="font-size:0.85em; font-weight:bold; color:#fb923c; padding: 0 0 10px 0; text-align:center;">
+                    ⚠️ Changes made here are ephemeral and will be discarded when exiting Director Mode.
+                </div>
                 <div id="tab-memory" class="tab-pane active" style="flex: 1;">
                     <div class="setting-row column" style="height: 100%;">
                         <div style="display:flex; justify-content:space-between; align-items:center; width: 100%;">

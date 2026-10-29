@@ -15,12 +15,42 @@ export class SettingsMenu {
 
     bindEvents() {
         document.getElementById('btn-settings').addEventListener('click', () => {
+            const isDir = this.uiManager.directorManager && this.uiManager.directorManager.isActive;
+            const optSave = document.querySelector('#settings-page-selector option[value="tab-saveload"]');
+            if (optSave) {
+                optSave.disabled = isDir;
+                optSave.hidden = isDir;
+            }
+            if (isDir && document.getElementById('settings-page-selector').value === 'tab-saveload') {
+                document.getElementById('settings-page-selector').value = 'tab-connection';
+            }
+            this.globalModal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById(document.getElementById('settings-page-selector').value).classList.add('active');
+
             this.globalModal.classList.remove('hidden');
             if (this.uiManager.slotManager) this.uiManager.slotManager.refreshSlotList(); 
         });
         document.getElementById('btn-close-settings').addEventListener('click', () => this.closeAndSave());
         
         document.getElementById('btn-chat-settings').addEventListener('click', () => {
+            const isDir = this.uiManager.directorManager && this.uiManager.directorManager.isActive;
+            const optAuto = document.querySelector('#chat-settings-page-selector option[value="tab-autosummarize"]');
+            if (optAuto) {
+                optAuto.disabled = isDir;
+                optAuto.hidden = isDir;
+            }
+            if (isDir && document.getElementById('chat-settings-page-selector').value === 'tab-autosummarize') {
+                document.getElementById('chat-settings-page-selector').value = 'tab-memory';
+            }
+            const banner = document.getElementById('chat-settings-dir-warning');
+            if (banner) {
+                if (isDir) banner.classList.remove('hidden');
+                else banner.classList.add('hidden');
+            }
+
+            this.chatModal.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById(document.getElementById('chat-settings-page-selector').value).classList.add('active');
+
             this.populateUI(); 
             this.uiManager.notesManager.renderBoard();
             this.chatModal.classList.remove('hidden');
@@ -417,7 +447,19 @@ export class SettingsMenu {
         document.getElementById('set-force-think').checked = settings.forceThink;
         document.getElementById('set-stop-seqs').value = settings.stopSequences;
         
-        document.getElementById('set-system-prompt').value = this.uiManager.state.systemPrompt;
+        const sysArea = document.getElementById('set-system-prompt');
+        if (this.uiManager.directorManager && this.uiManager.directorManager.isActive && this.uiManager.directorManager.settings.overrideSystemPrompt) {
+            sysArea.value = this.uiManager.directorManager.mainStoryState.systemPrompt;
+            sysArea.setAttribute('readonly', 'true');
+            sysArea.style.opacity = '0.7';
+            sysArea.title = "System prompt is currently overridden by Director Mode settings.";
+        } else {
+            sysArea.value = this.uiManager.state.systemPrompt;
+            sysArea.removeAttribute('readonly');
+            sysArea.style.opacity = '1';
+            sysArea.removeAttribute('title');
+        }
+
         document.getElementById('set-memory-disabled').checked = this.uiManager.state.disableMemory;
         
         document.getElementById('set-anote-template').value = this.uiManager.state.anoteTemplate;
@@ -515,24 +557,29 @@ export class SettingsMenu {
     }
 
     closeAndSaveChatSettings() {
-        const newSysPrompt = document.getElementById('set-system-prompt').value;
-        const oldSysPrompt = this.uiManager.state.systemPrompt;
+        const sysArea = document.getElementById('set-system-prompt');
+        const isReadonly = sysArea.hasAttribute('readonly');
         
-        // Push to History if changed
-        if (newSysPrompt !== oldSysPrompt) {
-            if (!this.uiManager.state.systemPromptHistory) this.uiManager.state.systemPromptHistory = [];
-            if (oldSysPrompt.trim() !== '') {
-                this.uiManager.state.systemPromptHistory.unshift({
-                    text: oldSysPrompt,
-                    timestamp: Date.now()
-                });
-                if (this.uiManager.state.systemPromptHistory.length > 5) {
-                    this.uiManager.state.systemPromptHistory.pop();
+        if (!isReadonly) {
+            const newSysPrompt = sysArea.value;
+            const oldSysPrompt = this.uiManager.state.systemPrompt;
+            
+            // Push to History if changed
+            if (newSysPrompt !== oldSysPrompt) {
+                if (!this.uiManager.state.systemPromptHistory) this.uiManager.state.systemPromptHistory = [];
+                if (oldSysPrompt.trim() !== '') {
+                    this.uiManager.state.systemPromptHistory.unshift({
+                        text: oldSysPrompt,
+                        timestamp: Date.now()
+                    });
+                    if (this.uiManager.state.systemPromptHistory.length > 5) {
+                        this.uiManager.state.systemPromptHistory.pop();
+                    }
                 }
             }
+            this.uiManager.state.systemPrompt = newSysPrompt;
         }
         
-        this.uiManager.state.systemPrompt = newSysPrompt;
         this.uiManager.state.disableMemory = document.getElementById('set-memory-disabled').checked;
         
         this.uiManager.state.anoteTemplate = document.getElementById('set-anote-template').value;

@@ -102,7 +102,7 @@ export class SummaryManager {
 
     updateSummaryMeter() {
         const container = document.getElementById('summary-meter-container');
-        if (!settings.trackSummary) {
+        if (!settings.trackSummary || (this.app.directorManager && this.app.directorManager.isActive)) {
             container.classList.add('hidden');
             return;
         }
