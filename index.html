@@ -118,6 +118,7 @@
                     <option value="tab-tool-trash">8. Trash Explorer</option>
                     <option value="tab-tool-editlog">9. Edit Log</option>
                     <option value="tab-tool-rewriter">10. Local Rewriter</option>
+                    <option value="tab-tool-timeline">11. Timeline Generator</option>
                 </select>
                 <button id="btn-close-tools" class="close-btn">&times;</button>
             </div>
@@ -309,6 +310,108 @@
                     </div>
                 </div>
 
+                <div id="tab-tool-timeline" class="tab-pane" style="flex:1;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span style="font-weight:bold;">Auto-Generate Markers</span>
+                        <button id="btn-tg-edit-prompt" class="secondary">Edit Prompt</button>
+                    </div>
+                    <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px;">Automatically scan the story and extract timeline markers.</p>
+                    
+                    <div class="setting-row">
+                        <span class="label-text">Range (1-based Turn Index)</span>
+                        <div style="display:flex; align-items:center; gap: 8px;">
+                            <input type="number" id="tg-start-idx" min="1" value="1" style="width: 70px;">
+                            <span style="color:var(--text-muted);">to</span>
+                            <input type="number" id="tg-end-idx" min="1" value="1" style="width: 70px;">
+                        </div>
+                    </div>
+                    
+                    <div class="setting-row">
+                        <span class="label-text">Quick Select Range</span>
+                        <div class="btn-group">
+                            <button id="btn-tg-range-all">All</button>
+                            <button id="btn-tg-range-unprocessed">Unprocessed</button>
+                        </div>
+                    </div>
+
+                    <div class="setting-row">
+                        <span class="label-text">Messages Per Chunk</span>
+                        <input type="number" id="tg-chunk-size" min="5" max="50" value="15" style="width: 70px;">
+                    </div>
+
+                    <div class="setting-row">
+                        <span class="label-text">Context Overlap (Turns)</span>
+                        <input type="number" id="tg-overlap-size" min="0" max="10" value="0" style="width: 70px;">
+                    </div>
+
+                    <hr>
+                    <button id="btn-tg-generate" class="primary" style="padding: 12px; font-size: 1.1em;">Generate Timeline</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline Prompt Editor Modal -->
+    <div id="tg-prompt-modal" class="modal hidden" style="z-index: 106;">
+        <div class="modal-content" style="max-height: 90vh; width: 700px; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <h2>Edit Timeline Prompt</h2>
+                <button id="btn-close-tg-prompt" class="close-btn">&times;</button>
+            </div>
+            
+            <div style="padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-panel); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <div style="display:flex; align-items:center; gap: 8px;">
+                    <button id="btn-tg-prompt-prev" class="secondary" style="padding: 4px 12px;">&laquo; Prev</button>
+                    <span id="tg-prompt-history-lbl" style="font-size: 0.9em; color: var(--text-muted);">History (0/0)</span>
+                    <button id="btn-tg-prompt-next" class="secondary" style="padding: 4px 12px;">Next &raquo;</button>
+                </div>
+                <button id="btn-tg-prompt-default" class="secondary" style="padding: 4px 12px;">Insert Default</button>
+            </div>
+
+            <div class="modal-body" style="display:flex; flex-direction:column; flex:1; padding:0;">
+                <textarea id="tg-prompt-textarea" style="flex:1; padding:12px; font-family:monospace; resize:none; border:none;"></textarea>
+            </div>
+            
+            <div style="padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:flex-end; gap: 12px;">
+                <button id="btn-tg-prompt-cancel" class="danger">Cancel</button>
+                <button id="btn-tg-prompt-save" class="primary">Save Prompt</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline Generator / Review Modal -->
+    <div id="tg-run-modal" class="modal hidden" style="z-index: 106;">
+        <div class="modal-content" style="max-height: 95vh; width: 800px; max-width:95vw; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <h2>Generating Timeline...</h2>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span id="tg-progress-lbl" style="font-size:0.9em; color:var(--text-muted); font-weight:bold;">0%</span>
+                </div>
+            </div>
+            
+            <div style="padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-panel); display: flex; align-items: center; justify-content: space-between;">
+                <div class="btn-group">
+                    <button id="btn-tg-tab-stream" class="primary">📜 Raw Stream</button>
+                    <button id="btn-tg-tab-review">📍 Live Markers</button>
+                </div>
+                <button id="btn-tg-abort" class="danger hidden" style="padding:4px 12px;">Stop Generation</button>
+            </div>
+
+            <div class="modal-body" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                <!-- Raw Stream View -->
+                <textarea id="tg-run-stream" readonly style="flex:1; font-family:monospace; resize:none; padding:12px; font-size:0.9em; background:var(--bg-main); color:var(--text-muted);"></textarea>
+                
+                <!-- Live Markers / Review View -->
+                <div id="tg-run-review" class="hidden" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
+            
+            <div style="padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:space-between; align-items:center;">
+                <span id="tg-run-status" style="font-size:0.9em; color:var(--text-muted);">Initializing...</span>
+                <div style="display:flex; gap:12px;">
+                    <button id="btn-tg-run-cancel" class="danger hidden">Discard All</button>
+                    <button id="btn-tg-run-apply" class="primary hidden">Apply Selected</button>
+                </div>
             </div>
         </div>
     </div>

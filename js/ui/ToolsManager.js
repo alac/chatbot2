@@ -21,6 +21,7 @@ export class ToolsManager {
             if (e.target.value === 'tab-tool-aggregate') this.populateDraftAggregatorUI();
             if (e.target.value === 'tab-tool-batch-edit') this.app.batchEditManager.populateUI();
             if (e.target.value === 'tab-tool-rewriter') this.app.rewriterManager.populateUI();
+            if (e.target.value === 'tab-tool-timeline') this.app.timelineGeneratorManager.populateUI();
         });
 
         // 1. Dice Tool
@@ -101,6 +102,9 @@ export class ToolsManager {
         }
         if (document.getElementById('tools-page-selector').value === 'tab-tool-rewriter') {
             this.app.rewriterManager.populateUI();
+        }
+        if (document.getElementById('tools-page-selector').value === 'tab-tool-timeline') {
+            this.app.timelineGeneratorManager.populateUI();
         }
         
         document.getElementById('tools-modal').classList.remove('hidden');

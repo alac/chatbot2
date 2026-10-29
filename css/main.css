@@ -522,6 +522,13 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 
 .director-nav-group.hidden { display: none !important; }
 
+/* Timeline Generator Classes */
+.tg-marker-card { background: var(--bg-main); border: 1px solid var(--border); padding: 10px; border-radius: 6px; display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none; }
+.tg-marker-card:hover { border-color: var(--accent); }
+.tg-marker-card.unselected { opacity: 0.5; border-color: var(--border) !important; background: rgba(0,0,0,0.1); }
+.tg-marker-checkbox { margin-top: 4px; transform: scale(1.2); cursor: pointer; }
+.tg-marker-info { flex: 1; }
+
 .director-target-bubble {
     border: 2px solid #fb923c !important;
     box-shadow: 0 0 12px rgba(251, 146, 60, 0.25);

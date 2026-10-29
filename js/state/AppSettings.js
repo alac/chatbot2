@@ -33,6 +33,12 @@ export class AppSettings {
         this.summarizeModel = '';
         this.autoSummarizePrompts = "::Event Log\nSummarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.\n\n::Story Synopsis\nWrite a prose summary of the recent events, continuing smoothly from the previous summary.";
 
+        // Timeline Generator
+        this.timelinePrompt = "Analyze the following story chunks and identify key narrative events.\nOutput your findings as XML tags.\n- msg: the message number where it occurs\n- type: \"point\", \"interval_start\", or \"interval_end\"\n- id: (only for intervals) a unique string linking start and end (no spaces)\n- tags: comma-separated list of tags\n\nExample:\n<marker msg=\"14\" type=\"interval_start\" id=\"club_mtg\" tags=\"school, club\">Club Meeting</marker>\n<marker msg=\"15\" type=\"point\" tags=\"chris, purchase\">Chris Buys A Car</marker>\n<marker msg=\"22\" type=\"interval_end\" id=\"club_mtg\">Club Meeting</marker>";
+        this.timelinePromptHistory = [];
+        this.timelineChunkSize = 15;
+        this.timelineOverlap = 0;
+
         // Samplers
         this.contextLength = 4096;
         this.charsPerToken = 4.0;
@@ -104,6 +110,11 @@ export class AppSettings {
             if (this.visibleOutOfContext === undefined) this.visibleOutOfContext = 5;
             if (!this.autoSummarizePrompts) this.autoSummarizePrompts = "::Event Log\nSummarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.\n\n::Story Synopsis\nWrite a prose summary of the recent events, continuing smoothly from the previous summary.";
             
+            if (!this.timelinePrompt) this.timelinePrompt = "Analyze the following story chunks and identify key narrative events.\nOutput your findings as XML tags.\n- msg: the message number where it occurs\n- type: \"point\", \"interval_start\", or \"interval_end\"\n- id: (only for intervals) a unique string linking start and end (no spaces)\n- tags: comma-separated list of tags\n\nExample:\n<marker msg=\"14\" type=\"interval_start\" id=\"club_mtg\" tags=\"school, club\">Club Meeting</marker>\n<marker msg=\"15\" type=\"point\" tags=\"chris, purchase\">Chris Buys A Car</marker>\n<marker msg=\"22\" type=\"interval_end\" id=\"club_mtg\">Club Meeting</marker>";
+            if (!Array.isArray(this.timelinePromptHistory)) this.timelinePromptHistory = [];
+            if (this.timelineChunkSize === undefined) this.timelineChunkSize = 15;
+            if (this.timelineOverlap === undefined) this.timelineOverlap = 0;
+
             if (!this.choicesPrompts) {
                 this.choicesPrompts = "::Plain\nSuggest 5 possible actions the user character could take next. Wrap each option in <choice> and </choice> tags.\n\n::Character Driven\nSuggest 5 possible actions the user character could take next based on their current state of mind and emotions. Wrap each option in <choice> and </choice> tags.\n\n::Context Driven\nSuggest 5 possible actions the user character could take next based on their various abilities, and what is afforded by the situation/location they are in. Wrap each option in <choice> and </choice> tags.\n\n::Dialogue Focused\nSuggest 5 different things the user character could say next, ranging from friendly to hostile. Wrap each option in <choice> and </choice> tags.\n\n::Unexpected Events\nSuggest 3 surprising, impulsive, or chaotic actions the user character could take to completely derail the current situation. Wrap each option in <choice> and </choice> tags.";
                 this.activeChoicePromptTitle = "Plain";

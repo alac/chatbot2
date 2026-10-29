@@ -22,6 +22,7 @@ import { FlagCollectorManager } from './FlagCollectorManager.js';
 import { TrashExplorerManager } from './TrashExplorerManager.js';
 import { EditLogManager } from './EditLogManager.js';
 import { TimelineManager } from './TimelineManager.js';
+import { TimelineGeneratorManager } from './TimelineGeneratorManager.js';
 import { DirectorManager } from './DirectorManager.js';
 
 import { CloudSyncUI } from './CloudSyncUI.js';
@@ -79,6 +80,7 @@ export class UIManager {
         this.avatarManager = new AvatarManager(this);
         this.nanoGPTUsage = new NanoGPTUsage();
         this.timelineManager = new TimelineManager(this);
+        this.timelineGeneratorManager = new TimelineGeneratorManager(this);
         this.directorManager = new DirectorManager(this);
 
         this.bindEvents();
