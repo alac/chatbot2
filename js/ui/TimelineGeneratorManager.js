@@ -9,6 +9,7 @@ export class TimelineGeneratorManager {
         this.abortController = null;
         this.activeJob = null;
         this.parsedMarkers = [];
+        this.closedIntervalNames = new Set();
         this.bindEvents();
     }
 
@@ -61,6 +62,18 @@ export class TimelineGeneratorManager {
         document.getElementById('tg-end-idx').value = this.app.state.history.length || 1;
         document.getElementById('tg-chunk-size').value = settings.timelineChunkSize;
         document.getElementById('tg-overlap-size').value = settings.timelineOverlap;
+    }
+
+    // Normalizes event names for fuzzy matching (stripping "ends", "end of", etc.)
+    normalizeEventName(name) {
+        if (!name) return "";
+        return name
+            .toLowerCase()
+            .replace(/^(end\s+of|the\s+end\s+of)\s+/i, '')
+            .replace(/\s+(ends|concludes|finishes|adjourns|over)$/i, '')
+            .replace(/[^\w\s]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
     }
 
     // --- PROMPT EDITOR ---
@@ -157,7 +170,6 @@ export class TimelineGeneratorManager {
             return alert("Invalid range selected.");
         }
 
-        // Filter eligible turns (skip hidden and non-story cards)
         const eligibleTurns = [];
         for (let i = 0; i < this.app.state.history.length; i++) {
             const turn = this.app.state.history[i];
@@ -176,7 +188,6 @@ export class TimelineGeneratorManager {
             return alert("No visible narrative messages found in the selected range.");
         }
 
-        // Prep UI
         document.getElementById('tools-modal').classList.add('hidden');
         document.getElementById('tg-run-modal').classList.remove('hidden');
         
@@ -189,6 +200,7 @@ export class TimelineGeneratorManager {
         document.getElementById('btn-tg-run-apply').classList.add('hidden');
 
         this.parsedMarkers = [];
+        this.closedIntervalNames.clear();
         this.abortController = new AbortController();
 
         // Scan for existing open intervals prior to startIdx
@@ -199,8 +211,9 @@ export class TimelineGeneratorManager {
             msg.markers.forEach(mk => {
                 if (mk.type === 'interval_start') {
                     openIntervals[mk.intervalId] = { ...mk, msgIndex: i };
-                } else if (mk.type === 'interval_end') {
+                } else if (mk.type === 'interval_end' && mk.intervalId) {
                     delete openIntervals[mk.intervalId];
+                    this.closedIntervalNames.add(this.normalizeEventName(mk.name));
                 }
             });
         }
@@ -260,7 +273,7 @@ export class TimelineGeneratorManager {
                 this.activeJob = new GenerationJob();
 
                 await this.activeJob.start(messages, () => {
-                    // Buffer 1: Display (Thoughts + Actual Content)
+                    // Buffer 1: Display with reasoning
                     let displayChunk = "";
                     if (this.activeJob.finalReasoning) {
                         displayChunk += `<think>\n${this.activeJob.finalReasoning}\n</think>\n\n`;
@@ -270,8 +283,8 @@ export class TimelineGeneratorManager {
                     streamEl.value = accumulatedStream + chunkHeader + displayChunk;
                     streamEl.scrollTop = streamEl.scrollHeight;
 
-                    // Buffer 2: Output Parser (Stripped of thinking tokens)
-                    this.parseStream(this.activeJob.finalContent);
+                    // Buffer 2: Output parser (clean text only)
+                    this.parseStream(this.activeJob.finalContent, openIntervals);
                 });
 
                 if (this.abortController.signal.aborted) break;
@@ -305,7 +318,6 @@ export class TimelineGeneratorManager {
         const count = this.parsedMarkers.length;
         document.getElementById('tg-run-status').textContent = `Finished. Found ${count} markers.`;
         
-        // Authoritative re-render using persistent markers with interactivity enabled
         this.renderReviewPane(this.parsedMarkers, true);
 
         if (count > 0 && document.getElementById('btn-tg-tab-stream').classList.contains('primary')) {
@@ -315,8 +327,7 @@ export class TimelineGeneratorManager {
 
     // --- PARSING & REVIEW UI ---
 
-    parseStream(text) {
-        // Strip thinking blocks so musings don't become phantom markers
+    parseStream(text, openIntervals) {
         const cleanText = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '');
         const regex = /<marker\s+([^>]+)>([\s\S]*?)<\/marker>/gi;
         const localMarkers = [];
@@ -331,11 +342,26 @@ export class TimelineGeneratorManager {
             const tagsMatch = attrStr.match(/tags="([^"]+)"/i);
 
             if (msgMatch && typeMatch) {
+                let mType = typeMatch[1].toLowerCase();
+                let mId = idMatch ? idMatch[1] : null;
+
+                // Live preview fuzzy ID linking
+                if (mType === 'interval_end' && openIntervals) {
+                    const norm = this.normalizeEventName(name);
+                    for (let key in openIntervals) {
+                        const oi = openIntervals[key];
+                        if (key === mId || this.normalizeEventName(oi.name) === norm) {
+                            mId = oi.intervalId;
+                            break;
+                        }
+                    }
+                }
+
                 localMarkers.push({
                     name: name,
                     msgNum: parseInt(msgMatch[1]),
-                    type: typeMatch[1].toLowerCase(),
-                    intervalId: idMatch ? idMatch[1] : null,
+                    type: mType,
+                    intervalId: mId,
                     tags: tagsMatch ? tagsMatch[1].split(',').map(t=>t.trim()).filter(t=>t) : [],
                     selected: true,
                     uid: Math.random().toString(36).substr(2, 9)
@@ -344,16 +370,17 @@ export class TimelineGeneratorManager {
         }
 
         const fullDisplayList = [...this.parsedMarkers, ...localMarkers];
-        this.renderReviewPane(fullDisplayList, false); // Read-only while streaming
+        this.renderReviewPane(fullDisplayList, false);
     }
 
     finalizeChunk(text, openIntervalsTracker, chunkStartIdx) {
         const cleanText = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '');
         const regex = /<marker\s+([^>]+)>([\s\S]*?)<\/marker>/gi;
         let match;
+
         while ((match = regex.exec(cleanText)) !== null) {
             const attrStr = match[1];
-            const name = match[2].trim();
+            let name = match[2].trim();
             const msgMatch = attrStr.match(/msg="(\d+)"/i);
             const typeMatch = attrStr.match(/type="([^"]+)"/i);
             const idMatch = attrStr.match(/id="([^"]+)"/i);
@@ -361,23 +388,59 @@ export class TimelineGeneratorManager {
 
             if (!msgMatch || !typeMatch) continue;
 
+            const mType = typeMatch[1].toLowerCase();
+            let mId = idMatch ? idMatch[1] : null;
+
+            // --- FUZZY INTERVAL MATCHING & DUPLICATE RESOLUTION ---
+            if (mType === 'interval_end') {
+                const normName = this.normalizeEventName(name);
+                let matchedOpen = null;
+
+                // 1. Exact ID match
+                if (mId && openIntervalsTracker[mId]) {
+                    matchedOpen = openIntervalsTracker[mId];
+                }
+
+                // 2. Fallback: Fuzzy Name Match against open intervals
+                if (!matchedOpen) {
+                    for (const key in openIntervalsTracker) {
+                        const oi = openIntervalsTracker[key];
+                        const oiNorm = this.normalizeEventName(oi.name);
+                        if (oiNorm === normName || oiNorm.includes(normName) || normName.includes(oiNorm)) {
+                            matchedOpen = oi;
+                            break;
+                        }
+                    }
+                }
+
+                if (matchedOpen) {
+                    // Harmonize ID and Name to match the Start marker perfectly
+                    mId = matchedOpen.intervalId;
+                    name = matchedOpen.name;
+                    delete openIntervalsTracker[matchedOpen.intervalId];
+                    this.closedIntervalNames.add(normName);
+                } else {
+                    // Suppress duplicate: If this interval was already closed in an earlier chunk, skip it!
+                    if (this.closedIntervalNames.has(normName)) {
+                        continue;
+                    }
+                }
+            } else if (mType === 'interval_start') {
+                mId = `c${chunkStartIdx}_${mId || Math.random().toString(36).substr(2, 7)}`;
+            }
+
             const marker = {
                 name: name,
                 msgNum: parseInt(msgMatch[1]), 
-                type: typeMatch[1].toLowerCase(),
-                intervalId: idMatch ? idMatch[1] : null,
+                type: mType,
+                intervalId: mId,
                 tags: tagsMatch ? tagsMatch[1].split(',').map(t=>t.trim()).filter(t=>t) : [],
                 selected: true,
                 uid: Math.random().toString(36).substr(2, 9)
             };
 
-            if (marker.intervalId) {
-                if (marker.type === 'interval_end' && openIntervalsTracker[marker.intervalId]) {
-                    delete openIntervalsTracker[marker.intervalId];
-                } else if (marker.type === 'interval_start') {
-                    marker.intervalId = `c${chunkStartIdx}_${marker.intervalId}`;
-                    openIntervalsTracker[marker.intervalId] = marker;
-                }
+            if (marker.type === 'interval_start') {
+                openIntervalsTracker[marker.intervalId] = marker;
             }
 
             this.parsedMarkers.push(marker);

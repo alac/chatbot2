@@ -416,6 +416,28 @@
         </div>
     </div>
 
+    <!-- Timeline Links Inspector Modal -->
+    <div id="timeline-links-modal" class="modal hidden" style="z-index: 210;">
+        <div class="modal-content" style="max-height: 90vh; width: 620px; max-width: 95vw; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <h2>🔗 Marker Links & Duplicates</h2>
+                <button id="btn-close-timeline-links" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 12px; padding: 16px; overflow-y:auto; flex:1;">
+                <div id="tl-links-target-card" style="padding: 12px; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px;"></div>
+                <div id="tl-links-actions-row" style="display:flex; gap: 8px;">
+                    <button id="btn-tl-convert-point" class="secondary" style="flex:1;">📍 Convert to Point Event</button>
+                </div>
+                <hr style="margin: 4px 0;">
+                <h3 style="font-size: 0.95em; color: var(--text-muted);">Linked Partner(s) (Matching ID)</h3>
+                <div id="tl-links-partners-list" style="display:flex; flex-direction:column; gap: 8px;"></div>
+                <hr style="margin: 4px 0;">
+                <h3 style="font-size: 0.95em; color: var(--text-muted);">Candidates (Same Name or Unlinked)</h3>
+                <div id="tl-links-candidates-list" style="display:flex; flex-direction:column; gap: 8px;"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Image Prompts Editor Modal -->
     <div id="image-prompts-modal" class="modal hidden" style="z-index: 105;">
         <div class="modal-content" style="max-height: 90vh; width: 700px;">

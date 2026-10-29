@@ -485,8 +485,16 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
 .timeline-item-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .tag-pill { background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; font-size: 0.75em; border: 1px solid var(--border); }
 .timeline-item-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px; gap: 8px; }
-.timeline-item-delete { background: transparent; border: none; font-size: 1em; cursor: pointer; padding: 2px 6px; opacity: 0.6; border-radius: 4px; line-height: 1; flex-shrink: 0; }
-.timeline-item-delete:hover { opacity: 1; background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+.timeline-item-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.timeline-item-action-btn { background: transparent; border: none; font-size: 1.05em; cursor: pointer; padding: 4px 6px; opacity: 0.7; border-radius: 4px; line-height: 1; min-width: 28px; min-height: 28px; display: inline-flex; justify-content: center; align-items: center; transition: all 0.2s; }
+.timeline-item-action-btn:hover { opacity: 1; background: rgba(255, 255, 255, 0.1); }
+.timeline-item-action-btn.delete:hover { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+.marker-health-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 0.75em; padding: 1px 6px; border-radius: 4px; margin-left: 6px; font-weight: normal; }
+.marker-health-badge.broken { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+.marker-health-badge.duplicate { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
+
+.tl-link-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 
 .turn-markers { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .marker-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px; font-size: 0.75em; font-weight: bold; cursor: pointer; user-select: none; border: 1px solid transparent; }

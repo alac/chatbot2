@@ -113,6 +113,14 @@ export class TimelineManager {
             this.renderDrawer();
         });
 
+        // Links Inspector Modal
+        const btnCloseLinks = document.getElementById('btn-close-timeline-links');
+        if (btnCloseLinks) {
+            btnCloseLinks.addEventListener('click', () => {
+                document.getElementById('timeline-links-modal').classList.add('hidden');
+            });
+        }
+
         // Marker Modal Base
         document.getElementById('btn-close-marker-modal').addEventListener('click', () => {
             document.getElementById('marker-modal').classList.add('hidden');
@@ -481,19 +489,34 @@ export class TimelineManager {
             });
         }
 
+        // 1. Build an interval health map across all markers in the story
+        const startsMap = {};
+        const endsMap = {};
+        this.app.state.history.forEach((m, msgIdx) => {
+            if (!m.markers) return;
+            m.markers.forEach(mk => {
+                if (!mk.intervalId || mk.intervalId === 'manual') return;
+                if (mk.type === 'interval_start') {
+                    if (!startsMap[mk.intervalId]) startsMap[mk.intervalId] = [];
+                    startsMap[mk.intervalId].push({ ...mk, msgIndex: msgIdx });
+                } else if (mk.type === 'interval_end') {
+                    if (!endsMap[mk.intervalId]) endsMap[mk.intervalId] = [];
+                    endsMap[mk.intervalId].push({ ...mk, msgIndex: msgIdx });
+                }
+            });
+        });
+
         let renderedCount = 0;
 
         this.app.state.history.forEach((msg, idx) => {
             if (!msg.markers || msg.markers.length === 0) return;
 
             msg.markers.forEach(mk => {
-                // Determine if this specific marker matches
                 const isDirectMatch = searchTerms.length === 0 || searchTerms.every(term => 
                     mk.name.toLowerCase().includes(term) || 
                     (mk.tags && mk.tags.some(tag => tag.toLowerCase().includes(term)))
                 );
 
-                // If not a direct match, check if its partner was matched
                 const isPartnerMatch = mk.intervalId && matchedIntervalIds.has(mk.intervalId);
 
                 if (!isDirectMatch && !isPartnerMatch) return;
@@ -512,7 +535,27 @@ export class TimelineManager {
                 if (mk.type === 'interval_start') { icon = '▶'; color = '#4ade80'; }
                 if (mk.type === 'interval_end') { icon = '⏹'; color = '#fb923c'; }
 
-                title.innerHTML = `<span style="color:${color};">${icon}</span> <span>${mk.name}</span>`;
+                let healthBadgeHtml = "";
+                if (mk.intervalId && mk.intervalId !== 'manual') {
+                    const starts = startsMap[mk.intervalId] || [];
+                    const ends = endsMap[mk.intervalId] || [];
+
+                    if (mk.type === 'interval_start') {
+                        if (ends.length === 0) {
+                            healthBadgeHtml = `<span class="marker-health-badge broken" title="Orphan: No matching End tag found">⛓️‍💥 Open</span>`;
+                        } else if (ends.length > 1) {
+                            healthBadgeHtml = `<span class="marker-health-badge duplicate" title="Duplicate: ${ends.length} matching End tags found">⚠️ ${ends.length} Ends</span>`;
+                        }
+                    } else if (mk.type === 'interval_end') {
+                        if (starts.length === 0) {
+                            healthBadgeHtml = `<span class="marker-health-badge broken" title="Orphan: No matching Start tag found">⛓️‍💥 Orphan End</span>`;
+                        } else if (starts.length > 1) {
+                            healthBadgeHtml = `<span class="marker-health-badge duplicate" title="Duplicate: ${starts.length} matching Start tags found">⚠️ ${starts.length} Starts</span>`;
+                        }
+                    }
+                }
+
+                title.innerHTML = `<span style="color:${color};">${icon}</span> <span style="flex:1;">${mk.name}</span> ${healthBadgeHtml}`;
 
                 const meta = document.createElement('div');
                 meta.className = 'timeline-item-meta';
@@ -536,18 +579,32 @@ export class TimelineManager {
                 }
                 footer.appendChild(tagDiv);
 
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'timeline-item-actions';
+
+                const btnLink = document.createElement('button');
+                btnLink.className = 'timeline-item-action-btn';
+                btnLink.textContent = '🔗';
+                btnLink.title = 'Inspect Links & Duplicates';
+                btnLink.onclick = (e) => {
+                    e.stopPropagation();
+                    this.openLinksModal(idx, mk);
+                };
+
                 const btnDel = document.createElement('button');
-                btnDel.className = 'timeline-item-delete';
+                btnDel.className = 'timeline-item-action-btn delete';
                 btnDel.textContent = '🗑️';
                 btnDel.title = 'Delete marker';
                 btnDel.onclick = (e) => {
-                    e.stopPropagation(); // Prevent jumping to message
+                    e.stopPropagation();
                     this.deleteMarkerFromDrawer(idx, mk);
                 };
-                footer.appendChild(btnDel);
+
+                actionsDiv.appendChild(btnLink);
+                actionsDiv.appendChild(btnDel);
+                footer.appendChild(actionsDiv);
 
                 item.appendChild(footer);
-
                 list.appendChild(item);
             });
         });
@@ -633,6 +690,142 @@ export class TimelineManager {
         this.app.renderAll();
         this.app.autoSave();
         this.renderDrawer();
+    }
+
+    openLinksModal(targetMsgIdx, targetMarker) {
+        const modal = document.getElementById('timeline-links-modal');
+        const targetCard = document.getElementById('tl-links-target-card');
+        const partnersList = document.getElementById('tl-links-partners-list');
+        const candidatesList = document.getElementById('tl-links-candidates-list');
+        const btnConvert = document.getElementById('btn-tl-convert-point');
+
+        // Target Card Header
+        let icon = targetMarker.type === 'interval_start' ? '▶' : targetMarker.type === 'interval_end' ? '⏹' : '📍';
+        targetCard.innerHTML = `
+            <div style="font-weight:bold; font-size:1.05em; margin-bottom:4px;">${icon} ${targetMarker.name}</div>
+            <div style="font-size:0.85em; color:var(--text-muted); line-height:1.5;">
+                <strong>Turn:</strong> #${targetMsgIdx + 1} &bull; 
+                <strong>Type:</strong> ${targetMarker.type} &bull; 
+                <strong>Interval ID:</strong> <code>${targetMarker.intervalId || '(none)'}</code>
+                ${targetMarker.tags && targetMarker.tags.length ? `<br><strong>Tags:</strong> ${targetMarker.tags.join(', ')}` : ''}
+            </div>
+        `;
+
+        // Convert to Point Button logic
+        if (targetMarker.type === 'point') {
+            btnConvert.classList.add('hidden');
+        } else {
+            btnConvert.classList.remove('hidden');
+            btnConvert.onclick = () => {
+                targetMarker.type = 'point';
+                delete targetMarker.intervalId;
+                this.app.renderAll();
+                this.app.autoSave();
+                this.renderDrawer();
+                this.openLinksModal(targetMsgIdx, targetMarker);
+            };
+        }
+
+        partnersList.innerHTML = '';
+        candidatesList.innerHTML = '';
+
+        // Search story for linked partners and same-name candidates
+        const partners = [];
+        const candidates = [];
+        const normTargetName = targetMarker.name.toLowerCase().trim();
+
+        this.app.state.history.forEach((m, mIdx) => {
+            if (!m.markers) return;
+            m.markers.forEach((mk, mkIdx) => {
+                if (mIdx === targetMsgIdx && mk.id === targetMarker.id) return;
+
+                // Partner: exact intervalId match
+                if (targetMarker.intervalId && mk.intervalId === targetMarker.intervalId) {
+                    partners.push({ msgIndex: mIdx, markerIndex: mkIdx, marker: mk });
+                } 
+                // Candidate: same name, but different/missing intervalId
+                else if (mk.name.toLowerCase().trim() === normTargetName) {
+                    candidates.push({ msgIndex: mIdx, markerIndex: mkIdx, marker: mk });
+                }
+            });
+        });
+
+        // Render Linked Partners
+        if (partners.length === 0) {
+            partnersList.innerHTML = `<div style="color:var(--text-muted); font-size:0.85em; font-style:italic;">No partner markers currently share this interval ID.</div>`;
+        } else {
+            partners.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'tl-link-card';
+                let pIcon = p.marker.type === 'interval_start' ? '▶' : p.marker.type === 'interval_end' ? '⏹' : '📍';
+                card.innerHTML = `
+                    <div style="flex:1;">
+                        <div style="font-weight:bold; font-size:0.9em;">${pIcon} ${p.marker.name}</div>
+                        <div style="font-size:0.8em; color:var(--text-muted);">Turn #${p.msgIndex + 1} &bull; Type: ${p.marker.type}</div>
+                    </div>
+                    <button class="danger btn-del-partner" style="padding:4px 8px; font-size:0.85em;">🗑️ Delete</button>
+                `;
+                card.querySelector('.btn-del-partner').onclick = () => {
+                    if (confirm(`Delete marker "${p.marker.name}" at Turn #${p.msgIndex + 1}?`)) {
+                        this.app.state.history[p.msgIndex].markers.splice(p.markerIndex, 1);
+                        this.app.renderAll();
+                        this.app.autoSave();
+                        this.renderDrawer();
+                        this.openLinksModal(targetMsgIdx, targetMarker);
+                    }
+                };
+                partnersList.appendChild(card);
+            });
+        }
+
+        // Render Candidates (Unlinked / Same-name)
+        if (candidates.length === 0) {
+            candidatesList.innerHTML = `<div style="color:var(--text-muted); font-size:0.85em; font-style:italic;">No other markers share this event name.</div>`;
+        } else {
+            candidates.forEach(c => {
+                const card = document.createElement('div');
+                card.className = 'tl-link-card';
+                let cIcon = c.marker.type === 'interval_start' ? '▶' : c.marker.type === 'interval_end' ? '⏹' : '📍';
+                card.innerHTML = `
+                    <div style="flex:1;">
+                        <div style="font-weight:bold; font-size:0.9em;">${cIcon} ${c.marker.name}</div>
+                        <div style="font-size:0.8em; color:var(--text-muted);">
+                            Turn #${c.msgIndex + 1} &bull; Type: ${c.marker.type} &bull; ID: <code>${c.marker.intervalId || '(none)'}</code>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="primary btn-pair-candidate" style="padding:4px 8px; font-size:0.85em;">🔗 Link / Pair</button>
+                        <button class="danger btn-del-candidate" style="padding:4px 8px; font-size:0.85em;">🗑️</button>
+                    </div>
+                `;
+
+                card.querySelector('.btn-pair-candidate').onclick = () => {
+                    // Generate shared ID if target didn't have one
+                    if (!targetMarker.intervalId || targetMarker.intervalId === 'manual') {
+                        targetMarker.intervalId = Math.random().toString(36).substr(2, 9);
+                    }
+                    c.marker.intervalId = targetMarker.intervalId;
+                    this.app.renderAll();
+                    this.app.autoSave();
+                    this.renderDrawer();
+                    this.openLinksModal(targetMsgIdx, targetMarker);
+                };
+
+                card.querySelector('.btn-del-candidate').onclick = () => {
+                    if (confirm(`Delete marker "${c.marker.name}" at Turn #${c.msgIndex + 1}?`)) {
+                        this.app.state.history[c.msgIndex].markers.splice(c.markerIndex, 1);
+                        this.app.renderAll();
+                        this.app.autoSave();
+                        this.renderDrawer();
+                        this.openLinksModal(targetMsgIdx, targetMarker);
+                    }
+                };
+
+                candidatesList.appendChild(card);
+            });
+        }
+
+        modal.classList.remove('hidden');
     }
 }
 // END FILE: js/ui/TimelineManager.js
