@@ -20,15 +20,16 @@ export class TimelineGeneratorManager {
             document.getElementById('tg-end-idx').value = this.app.state.history.length;
         });
         document.getElementById('btn-tg-range-unprocessed').addEventListener('click', () => {
-            let lastMarkerMsg = 0;
+            let lastMarkerMsg = -1;
             for (let i = this.app.state.history.length - 1; i >= 0; i--) {
                 if (this.app.state.history[i].markers && this.app.state.history[i].markers.length > 0) {
                     lastMarkerMsg = i;
                     break;
                 }
             }
-            // Start from the message after the last mark (1-based index)
-            document.getElementById('tg-start-idx').value = Math.min(this.app.state.history.length, lastMarkerMsg + 2);
+            // If no markers found, start at 1. Otherwise start at the message after the last marker.
+            const startVal = lastMarkerMsg === -1 ? 1 : Math.min(this.app.state.history.length, lastMarkerMsg + 2);
+            document.getElementById('tg-start-idx').value = startVal;
             document.getElementById('tg-end-idx').value = this.app.state.history.length;
         });
         document.getElementById('btn-tg-generate').addEventListener('click', () => this.startGeneration());
@@ -187,22 +188,50 @@ export class TimelineGeneratorManager {
             });
         }
 
-        // 4. Chunking Loop
-        let currentStart = startIdx;
-        const totalMessages = endIdx - startIdx + 1;
-        let messagesProcessed = 0;
+        // 4. Collect eligible visible turns (preserving true 1-based indices)
+        const eligibleTurns = [];
+        for (let i = 0; i < this.app.state.history.length; i++) {
+            const turn = this.app.state.history[i];
+            // Skip hidden turns and interactive/asset cards
+            if (turn.isHidden || turn.role === 'gallery' || turn.role === 'choices') continue;
+            eligibleTurns.push({
+                index: i,
+                turnNum: i + 1,
+                content: this.app.state.getContent(i)
+            });
+        }
+
+        const targetTurns = eligibleTurns.filter(t => t.index >= startIdx && t.index <= endIdx);
+        const totalTarget = targetTurns.length;
+
+        if (totalTarget === 0) {
+            alert("No visible narrative messages found in the selected range.");
+            this.closeRunModal();
+            return;
+        }
+
+        let accumulatedStream = "";
+        let turnCursor = 0;
 
         try {
-            while (currentStart <= endIdx) {
+            while (turnCursor < totalTarget) {
                 if (this.abortController.signal.aborted) break;
 
-                const currentEnd = Math.min(endIdx, currentStart + chunkSize - 1);
-                const prefixStart = Math.max(0, currentStart - overlap);
-                
-                // Build text payload
+                const chunkEndCursor = Math.min(totalTarget, turnCursor + chunkSize);
+                const chunkTurns = targetTurns.slice(turnCursor, chunkEndCursor);
+
+                // Calculate overlap using eligible turns preceding this chunk
+                let overlapTurns = [];
+                if (overlap > 0) {
+                    const firstChunkTurnIndex = chunkTurns[0].index;
+                    overlapTurns = eligibleTurns
+                        .filter(t => t.index < firstChunkTurnIndex)
+                        .slice(-overlap);
+                }
+
+                // Build prompt payload
                 let payloadText = "";
                 
-                // Active Open Intervals Injector
                 const openArr = Object.values(openIntervals);
                 if (openArr.length > 0) {
                     payloadText += `<open_intervals>\nThese events are currently active and have not ended yet:\n`;
@@ -212,20 +241,18 @@ export class TimelineGeneratorManager {
                     payloadText += `</open_intervals>\n\n`;
                 }
 
-                // Prior Context (Overlap)
-                if (prefixStart < currentStart) {
+                if (overlapTurns.length > 0) {
                     payloadText += `<prior_context_do_not_tag>\n`;
-                    for (let i = prefixStart; i < currentStart; i++) {
-                        payloadText += `<message num="${i+1}">\n${this.app.state.getContent(i)}\n</message>\n\n`;
-                    }
+                    overlapTurns.forEach(t => {
+                        payloadText += `<message num="${t.turnNum}">\n${t.content}\n</message>\n\n`;
+                    });
                     payloadText += `</prior_context_do_not_tag>\n\n`;
                 }
 
-                // Target Chunk
                 payloadText += `<messages_to_tag>\n`;
-                for (let i = currentStart; i <= currentEnd; i++) {
-                    payloadText += `<message num="${i+1}">\n${this.app.state.getContent(i)}\n</message>\n\n`;
-                }
+                chunkTurns.forEach(t => {
+                    payloadText += `<message num="${t.turnNum}">\n${t.content}\n</message>\n\n`;
+                });
                 payloadText += `</messages_to_tag>`;
 
                 const messages = [
@@ -233,25 +260,26 @@ export class TimelineGeneratorManager {
                     { role: 'user', content: payloadText }
                 ];
 
-                document.getElementById('tg-run-status').textContent = `Processing messages ${currentStart+1} to ${currentEnd+1}...`;
-                document.getElementById('tg-run-stream').value += `\n\n--- CHUNK: Msgs ${currentStart+1} to ${currentEnd+1} ---\n`;
-
+                const chunkHeader = `\n--- CHUNK: Turns #${chunkTurns[0].turnNum} to #${chunkTurns[chunkTurns.length - 1].turnNum} ---\n`;
+                document.getElementById('tg-run-status').textContent = `Processing turns #${chunkTurns[0].turnNum} to #${chunkTurns[chunkTurns.length - 1].turnNum}...`;
+                
+                const streamEl = document.getElementById('tg-run-stream');
                 this.activeJob = new GenerationJob();
+
                 await this.activeJob.start(messages, () => {
-                    document.getElementById('tg-run-stream').value = this.activeJob.rawContent;
-                    this.parseStream(this.activeJob.finalContent); // Re-parse everything live
+                    streamEl.value = accumulatedStream + chunkHeader + this.activeJob.rawContent;
+                    streamEl.scrollTop = streamEl.scrollHeight;
+                    this.parseStream(this.activeJob.finalContent);
                 });
 
                 if (this.abortController.signal.aborted) break;
 
-                // Final Parse for this chunk to finalize state and open intervals
-                this.finalizeChunk(this.activeJob.finalContent, openIntervals, currentStart);
+                this.finalizeChunk(this.activeJob.finalContent, openIntervals, chunkTurns[0].turnNum);
+                accumulatedStream += chunkHeader + this.activeJob.rawContent + "\n";
 
-                messagesProcessed += (currentEnd - currentStart + 1);
-                const pct = Math.round((messagesProcessed / totalMessages) * 100);
+                turnCursor = chunkEndCursor;
+                const pct = Math.round((turnCursor / totalTarget) * 100);
                 document.getElementById('tg-progress-lbl').textContent = `${pct}%`;
-
-                currentStart = currentEnd + 1;
             }
         } catch (e) {
             console.error("Timeline Generation Error:", e);
