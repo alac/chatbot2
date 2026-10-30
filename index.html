@@ -1422,6 +1422,11 @@
         <div class="modal-content" style="max-height: 95vh; width: 900px; max-width: 95vw; display:flex; flex-direction:column;">
             <div class="modal-header">
                 <h2>Review Revisions</h2>
+                <div id="dir-review-splice-controls" class="hidden" style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:0.9em; color:var(--text-muted);">Include New Turns:</span>
+                    <input type="number" id="dir-review-turn-count" min="0" value="0" style="width:60px; padding:4px;">
+                    <span id="dir-review-total-lbl" style="font-size:0.85em; color:var(--text-muted);">(of 0)</span>
+                </div>
                 <button id="btn-close-director-review" class="close-btn">&times;</button>
             </div>
             <div class="modal-body" style="display:flex; flex-direction:column; padding:0; flex:1; overflow:hidden;">

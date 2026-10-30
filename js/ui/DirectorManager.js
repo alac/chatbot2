@@ -92,6 +92,9 @@ export class DirectorManager {
             this.commit();
             document.getElementById('director-review-modal').classList.add('hidden');
         });
+        document.getElementById('dir-review-turn-count').addEventListener('input', () => {
+            this.renderReviewCards();
+        });
     }
 
     openSettingsModal() {
@@ -199,15 +202,32 @@ export class DirectorManager {
 
         this._pendingModifications = modifications;
         this._pendingNewTurns = newTurns;
-        this.showReviewModal(modifications, newTurns);
+
+        // Setup the count spinbox
+        const spliceControls = document.getElementById('dir-review-splice-controls');
+        const countInput = document.getElementById('dir-review-turn-count');
+        const totalLbl = document.getElementById('dir-review-total-lbl');
+
+        if (newTurns.length > 0) {
+            spliceControls.classList.remove('hidden');
+            countInput.max = newTurns.length;
+            countInput.value = newTurns.length; // Default to taking all of them
+            totalLbl.textContent = `(of ${newTurns.length})`;
+        } else {
+            spliceControls.classList.add('hidden');
+            countInput.value = 0;
+        }
+
+        this.renderReviewCards();
+        document.getElementById('director-review-modal').classList.remove('hidden');
     }
 
-    showReviewModal(modifications, newTurns) {
+    renderReviewCards() {
         const container = document.getElementById('director-review-diffs');
         container.innerHTML = '';
 
         // 1. Render Modifications to existing turns
-        modifications.forEach(mod => {
+        this._pendingModifications.forEach(mod => {
             const diffs = diffWords(mod.oldText, mod.newText);
             const card = document.createElement('div');
             card.className = 'ae-card';
@@ -226,8 +246,12 @@ export class DirectorManager {
             container.appendChild(card);
         });
 
-        // 2. Render brand new inserted turns
-        newTurns.forEach((turn, i) => {
+        // 2. Render selected slice of new turns
+        const countInput = document.getElementById('dir-review-turn-count');
+        const takeCount = Math.min(this._pendingNewTurns.length, Math.max(0, parseInt(countInput.value) || 0));
+        const turnsToPreview = this._pendingNewTurns.slice(0, takeCount);
+
+        turnsToPreview.forEach((turn, i) => {
             const card = document.createElement('div');
             card.className = 'ae-card';
             const roleColor = turn.role === 'user' ? '#60a5fa' : '#4ade80';
@@ -235,20 +259,18 @@ export class DirectorManager {
             
             card.innerHTML = `
                 <div style="margin-bottom: 8px;">
-                    <span style="color:${roleColor}; font-weight:bold;">[➕ Splice: New ${roleName} Turn]</span>
+                    <span style="color:${roleColor}; font-weight:bold;">[➕ Splice: New ${roleName} Turn #${i + 1}]</span>
                 </div>
                 <div style="background: var(--bg-panel); padding: 8px; border-radius: 4px; border: 1px solid var(--border); white-space: pre-wrap; font-size: 0.85em;">${turn.drafts[turn.activeDraftIndex].content}</div>
             `;
             container.appendChild(card);
         });
-
-        document.getElementById('director-review-modal').classList.remove('hidden');
     }
 
     commit() {
         if (!this.isActive) return;
 
-        // Apply edits to main state
+        // Apply edits to existing turns in main state
         this._pendingModifications.forEach(mod => {
             const turn = mod.turn;
             if (turn._originIndex !== undefined) {
@@ -257,17 +279,18 @@ export class DirectorManager {
             }
         });
 
-        // Splice generated new turns back into main history
-        if (this._pendingNewTurns.length > 0) {
-            // Clean out sandbox metadata before splicing
-            const cleanNewTurns = structuredClone(this._pendingNewTurns);
-            cleanNewTurns.forEach(t => {
+        // Splice ONLY the user-specified count of new turns into the main history
+        const countInput = document.getElementById('dir-review-turn-count');
+        const takeCount = Math.min(this._pendingNewTurns.length, Math.max(0, parseInt(countInput.value) || 0));
+
+        if (takeCount > 0) {
+            const selectedNewTurns = structuredClone(this._pendingNewTurns.slice(0, takeCount));
+            selectedNewTurns.forEach(t => {
                 delete t._originIndex;
                 delete t._isTargetTurn;
                 delete t._originalContentSnapshot;
             });
-            // Splice exactly after the target index (which is where the sandbox left off)
-            this.mainStoryState.history.splice(this.targetIndex + 1, 0, ...cleanNewTurns);
+            this.mainStoryState.history.splice(this.targetIndex + 1, 0, ...selectedNewTurns);
         }
 
         this.teardown();

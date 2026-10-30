@@ -1061,7 +1061,7 @@ export class UIManager {
                 iconsDiv.appendChild(btnEdit);
 
                 const btnInject = document.createElement('span');
-                btnInject.textContent = '⤵️';
+                btnInject.textContent = '💉';
                 btnInject.title = "Inject Turn Below";
                 btnInject.addEventListener('click', (e) => {
                     e.stopPropagation();
