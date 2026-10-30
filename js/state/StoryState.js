@@ -220,6 +220,26 @@ export class StoryState {
         return this.history.length - 1;
     }
 
+    injectTurn(insertIndex, role, content) {
+        const wasSummarized = this.history[insertIndex] ? this.history[insertIndex].wasSummarized : false;
+        
+        const newTurn = {
+            role,
+            isHidden: false,
+            isBatch: false,
+            activeDraftIndex: 0,
+            wasSummarized: wasSummarized,
+            extractedChoices: null,
+            meta: {},
+            markers: [],
+            drafts: [{ model: '', content, reasoning: '', status: 'done', duration: 0, markdownOverride: null, usage: null, isStale: false }]
+        };
+        
+        // Insert right after the specified index
+        this.history.splice(insertIndex + 1, 0, newTurn);
+        this.flushRedoToTrash();
+    }
+
     addTurn(role, content, reasoning = '', meta = {}) {
         this.history.push({ 
             role, 
@@ -457,7 +477,18 @@ export class StoryState {
             messages.push({ role: "system", content: `<summary>\n${this.summary.trim()}\n</summary>` });
         }
 
-        includedHistoryMsgs.forEach(m => messages.push(m));
+        // Merge consecutive turns with the same role before pushing to LLM messages array
+        let mergedHistory = [];
+        for (let i = 0; i < includedHistoryMsgs.length; i++) {
+            const m = includedHistoryMsgs[i];
+            if (mergedHistory.length > 0 && mergedHistory[mergedHistory.length - 1].role === m.role) {
+                mergedHistory[mergedHistory.length - 1].content += "\n\n" + m.content;
+            } else {
+                mergedHistory.push({ ...m });
+            }
+        }
+
+        mergedHistory.forEach(m => messages.push(m));
 
         if (!this.disableMemory && !isSummarizing) {
             const anote = this.anoteContent.trim();

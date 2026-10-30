@@ -1401,10 +1401,6 @@
                     <input type="number" id="dir-set-prior" min="0" max="100" style="width: 80px;">
                 </div>
                 <div class="setting-row">
-                    <span class="label-text">Post Context (Turns)</span>
-                    <input type="number" id="dir-set-post" min="0" max="100" style="width: 80px;">
-                </div>
-                <div class="setting-row">
                     <span class="label-text">Include Main Summary</span>
                     <input type="checkbox" id="dir-set-summary">
                 </div>
@@ -1437,6 +1433,40 @@
                     <button id="btn-dir-review-keep-editing" class="secondary">Keep Editing</button>
                     <button id="btn-dir-review-commit" class="primary">Accept & Commit</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inject Turn Modal -->
+    <div id="inject-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="max-height: 90vh; width: 800px; max-width: 95vw; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <h2 id="inject-modal-title">Inject Turn Below</h2>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <select id="inject-role-select" style="width: 120px;">
+                        <option value="assistant">Assistant</option>
+                        <option value="user">User</option>
+                        <option value="system">System</option>
+                    </select>
+                    <button id="btn-close-inject" class="close-btn">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; padding:0; flex:1; overflow:hidden;">
+                <div style="background: var(--bg-panel); border-bottom: 1px solid var(--border); padding: 4px 8px; display:flex; justify-content:center;">
+                    <button id="btn-inject-prev-toggle" class="secondary" style="font-size: 0.85em; padding: 4px 12px;">👁️ Show Previous Message</button>
+                </div>
+                <div id="inject-prev-context" class="hidden" style="padding: 12px; background: rgba(0,0,0,0.1); color: var(--text-muted); font-size: 0.9em; white-space: pre-wrap; overflow-y: auto; max-height: 25%; flex-shrink:0;"></div>
+                
+                <textarea id="inject-textarea" style="flex:1; width: 100%; resize: none; font-family: inherit; font-size: 1em; padding: 12px; border: none; border-radius: 0; background: var(--bg-main); color: var(--text-main);"></textarea>
+                
+                <div id="inject-next-context" class="hidden" style="padding: 12px; background: rgba(0,0,0,0.1); color: var(--text-muted); font-size: 0.9em; white-space: pre-wrap; overflow-y: auto; max-height: 25%; flex-shrink:0;"></div>
+                <div style="background: var(--bg-panel); border-top: 1px solid var(--border); padding: 4px 8px; display:flex; justify-content:center;">
+                    <button id="btn-inject-next-toggle" class="secondary" style="font-size: 0.85em; padding: 4px 12px;">👁️ Show Next Message</button>
+                </div>
+            </div>
+            <div style="padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:flex-end; gap: 12px;">
+                <button id="btn-inject-cancel" class="danger">Cancel</button>
+                <button id="btn-inject-apply" class="primary">Inject Turn</button>
             </div>
         </div>
     </div>

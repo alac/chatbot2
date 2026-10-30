@@ -1,4 +1,3 @@
-// BEGIN FILE: js/ui/DirectorManager.js
 import { StoryState } from '../state/StoryState.js';
 import { diffWords } from '../utils/diff.js';
 import { settings } from '../state/AppSettings.js';
@@ -11,16 +10,17 @@ export class DirectorManager {
         
         this.targetIndex = -1;
         this.currentSessionPrior = 0;
-        this.currentSessionPost = 0;
 
         // Default Director Settings
         this.settings = {
             priorContextCount: 3,
-            postContextCount: 1,
             includeSummary: false,
             overrideSystemPrompt: true,
             customSystemPrompt: "You are an expert narrative editor helping the author polish this specific passage. Do not continue the forward plot. Output requested revisions or provide proposed changes. You may use <edit> blocks or output new drafts entirely."
         };
+
+        this._pendingModifications = [];
+        this._pendingNewTurns = [];
 
         this.loadSettings();
         this.bindEvents();
@@ -45,11 +45,9 @@ export class DirectorManager {
         document.getElementById('btn-close-director-settings').addEventListener('click', () => document.getElementById('director-settings-modal').classList.add('hidden'));
         document.getElementById('btn-save-director-settings').addEventListener('click', () => {
             const newPrior = parseInt(document.getElementById('dir-set-prior').value) || 0;
-            const newPost = parseInt(document.getElementById('dir-set-post').value) || 0;
-            const boundsChanged = (newPrior !== this.currentSessionPrior || newPost !== this.currentSessionPost);
+            const boundsChanged = (newPrior !== this.currentSessionPrior);
 
             this.settings.priorContextCount = newPrior;
-            this.settings.postContextCount = newPost;
             this.settings.includeSummary = document.getElementById('dir-set-summary').checked;
             this.settings.overrideSystemPrompt = document.getElementById('dir-set-override').checked;
             this.settings.customSystemPrompt = document.getElementById('dir-set-prompt').value;
@@ -59,7 +57,7 @@ export class DirectorManager {
                 // If user changed turn counts mid-session, warn and offer to kick out
                 if (boundsChanged) {
                     const shouldExit = confirm(
-                        "Context window bounds (prior/post turns) cannot be applied to an ongoing session without restarting it.\n\nDiscard this session and exit Director Mode now so you can start fresh with the new context?"
+                        "Context window bounds (prior turns) cannot be applied to an ongoing session without restarting it.\n\nDiscard this session and exit Director Mode now so you can start fresh with the new context?"
                     );
                     if (shouldExit) {
                         document.getElementById('director-settings-modal').classList.add('hidden');
@@ -98,7 +96,6 @@ export class DirectorManager {
 
     openSettingsModal() {
         document.getElementById('dir-set-prior').value = this.settings.priorContextCount;
-        document.getElementById('dir-set-post').value = this.settings.postContextCount;
         document.getElementById('dir-set-summary').checked = this.settings.includeSummary;
         document.getElementById('dir-set-override').checked = this.settings.overrideSystemPrompt;
         document.getElementById('dir-set-prompt').value = this.settings.customSystemPrompt;
@@ -110,14 +107,13 @@ export class DirectorManager {
 
         this.targetIndex = targetIndex;
         this.currentSessionPrior = this.settings.priorContextCount;
-        this.currentSessionPost = this.settings.postContextCount;
 
         this.mainStoryState = this.app.state;
         const mainHistory = this.mainStoryState.history;
         
-        // Calculate Slice Bounds
+        // Calculate Slice Bounds (No Post-Context. Target Index is the end of the history)
         const startIdx = Math.max(0, targetIndex - this.settings.priorContextCount);
-        const endIdx = Math.min(mainHistory.length - 1, targetIndex + this.settings.postContextCount);
+        const endIdx = targetIndex; 
 
         // Deep clone the slice
         const clonedSlice = structuredClone(mainHistory.slice(startIdx, endIdx + 1));
@@ -176,6 +172,8 @@ export class DirectorManager {
         if (!this.isActive) return;
 
         const modifications = [];
+        const newTurns = [];
+
         this.app.state.history.forEach(turn => {
             if (turn._originIndex !== undefined && turn.drafts && turn.drafts[turn.activeDraftIndex]) {
                 const currentContent = turn.drafts[turn.activeDraftIndex].content;
@@ -186,23 +184,29 @@ export class DirectorManager {
                         newText: currentContent || ''
                     });
                 }
+            } else if (turn._originIndex === undefined) {
+                // Generated / injected turns inside the sandbox
+                newTurns.push(turn);
             }
         });
 
-        if (modifications.length === 0) {
-            if (confirm("No original passages were modified. Exit Director Mode?")) {
+        if (modifications.length === 0 && newTurns.length === 0) {
+            if (confirm("No original passages were modified and no new turns were added. Exit Director Mode?")) {
                 this.discard();
             }
             return;
         }
 
-        this.showReviewModal(modifications);
+        this._pendingModifications = modifications;
+        this._pendingNewTurns = newTurns;
+        this.showReviewModal(modifications, newTurns);
     }
 
-    showReviewModal(modifications) {
+    showReviewModal(modifications, newTurns) {
         const container = document.getElementById('director-review-diffs');
         container.innerHTML = '';
 
+        // 1. Render Modifications to existing turns
         modifications.forEach(mod => {
             const diffs = diffWords(mod.oldText, mod.newText);
             const card = document.createElement('div');
@@ -222,22 +226,49 @@ export class DirectorManager {
             container.appendChild(card);
         });
 
+        // 2. Render brand new inserted turns
+        newTurns.forEach((turn, i) => {
+            const card = document.createElement('div');
+            card.className = 'ae-card';
+            const roleColor = turn.role === 'user' ? '#60a5fa' : '#4ade80';
+            const roleName = turn.role.charAt(0).toUpperCase() + turn.role.slice(1);
+            
+            card.innerHTML = `
+                <div style="margin-bottom: 8px;">
+                    <span style="color:${roleColor}; font-weight:bold;">[➕ Splice: New ${roleName} Turn]</span>
+                </div>
+                <div style="background: var(--bg-panel); padding: 8px; border-radius: 4px; border: 1px solid var(--border); white-space: pre-wrap; font-size: 0.85em;">${turn.drafts[turn.activeDraftIndex].content}</div>
+            `;
+            container.appendChild(card);
+        });
+
         document.getElementById('director-review-modal').classList.remove('hidden');
     }
 
     commit() {
         if (!this.isActive) return;
 
-        // Apply changes to main state
-        this.app.state.history.forEach(turn => {
-            if (turn._originIndex !== undefined && turn.drafts && turn.drafts[turn.activeDraftIndex]) {
-                const currentContent = turn.drafts[turn.activeDraftIndex].content;
-                if (currentContent !== turn._originalContentSnapshot) {
-                    this.mainStoryState.recordEdit(turn._originalContentSnapshot, currentContent, 'director_mode');
-                    this.mainStoryState.editTurn(turn._originIndex, currentContent);
-                }
+        // Apply edits to main state
+        this._pendingModifications.forEach(mod => {
+            const turn = mod.turn;
+            if (turn._originIndex !== undefined) {
+                this.mainStoryState.recordEdit(turn._originalContentSnapshot, mod.newText, 'director_mode');
+                this.mainStoryState.editTurn(turn._originIndex, mod.newText);
             }
         });
+
+        // Splice generated new turns back into main history
+        if (this._pendingNewTurns.length > 0) {
+            // Clean out sandbox metadata before splicing
+            const cleanNewTurns = structuredClone(this._pendingNewTurns);
+            cleanNewTurns.forEach(t => {
+                delete t._originIndex;
+                delete t._isTargetTurn;
+                delete t._originalContentSnapshot;
+            });
+            // Splice exactly after the target index (which is where the sandbox left off)
+            this.mainStoryState.history.splice(this.targetIndex + 1, 0, ...cleanNewTurns);
+        }
 
         this.teardown();
         this.app.autoSave();
@@ -253,6 +284,8 @@ export class DirectorManager {
         this.isActive = false;
         this.mainStoryState = null;
         this.targetIndex = -1;
+        this._pendingModifications = [];
+        this._pendingNewTurns = [];
 
         // Restore Header UI
         document.getElementById('director-nav-group').classList.add('hidden');
@@ -268,4 +301,3 @@ export class DirectorManager {
         this.app.renderAll();
     }
 }
-// END FILE: js/ui/DirectorManager.js

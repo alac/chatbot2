@@ -168,6 +168,58 @@ export class UIManager {
         });
         document.getElementById('btn-close-prompt').addEventListener('click', () => document.getElementById('prompt-modal').classList.add('hidden'));
         document.getElementById('btn-close-usage').addEventListener('click', () => document.getElementById('usage-modal').classList.add('hidden'));
+        
+        // Inject Turn Bindings
+        document.getElementById('btn-inject-cancel').addEventListener('click', () => document.getElementById('inject-modal').classList.add('hidden'));
+        document.getElementById('btn-close-inject').addEventListener('click', () => document.getElementById('inject-modal').classList.add('hidden'));
+        document.getElementById('btn-inject-apply').addEventListener('click', () => this.handleInjectSave());
+        document.getElementById('btn-inject-prev-toggle').addEventListener('click', () => document.getElementById('inject-prev-context').classList.toggle('hidden'));
+        document.getElementById('btn-inject-next-toggle').addEventListener('click', () => document.getElementById('inject-next-context').classList.toggle('hidden'));
+    }
+
+    openInjectModal(index) {
+        this.activeInjectIndex = index;
+        document.getElementById('inject-modal-title').textContent = `Inject Turn Below #${index + 1}`;
+        document.getElementById('inject-textarea').value = '';
+        document.getElementById('inject-role-select').value = 'assistant';
+
+        const prevContext = document.getElementById('inject-prev-context');
+        const nextContext = document.getElementById('inject-next-context');
+
+        prevContext.classList.add('hidden');
+        nextContext.classList.add('hidden');
+
+        if (index >= 0 && this.state.history[index]) {
+            prevContext.textContent = this.state.getContent(index);
+        } else {
+            prevContext.textContent = "(No previous message)";
+        }
+
+        if (index + 1 < this.state.history.length && this.state.history[index + 1]) {
+            nextContext.textContent = this.state.getContent(index + 1);
+        } else {
+            nextContext.textContent = "(No next message)";
+        }
+
+        document.getElementById('inject-modal').classList.remove('hidden');
+        setTimeout(() => document.getElementById('inject-textarea').focus(), 50);
+    }
+
+    handleInjectSave() {
+        const content = document.getElementById('inject-textarea').value;
+        const role = document.getElementById('inject-role-select').value;
+        
+        if (!content.trim()) {
+            alert("Content cannot be empty.");
+            return;
+        }
+
+        this.state.injectTurn(this.activeInjectIndex, role, content);
+        
+        document.getElementById('inject-modal').classList.add('hidden');
+        this.state.buildPromptPayload();
+        this.renderAll();
+        this.autoSave();
     }
 
     handleRetry() {
@@ -1007,6 +1059,15 @@ export class UIManager {
                     document.getElementById('edit-modal').classList.remove('hidden');
                 });
                 iconsDiv.appendChild(btnEdit);
+
+                const btnInject = document.createElement('span');
+                btnInject.textContent = '⤵️';
+                btnInject.title = "Inject Turn Below";
+                btnInject.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.openInjectModal(index);
+                });
+                iconsDiv.appendChild(btnInject);
 
                 const btnUsage = document.createElement('span');
                 btnUsage.id = `btn-usage-${index}`;
