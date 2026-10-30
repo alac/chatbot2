@@ -1141,7 +1141,7 @@ export class UIManager {
     }
 
     updateDocumentTitle() {
-        document.title = `✍️ ${this.activeSlotName || `Slot ${this.activeSlot}`}`;
+        document.title = `${this.activeSlotName || `Slot ${this.activeSlot}`}`;
     }
 
     scrollToBottom() {
