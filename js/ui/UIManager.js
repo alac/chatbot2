@@ -32,10 +32,12 @@ import { RemoteManagerUI } from './RemoteManagerUI.js';
 import { ImageGenManager } from './ImageGenManager.js';
 import { AvatarManager } from './AvatarManager.js';
 import { NanoGPTUsage } from './NanoGPTUsage.js';
+import { RequestTracker } from './RequestTracker.js';
 
 export class UIManager {
     constructor() {
         this.state = new StoryState();
+        this.requestTracker = new RequestTracker(this);
         this.storage = new StorageManager();
         this.activeBatch = null;
         this.activeSlot = '1';
@@ -253,6 +255,7 @@ export class UIManager {
         document.getElementById('btn-retry').classList.add('hidden');
         document.getElementById('btn-abort').classList.remove('hidden');
         this.isUserScrolledUp = false;
+        this.requestTracker.startTask();
 
         let tempMsg = null;
         if (targetIndex !== null) {
@@ -407,6 +410,7 @@ export class UIManager {
             this.summaryManager.updateSummaryMeter();
             this.nanoGPTUsage.update();
             if (!this.isUserScrolledUp) this.scrollToBottom();
+            this.requestTracker.endTask();
             this.autoSave();
         }
     }
@@ -417,6 +421,7 @@ export class UIManager {
         document.getElementById('btn-send').classList.add('hidden');
         document.getElementById('btn-retry').classList.add('hidden');
         document.getElementById('btn-abort').classList.remove('hidden');
+        this.requestTracker.startTask();
 
         const popped = this.state.history.splice(msgIndex + 1);
         const targetMsg = this.state.history.pop(); 
@@ -515,6 +520,7 @@ export class UIManager {
                 this.draftSwitcher.renderSwitcher(msgIndex, false);
             }
             this.summaryManager.updateSummaryMeter();
+            this.requestTracker.endTask();
             this.autoSave();
         }
     }
@@ -1201,8 +1207,12 @@ export class UIManager {
         this.container.appendChild(wrapper);
     }
 
+    getBaseTitle() {
+        return `${this.activeSlotName || `Slot ${this.activeSlot}`}`;
+    }
+
     updateDocumentTitle() {
-        document.title = `${this.activeSlotName || `Slot ${this.activeSlot}`}`;
+        this.requestTracker.updateTitle();
     }
 
     scrollToBottom() {
