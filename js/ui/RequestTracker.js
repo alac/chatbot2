@@ -1,3 +1,5 @@
+import { settings } from '../state/AppSettings.js';
+
 export class RequestTracker {
     constructor(app) {
         this.app = app;
@@ -46,6 +48,13 @@ export class RequestTracker {
             if (this.timer) {
                 clearInterval(this.timer);
                 this.timer = null;
+            }
+
+            // Crisp double-pulse vibration (100ms vibrate, 50ms pause, 100ms vibrate)
+            if (settings.enableHaptics && 'vibrate' in navigator) {
+                try {
+                    navigator.vibrate([100, 50, 100]);
+                } catch (e) {}
             }
 
             if (document.hidden) {

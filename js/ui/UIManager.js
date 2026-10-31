@@ -107,6 +107,15 @@ export class UIManager {
 
         this.summaryManager.updateSummaryMeter();
         this.nanoGPTUsage.update();
+
+        const hapticsEl = document.getElementById('set-enable-haptics');
+        if (hapticsEl) {
+            hapticsEl.checked = !!settings.enableHaptics;
+            hapticsEl.addEventListener('change', (e) => {
+                settings.enableHaptics = e.target.checked;
+                settings.save();
+            });
+        }
     }
 
     bindEvents() {

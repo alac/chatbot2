@@ -58,6 +58,7 @@ export class AppSettings {
         this.theme = 'kobold';
         this.renderMarkdown = true;
         this.visibleOutOfContext = 5;
+        this.enableHaptics = false;
         this.regexes = []; 
         
         // Tools Menu Global Persistence
@@ -108,6 +109,7 @@ export class AppSettings {
             if (!Array.isArray(this.regexes)) this.regexes = [];
             if (!this.charsPerToken) this.charsPerToken = 4.0;
             if (this.visibleOutOfContext === undefined) this.visibleOutOfContext = 5;
+            if (this.enableHaptics === undefined) this.enableHaptics = false;
             if (!this.autoSummarizePrompts) this.autoSummarizePrompts = "::Event Log\nSummarize the provided unsummarized events. Extract all key character actions, plot points, and dialogue beats. Format as a concise bulleted list.\n\n::Story Synopsis\nWrite a prose summary of the recent events, continuing smoothly from the previous summary.";
             
             if (!this.timelinePrompt) this.timelinePrompt = "Analyze the following story chunks and identify key narrative events.\nOutput your findings as XML tags.\n- msg: the message number where it occurs\n- type: \"point\", \"interval_start\", or \"interval_end\"\n- id: (only for intervals) a unique string linking start and end (no spaces)\n- tags: comma-separated list of tags\n\nExample:\n<marker msg=\"14\" type=\"interval_start\" id=\"club_mtg\" tags=\"school, club\">Club Meeting</marker>\n<marker msg=\"15\" type=\"point\" tags=\"chris, purchase\">Chris Buys A Car</marker>\n<marker msg=\"22\" type=\"interval_end\" id=\"club_mtg\">Club Meeting</marker>";
