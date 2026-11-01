@@ -44,37 +44,53 @@ export class DirectorManager {
         // Settings Modal
         document.getElementById('btn-close-director-settings').addEventListener('click', () => document.getElementById('director-settings-modal').classList.add('hidden'));
         document.getElementById('btn-save-director-settings').addEventListener('click', () => {
-            const newPrior = parseInt(document.getElementById('dir-set-prior').value) || 0;
-            const boundsChanged = (newPrior !== this.currentSessionPrior);
+            const newPrior = Math.max(0, parseInt(document.getElementById('dir-set-prior').value) || 0);
+
+            if (this.isActive) {
+                if (newPrior < this.currentSessionPrior) {
+                    alert("Shrinking context mid-session risks losing edits to earlier turns. Please review/commit or discard your current session first.");
+                    document.getElementById('dir-set-prior').value = this.currentSessionPrior;
+                    return;
+                } else if (newPrior > this.currentSessionPrior) {
+                    // Extending in-place
+                    const currentMinOrigin = this.app.state.history.length > 0 && this.app.state.history[0]._originIndex !== undefined
+                        ? this.app.state.history[0]._originIndex 
+                        : this.targetIndex;
+
+                    const desiredStartIdx = Math.max(0, this.targetIndex - newPrior);
+                    
+                    if (desiredStartIdx < currentMinOrigin) {
+                        const sliceToPrepend = structuredClone(this.mainStoryState.history.slice(desiredStartIdx, currentMinOrigin));
+                        sliceToPrepend.forEach((turn, localIdx) => {
+                            const originalIndex = desiredStartIdx + localIdx;
+                            turn._originIndex = originalIndex;
+                            turn._isTargetTurn = false;
+                            if (turn.drafts && turn.drafts[turn.activeDraftIndex]) {
+                                turn._originalContentSnapshot = turn.drafts[turn.activeDraftIndex].content;
+                            }
+                        });
+                        
+                        this.app.state.history.unshift(...sliceToPrepend);
+                        this.currentSessionPrior = this.targetIndex - desiredStartIdx;
+                    }
+                }
+
+                // Update active sandbox properties that can safely change live
+                this.app.state.disableSummary = !document.getElementById('dir-set-summary').checked;
+                if (document.getElementById('dir-set-override').checked) {
+                    this.app.state.systemPrompt = document.getElementById('dir-set-prompt').value;
+                } else {
+                    this.app.state.systemPrompt = this.mainStoryState.systemPrompt;
+                }
+                this.app.state.buildPromptPayload();
+                this.app.renderAll();
+            }
 
             this.settings.priorContextCount = newPrior;
             this.settings.includeSummary = document.getElementById('dir-set-summary').checked;
             this.settings.overrideSystemPrompt = document.getElementById('dir-set-override').checked;
             this.settings.customSystemPrompt = document.getElementById('dir-set-prompt').value;
             this.saveSettings();
-            
-            if (this.isActive) {
-                // If user changed turn counts mid-session, warn and offer to kick out
-                if (boundsChanged) {
-                    const shouldExit = confirm(
-                        "Context window bounds (prior turns) cannot be applied to an ongoing session without restarting it.\n\nDiscard this session and exit Director Mode now so you can start fresh with the new context?"
-                    );
-                    if (shouldExit) {
-                        document.getElementById('director-settings-modal').classList.add('hidden');
-                        this.discard();
-                        return;
-                    }
-                }
-
-                // Update active sandbox properties that can safely change live
-                this.app.state.disableSummary = !this.settings.includeSummary;
-                if (this.settings.overrideSystemPrompt) {
-                    this.app.state.systemPrompt = this.settings.customSystemPrompt;
-                } else {
-                    this.app.state.systemPrompt = this.mainStoryState.systemPrompt;
-                }
-                this.app.state.buildPromptPayload();
-            }
             
             document.getElementById('director-settings-modal').classList.add('hidden');
         });
@@ -303,6 +319,8 @@ export class DirectorManager {
     }
 
     teardown() {
+        const savedTargetIndex = this.targetIndex; // Capture before reset
+
         this.app.state = this.mainStoryState;
         this.isActive = false;
         this.mainStoryState = null;
@@ -322,5 +340,17 @@ export class DirectorManager {
 
         this.app.state.buildPromptPayload();
         this.app.renderAll();
+
+        // Restore Viewport anchoring to target passage
+        if (savedTargetIndex !== -1) {
+            setTimeout(() => {
+                const targetEl = document.getElementById(`turn-wrapper-${savedTargetIndex}`);
+                if (targetEl) {
+                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    targetEl.classList.add('pulse-highlight');
+                    setTimeout(() => targetEl.classList.remove('pulse-highlight'), 2000);
+                }
+            }, 50); // slight delay to ensure DOM is fully rendered
+        }
     }
 }
