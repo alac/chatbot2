@@ -1400,24 +1400,66 @@
                 <h2>Director Mode Settings</h2>
                 <button id="btn-close-director-settings" class="close-btn">&times;</button>
             </div>
-            <div class="modal-body" style="display:flex; flex-direction:column; gap: 12px;">
+            <div class="modal-body" style="display:flex; flex-direction:column; gap: 16px;">
                 <div class="setting-row">
                     <span class="label-text">Prior Context (Turns)</span>
                     <input type="number" id="dir-set-prior" min="0" max="100" style="width: 80px;">
                 </div>
+                <hr style="margin:0;">
                 <div class="setting-row">
-                    <span class="label-text">Include Main Summary</span>
-                    <input type="checkbox" id="dir-set-summary">
+                    <div>
+                        <div class="label-text">Memory (System Prompt)</div>
+                        <div style="font-size:0.8em; color:var(--text-muted); margin-top:2px;">Behavior: <span id="dir-badge-memory" style="font-weight:bold; color:var(--accent);">Override</span></div>
+                    </div>
+                    <button id="btn-dir-edit-memory" class="secondary">Edit Channel</button>
                 </div>
-                <hr style="margin:4px 0;">
                 <div class="setting-row">
-                    <span class="label-text">Override System Prompt</span>
-                    <input type="checkbox" id="dir-set-override">
+                    <div>
+                        <div class="label-text">Author's Note</div>
+                        <div style="font-size:0.8em; color:var(--text-muted); margin-top:2px;">Behavior: <span id="dir-badge-anote" style="font-weight:bold; color:var(--accent);">Default</span></div>
+                    </div>
+                    <button id="btn-dir-edit-anote" class="secondary">Edit Channel</button>
                 </div>
-                <textarea id="dir-set-prompt" style="flex:1; min-height: 150px; font-family: inherit; padding: 8px; resize:none;" placeholder="System prompt for the editor..."></textarea>
+                <div class="setting-row">
+                    <div>
+                        <div class="label-text">Summary</div>
+                        <div style="font-size:0.8em; color:var(--text-muted); margin-top:2px;">Behavior: <span id="dir-badge-summary" style="font-weight:bold; color:var(--accent);">Default</span></div>
+                    </div>
+                    <button id="btn-dir-edit-summary" class="secondary">Edit Channel</button>
+                </div>
             </div>
             <div style="padding: 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:flex-end;">
                 <button id="btn-save-director-settings" class="primary">Save & Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Director Channel Editor Modal -->
+    <div id="dir-channel-modal" class="modal hidden" style="z-index: 110;">
+        <div class="modal-content" style="max-height: 90vh; width: 700px; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <h2 id="dir-channel-modal-title">Edit Channel</h2>
+                <button id="btn-close-dir-channel" class="close-btn">&times;</button>
+            </div>
+            <div style="padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-panel); display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                <div style="display:flex; align-items:center; gap: 8px;">
+                    <span class="label-text" style="font-size:0.85em;">Behavior:</span>
+                    <select id="dir-channel-behavior" style="padding: 4px 8px; font-size: 0.9em;">
+                        <option value="none">None</option>
+                        <option value="default">Default</option>
+                        <option value="prefix">Prefix</option>
+                        <option value="suffix">Suffix</option>
+                        <option value="override">Override</option>
+                    </select>
+                </div>
+                <div style="display:flex; align-items:center; gap: 8px;">
+                    <button id="btn-dir-channel-paste-default" class="secondary" style="padding: 4px 10px; font-size:0.85em;">📋 Paste Default</button>
+                    <button id="btn-dir-channel-cancel" class="danger" style="padding: 4px 10px; font-size:0.85em;">Cancel</button>
+                    <button id="btn-dir-channel-save" class="primary" style="padding: 4px 12px; font-size:0.85em;">Save</button>
+                </div>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; flex:1; padding:0;">
+                <textarea id="dir-channel-textarea" style="flex:1; width:100%; min-height:300px; padding:12px; font-family:inherit; resize:none; border:none; background:var(--bg-main); color:var(--text-main); font-size:0.95em;" placeholder="Type custom channel text here..."></textarea>
             </div>
         </div>
     </div>

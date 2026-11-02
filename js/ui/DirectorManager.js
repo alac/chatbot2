@@ -14,13 +14,25 @@ export class DirectorManager {
         // Default Director Settings
         this.settings = {
             priorContextCount: 3,
-            includeSummary: false,
-            overrideSystemPrompt: true,
-            customSystemPrompt: "You are an expert narrative editor helping the author polish this specific passage. Do not continue the forward plot. Output requested revisions or provide proposed changes. You may use <edit> blocks or output new drafts entirely."
+            memory: {
+                behavior: 'override',
+                text: "You are an expert narrative editor helping the author polish this specific passage. Do not continue the forward plot. Output requested revisions or provide proposed changes. You may use <edit> blocks or output new drafts entirely."
+            },
+            anote: {
+                behavior: 'default',
+                text: ""
+            },
+            summary: {
+                behavior: 'default',
+                text: ""
+            }
         };
 
-        this._pendingModifications = [];
-        this._pendingNewTurns = [];
+        this.activeEditingChannel = null;
+        this._pendingInterior = [];
+        this._pendingExtended = [];
+        this._interiorDiffs = [];
+        this._extendedCheckboxes = [];
 
         this.loadSettings();
         this.bindEvents();
@@ -29,7 +41,31 @@ export class DirectorManager {
     loadSettings() {
         const saved = localStorage.getItem('ai_proto_director_settings');
         if (saved) {
-            Object.assign(this.settings, JSON.parse(saved));
+            try {
+                const parsed = JSON.parse(saved);
+                // Migrate from legacy schema if present
+                if (parsed.overrideSystemPrompt !== undefined && !parsed.memory) {
+                    this.settings.memory = {
+                        behavior: parsed.overrideSystemPrompt ? 'override' : 'default',
+                        text: parsed.customSystemPrompt || this.settings.memory.text
+                    };
+                }
+                if (parsed.includeSummary !== undefined && !parsed.summary) {
+                    this.settings.summary = {
+                        behavior: parsed.includeSummary ? 'default' : 'none',
+                        text: ''
+                    };
+                }
+                if (!parsed.anote) {
+                    this.settings.anote = { behavior: 'default', text: '' };
+                }
+                Object.assign(this.settings, parsed);
+                if (!this.settings.memory) this.settings.memory = { behavior: 'override', text: '' };
+                if (!this.settings.anote) this.settings.anote = { behavior: 'default', text: '' };
+                if (!this.settings.summary) this.settings.summary = { behavior: 'default', text: '' };
+            } catch (e) {
+                console.error("Error loading director settings:", e);
+            }
         }
     }
 
@@ -37,12 +73,17 @@ export class DirectorManager {
         localStorage.setItem('ai_proto_director_settings', JSON.stringify(this.settings));
     }
 
+
     bindEvents() {
         document.getElementById('btn-director-settings').addEventListener('click', () => this.openSettingsModal());
         document.getElementById('btn-director-exit').addEventListener('click', () => this.exit());
         
-        // Settings Modal
+        // Director Settings Modal
         document.getElementById('btn-close-director-settings').addEventListener('click', () => document.getElementById('director-settings-modal').classList.add('hidden'));
+        document.getElementById('btn-dir-edit-memory').addEventListener('click', () => this.openChannelModal('memory'));
+        document.getElementById('btn-dir-edit-anote').addEventListener('click', () => this.openChannelModal('anote'));
+        document.getElementById('btn-dir-edit-summary').addEventListener('click', () => this.openChannelModal('summary'));
+
         document.getElementById('btn-save-director-settings').addEventListener('click', () => {
             const newPrior = Math.max(0, parseInt(document.getElementById('dir-set-prior').value) || 0);
 
@@ -72,27 +113,47 @@ export class DirectorManager {
                         
                         this.app.state.history.unshift(...sliceToPrepend);
                         this.currentSessionPrior = this.targetIndex - desiredStartIdx;
+                        this.startIdx = desiredStartIdx;
+                        this.originalSpanLength = this.targetIndex - this.startIdx + 1;
                     }
                 }
 
-                // Update active sandbox properties that can safely change live
-                this.app.state.disableSummary = !document.getElementById('dir-set-summary').checked;
-                if (document.getElementById('dir-set-override').checked) {
-                    this.app.state.systemPrompt = document.getElementById('dir-set-prompt').value;
-                } else {
-                    this.app.state.systemPrompt = this.mainStoryState.systemPrompt;
-                }
+                this.applyChannelSettingsToSandbox(this.app.state);
                 this.app.state.buildPromptPayload();
                 this.app.renderAll();
             }
 
             this.settings.priorContextCount = newPrior;
-            this.settings.includeSummary = document.getElementById('dir-set-summary').checked;
-            this.settings.overrideSystemPrompt = document.getElementById('dir-set-override').checked;
-            this.settings.customSystemPrompt = document.getElementById('dir-set-prompt').value;
             this.saveSettings();
             
             document.getElementById('director-settings-modal').classList.add('hidden');
+        });
+
+        // Channel Editor Sub-Modal
+        document.getElementById('btn-close-dir-channel').addEventListener('click', () => this.closeChannelModal());
+        document.getElementById('btn-dir-channel-cancel').addEventListener('click', () => this.closeChannelModal());
+        document.getElementById('btn-dir-channel-paste-default').addEventListener('click', () => {
+            if (!this.activeEditingChannel) return;
+            const parentVal = this.getParentChannelValue(this.activeEditingChannel);
+            document.getElementById('dir-channel-textarea').value = parentVal.text;
+        });
+
+        document.getElementById('btn-dir-channel-save').addEventListener('click', () => {
+            if (!this.activeEditingChannel) return;
+            const behavior = document.getElementById('dir-channel-behavior').value;
+            const text = document.getElementById('dir-channel-textarea').value;
+
+            this.settings[this.activeEditingChannel] = { behavior, text };
+            this.saveSettings();
+            this.updateSettingsBadges();
+
+            if (this.isActive) {
+                this.applyChannelSettingsToSandbox(this.app.state);
+                this.app.state.buildPromptPayload();
+                this.app.renderAll();
+            }
+
+            this.closeChannelModal();
         });
 
         // Review Modal
@@ -108,17 +169,98 @@ export class DirectorManager {
             this.commit();
             document.getElementById('director-review-modal').classList.add('hidden');
         });
-        document.getElementById('dir-review-turn-count').addEventListener('input', () => {
-            this.renderReviewCards();
-        });
     }
 
     openSettingsModal() {
         document.getElementById('dir-set-prior').value = this.settings.priorContextCount;
-        document.getElementById('dir-set-summary').checked = this.settings.includeSummary;
-        document.getElementById('dir-set-override').checked = this.settings.overrideSystemPrompt;
-        document.getElementById('dir-set-prompt').value = this.settings.customSystemPrompt;
+        this.updateSettingsBadges();
         document.getElementById('director-settings-modal').classList.remove('hidden');
+    }
+
+    updateSettingsBadges() {
+        const capitalize = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Default';
+        const bMem = document.getElementById('dir-badge-memory');
+        const bAn = document.getElementById('dir-badge-anote');
+        const bSum = document.getElementById('dir-badge-summary');
+
+        if (bMem && this.settings.memory) bMem.textContent = capitalize(this.settings.memory.behavior);
+        if (bAn && this.settings.anote) bAn.textContent = capitalize(this.settings.anote.behavior);
+        if (bSum && this.settings.summary) bSum.textContent = capitalize(this.settings.summary.behavior);
+    }
+
+    openChannelModal(channelKey) {
+        this.activeEditingChannel = channelKey;
+        const titles = {
+            memory: 'Edit Memory (System Prompt)',
+            anote: "Edit Author's Note",
+            summary: 'Edit Story Summary'
+        };
+        document.getElementById('dir-channel-modal-title').textContent = titles[channelKey] || 'Edit Channel';
+
+        const config = this.settings[channelKey] || { behavior: 'default', text: '' };
+        document.getElementById('dir-channel-behavior').value = config.behavior || 'default';
+        document.getElementById('dir-channel-textarea').value = config.text || '';
+
+        document.getElementById('dir-channel-modal').classList.remove('hidden');
+        setTimeout(() => document.getElementById('dir-channel-textarea').focus(), 50);
+    }
+
+    closeChannelModal() {
+        document.getElementById('dir-channel-modal').classList.add('hidden');
+        this.activeEditingChannel = null;
+    }
+
+    getParentChannelValue(channelKey) {
+        const parent = this.mainStoryState || this.app.state;
+        if (!parent) return { text: '', disabled: false };
+        if (channelKey === 'memory') {
+            return { text: parent.systemPrompt || '', disabled: !!parent.disableMemory };
+        } else if (channelKey === 'anote') {
+            return { text: parent.anoteContent || '', disabled: false };
+        } else if (channelKey === 'summary') {
+            return { text: parent.summary || '', disabled: !!parent.disableSummary };
+        }
+        return { text: '', disabled: false };
+    }
+
+    computeEffectiveChannel(channelKey) {
+        const config = this.settings[channelKey] || { behavior: 'default', text: '' };
+        const parentVal = this.getParentChannelValue(channelKey);
+        const customText = (config.text || '').trim();
+        const parentText = (parentVal.text || '').trim();
+        const behavior = config.behavior || 'default';
+
+        if (behavior === 'none') {
+            return { text: '', disabled: true };
+        }
+        if (behavior === 'default') {
+            return { text: parentVal.text, disabled: parentVal.disabled };
+        }
+        if (behavior === 'override') {
+            return { text: config.text || '', disabled: false };
+        }
+        if (behavior === 'prefix') {
+            const combined = customText ? (parentText ? `${customText}\n\n${parentText}` : customText) : parentText;
+            return { text: combined, disabled: false };
+        }
+        if (behavior === 'suffix') {
+            const combined = customText ? (parentText ? `${parentText}\n\n${customText}` : customText) : parentText;
+            return { text: combined, disabled: false };
+        }
+        return { text: parentVal.text, disabled: parentVal.disabled };
+    }
+
+    applyChannelSettingsToSandbox(sandbox) {
+        const mem = this.computeEffectiveChannel('memory');
+        sandbox.systemPrompt = mem.text;
+        sandbox.disableMemory = mem.disabled;
+
+        const an = this.computeEffectiveChannel('anote');
+        sandbox.anoteContent = an.text;
+
+        const sum = this.computeEffectiveChannel('summary');
+        sandbox.summary = sum.text;
+        sandbox.disableSummary = sum.disabled;
     }
 
     enter(targetIndex) {
@@ -154,10 +296,7 @@ export class DirectorManager {
         sandboxState.loadFromData(this.mainStoryState.exportData());
         sandboxState.history = clonedSlice;
         
-        sandboxState.disableSummary = !this.settings.includeSummary;
-        if (this.settings.overrideSystemPrompt) {
-            sandboxState.systemPrompt = this.settings.customSystemPrompt;
-        }
+        this.applyChannelSettingsToSandbox(sandboxState);
 
         // Perform the Swap
         this.app.state = sandboxState;
