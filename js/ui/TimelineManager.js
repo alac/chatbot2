@@ -4,6 +4,8 @@ export class TimelineManager {
         this.app = app;
         this.activeMsgIndex = -1;
         this.activeTagInputId = null; // Tracks which input the Tag Picker should write to
+        this.lastInteractedMarkerId = null;
+        this.lastDrawerScrollTop = 0;
         this.buildUI();
         this.bindEvents();
     }
@@ -163,10 +165,27 @@ export class TimelineManager {
             this.renderDrawer();
             drawer.classList.add('open');
             overlay.classList.add('open');
+            this.scrollToLastInteracted();
         } else {
+            const list = document.getElementById('timeline-list');
+            if (list) this.lastDrawerScrollTop = list.scrollTop;
             drawer.classList.remove('open');
             overlay.classList.remove('open');
         }
+    }
+
+    scrollToLastInteracted() {
+        const list = document.getElementById('timeline-list');
+        if (!list) return;
+
+        if (this.lastInteractedMarkerId) {
+            const targetEl = list.querySelector(`[data-marker-id="${this.lastInteractedMarkerId}"]`);
+            if (targetEl) {
+                targetEl.scrollIntoView({ block: 'center', behavior: 'auto' });
+                return;
+            }
+        }
+        list.scrollTop = this.lastDrawerScrollTop;
     }
 
     // --- TAG PICKER LOGIC ---
@@ -236,6 +255,10 @@ export class TimelineManager {
 
     openMarkerModal(msgIndex) {
         this.activeMsgIndex = msgIndex;
+        const msg = this.app.state.history[msgIndex];
+        if (msg && msg.markers && msg.markers.length > 0) {
+            this.lastInteractedMarkerId = msg.markers[0].id;
+        }
         document.getElementById('marker-modal-title').textContent = `Markers for Message #${msgIndex + 1}`;
         
         document.getElementById('marker-create-form').classList.add('hidden');
@@ -347,6 +370,7 @@ export class TimelineManager {
 
                 mk.name = newName;
                 mk.tags = newTags;
+                this.lastInteractedMarkerId = mk.id;
 
                 // Partner Sync Logic
                 if (mk.intervalId && mk.intervalId !== 'manual') {
@@ -392,6 +416,8 @@ export class TimelineManager {
         } else if (type === 'interval_end') {
             marker.intervalId = 'manual';
         }
+
+        this.lastInteractedMarkerId = marker.id;
 
         const msg = this.app.state.history[this.activeMsgIndex];
         if (!msg.markers) msg.markers = [];
@@ -444,13 +470,15 @@ export class TimelineManager {
             
             btn.onclick = () => {
                 const msg = this.app.state.history[this.activeMsgIndex];
-                msg.markers.push({
+                const newMarker = {
                     id: Math.random().toString(36).substring(2, 9),
                     type: 'interval_end',
                     name: st.name,
                     intervalId: st.intervalId,
                     tags: [...(st.tags || [])]
-                });
+                };
+                msg.markers.push(newMarker);
+                this.lastInteractedMarkerId = newMarker.id;
                 
                 this.app.renderAll();
                 this.app.autoSave();
@@ -525,7 +553,11 @@ export class TimelineManager {
 
                 const item = document.createElement('div');
                 item.className = 'timeline-item';
-                item.onclick = () => this.jumpToMessage(idx);
+                item.dataset.markerId = mk.id;
+                item.onclick = () => {
+                    this.lastInteractedMarkerId = mk.id;
+                    this.jumpToMessage(idx);
+                };
 
                 const title = document.createElement('div');
                 title.className = 'timeline-item-title';
@@ -588,6 +620,7 @@ export class TimelineManager {
                 btnLink.title = 'Inspect Links & Duplicates';
                 btnLink.onclick = (e) => {
                     e.stopPropagation();
+                    this.lastInteractedMarkerId = mk.id;
                     this.openLinksModal(idx, mk);
                 };
 
@@ -597,6 +630,7 @@ export class TimelineManager {
                 btnDel.title = 'Delete marker';
                 btnDel.onclick = (e) => {
                     e.stopPropagation();
+                    this.lastInteractedMarkerId = mk.id;
                     this.deleteMarkerFromDrawer(idx, mk);
                 };
 
