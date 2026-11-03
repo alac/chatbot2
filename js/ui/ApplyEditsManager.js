@@ -133,6 +133,95 @@ export class ApplyEditsManager {
         document.getElementById('apply-edits-modal').classList.remove('hidden');
     }
 
+    matchEditInContent(content, oldText, newText) {
+        const normContent = content.replace(/\r\n/g, '\n');
+        const normOld = oldText.replace(/\r\n/g, '\n');
+        const normNew = newText.replace(/\r\n/g, '\n');
+
+        const stripPrefix = (str) => {
+            const lines = str.split('\n');
+            const nonEmpty = lines.filter(l => l.trim().length > 0);
+            if (nonEmpty.length === 0) return str;
+            if (nonEmpty.every(l => /^\s*>\s?/.test(l))) {
+                return lines.map(l => l.replace(/^\s*>\s?/, '').trimEnd()).join('\n').trim();
+            }
+            let prefix = nonEmpty[0].match(/^\s+/)?.[0] || '';
+            for (let i = 1; i < nonEmpty.length; i++) {
+                while (!nonEmpty[i].startsWith(prefix) && prefix.length > 0) {
+                    prefix = prefix.slice(0, -1);
+                }
+            }
+            if (prefix.length > 0) {
+                return lines.map(l => (l.startsWith(prefix) ? l.slice(prefix.length) : l).trimEnd()).join('\n').trim();
+            }
+            return lines.map(l => l.trimEnd()).join('\n').trim();
+        };
+
+        const expandNewlines = (str) => {
+            return str.split(/\n+/).map(l => l.trimEnd()).join('\n\n').trim();
+        };
+
+        const passes = [
+            // Pass 0: Exact match
+            { 
+                getOld: () => normOld, 
+                getNew: () => normNew 
+            },
+            // Pass 1: Trailing whitespace trimmed per line
+            { 
+                getOld: () => normOld.split('\n').map(l => l.trimEnd()).join('\n').trim(), 
+                getNew: () => normNew.split('\n').map(l => l.trimEnd()).join('\n').trim() 
+            },
+            // Pass 2: Strip common prefix (e.g. "> " or indentation)
+            { 
+                getOld: () => stripPrefix(normOld), 
+                getNew: () => stripPrefix(normNew) 
+            },
+            // Pass 3: Expand single newlines to double paragraph spacing
+            { 
+                getOld: () => expandNewlines(normOld), 
+                getNew: () => expandNewlines(normNew) 
+            },
+            // Pass 4: Combined: Strip prefix AND expand newlines
+            { 
+                getOld: () => expandNewlines(stripPrefix(normOld)), 
+                getNew: () => expandNewlines(stripPrefix(normNew)) 
+            }
+        ];
+
+        for (const pass of passes) {
+            const candidateOld = pass.getOld();
+            const candidateNew = pass.getNew();
+
+            if (!candidateOld) continue;
+
+            const oldIdx = normContent.indexOf(candidateOld);
+            if (oldIdx !== -1) {
+                return {
+                    status: 'apply',
+                    startIndex: oldIdx,
+                    endIndex: oldIdx + candidateOld.length,
+                    effectiveOld: candidateOld,
+                    effectiveNew: candidateNew
+                };
+            }
+
+            const newIdx = candidateNew === "" ? -1 : normContent.indexOf(candidateNew);
+            const newIsSubOfOld = candidateNew !== "" && candidateOld.includes(candidateNew);
+            if (newIdx !== -1 && !newIsSubOfOld) {
+                return {
+                    status: 'applied',
+                    startIndex: newIdx,
+                    endIndex: newIdx + candidateNew.length,
+                    effectiveOld: candidateOld,
+                    effectiveNew: candidateNew
+                };
+            }
+        }
+
+        return null;
+    }
+
     evaluateEditsStatus() {
         // Collect up to 10 visible message indices backwards (excluding the latest message which has the edits)
         const visibleIndices = [];
@@ -157,25 +246,15 @@ export class ApplyEditsManager {
                     continue;
                 }
 
-                const oldIdx = content.indexOf(edit.oldText);
-                
-                // Fix for "".indexOf("") returning 0
-                const newIdx = edit.newText === "" ? -1 : content.indexOf(edit.newText);
-                const newIsSubOfOld = edit.newText !== "" && edit.oldText.includes(edit.newText);
-                
-                if (oldIdx !== -1) {
-                    edit.status = 'apply';
+                const match = this.matchEditInContent(content, edit.oldText, edit.newText);
+                if (match) {
+                    edit.status = match.status;
                     edit.targetMessageIdx = msgIdx;
-                    edit.startIndex = oldIdx;
-                    edit.endIndex = oldIdx + edit.oldText.length;
-                    edit.score = msgIdx * 100000 + oldIdx;
-                    break;
-                } else if (newIdx !== -1 && !newIsSubOfOld) {
-                    edit.status = 'applied';
-                    edit.targetMessageIdx = msgIdx;
-                    edit.startIndex = newIdx;
-                    edit.endIndex = newIdx + edit.newText.length;
-                    edit.score = msgIdx * 100000 + newIdx;
+                    edit.startIndex = match.startIndex;
+                    edit.endIndex = match.endIndex;
+                    edit.oldText = match.effectiveOld;
+                    edit.newText = match.effectiveNew;
+                    edit.score = msgIdx * 100000 + match.startIndex;
                     break;
                 }
             }
