@@ -639,6 +639,17 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     border-color: var(--danger);
 }
 
+.sr-badge-identical {
+    background: rgba(148, 163, 184, 0.2);
+    color: var(--text-muted);
+    border-color: rgba(148, 163, 184, 0.4);
+    cursor: default;
+}
+
+.hide-deletions del {
+    display: none !important;
+}
+
 .sr-card-content {
     font-size: 0.95em;
     line-height: 1.5;

@@ -39,6 +39,15 @@ export class RewriterManager {
         document.getElementById('btn-sr-cancel').addEventListener('click', () => this.cancelStagedRewrite());
         document.getElementById('btn-sr-stop').addEventListener('click', () => this.stopQueue());
         document.getElementById('btn-sr-apply').addEventListener('click', () => this.applyStagedRewrite());
+        
+        document.getElementById('sr-show-deletions').addEventListener('change', (e) => {
+            const list = document.getElementById('sr-sentence-list');
+            if (e.target.checked) {
+                list.classList.remove('hide-deletions');
+            } else {
+                list.classList.add('hide-deletions');
+            }
+        });
     }
 
     populateUI() {
@@ -229,6 +238,15 @@ export class RewriterManager {
         this.renderStagedModal();
         document.getElementById('staged-rewrite-modal').classList.remove('hidden');
 
+        // Sync checkbox state for deletions
+        const showDeletions = document.getElementById('sr-show-deletions').checked;
+        const list = document.getElementById('sr-sentence-list');
+        if (showDeletions) {
+            list.classList.remove('hide-deletions');
+        } else {
+            list.classList.add('hide-deletions');
+        }
+
         // Start sequential queue processing
         this.startQueue();
     }
@@ -318,7 +336,7 @@ export class RewriterManager {
 
     updateProgressUI() {
         const total = this.sentenceList.filter(s => s.status !== 'skipped').length;
-        const processed = this.sentenceList.filter(s => s.status === 'done' || s.status === 'failed').length;
+        const processed = this.sentenceList.filter(s => s.status === 'done' || s.status === 'failed' || s.status === 'identical').length;
         
         const badge = document.getElementById('sr-progress-badge');
         if (badge) badge.textContent = `${processed} / ${total} done`;
@@ -358,9 +376,16 @@ export class RewriterManager {
 
             try {
                 const outputText = await this.engine.rewrite(item.core);
-                item.rewritten = item.prefix + outputText.trim() + item.suffix;
-                item.status = 'done';
-                item.useRewritten = true;
+                const trimmedOutput = outputText.trim();
+                item.rewritten = item.prefix + trimmedOutput + item.suffix;
+                
+                if (trimmedOutput === item.core) {
+                    item.status = 'identical';
+                    item.useRewritten = false; // Same either way, safe fallback
+                } else {
+                    item.status = 'done';
+                    item.useRewritten = true;
+                }
             } catch (err) {
                 console.error(`Error rewriting sentence #${i + 1}:`, err);
                 item.status = 'failed';
@@ -420,6 +445,10 @@ export class RewriterManager {
         } else if (item.status === 'skipped') {
             badge.textContent = 'Skipped';
             content.textContent = '(whitespace)';
+        } else if (item.status === 'identical') {
+            badge.textContent = 'Identical';
+            badge.className = 'sr-badge sr-badge-identical';
+            content.textContent = item.original;
         } else if (item.status === 'done') {
             if (item.useRewritten) {
                 badge.textContent = 'Rewritten';

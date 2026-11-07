@@ -1217,11 +1217,16 @@
                 </div>
                 <button id="btn-close-staged-rewrite" class="close-btn">&times;</button>
             </div>
-            <div style="padding: 8px 16px; background: var(--bg-main); border-bottom: 1px solid var(--border); font-size: 0.85em; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+            <div style="padding: 8px 16px; background: var(--bg-main); border-bottom: 1px solid var(--border); font-size: 0.85em; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <span>Click any completed sentence badge to toggle between <strong>Rewritten</strong> and <strong>Original</strong>.</span>
-                <span id="sr-status-summary" style="font-weight: bold; color: var(--accent);">Ready</span>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                        <input type="checkbox" id="sr-show-deletions"> Show Deletions
+                    </label>
+                    <span id="sr-status-summary" style="font-weight: bold; color: var(--accent);">Ready</span>
+                </div>
             </div>
-            <div class="modal-body" id="sr-sentence-list" style="display: flex; flex-direction: column; gap: 10px; padding: 16px; overflow-y: auto; flex: 1; background: var(--bg-main);">
+            <div class="modal-body hide-deletions" id="sr-sentence-list" style="display: flex; flex-direction: column; gap: 10px; padding: 16px; overflow-y: auto; flex: 1; background: var(--bg-main);">
                 <!-- Sentence cards populated by JS -->
             </div>
             <div style="padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display: flex; justify-content: space-between; align-items: center;">
