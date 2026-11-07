@@ -1,3 +1,4 @@
+// BEGIN FILE: js/ui/RewriterManager.js
 import { settings } from '../state/AppSettings.js';
 import { LocalRewriterEngine } from '../api/LocalRewriterEngine.js';
 import { diffWords } from '../utils/diff.js';
@@ -40,13 +41,24 @@ export class RewriterManager {
         document.getElementById('btn-sr-stop').addEventListener('click', () => this.stopQueue());
         document.getElementById('btn-sr-apply').addEventListener('click', () => this.applyStagedRewrite());
         
-        document.getElementById('sr-show-deletions').addEventListener('change', (e) => {
-            const list = document.getElementById('sr-sentence-list');
-            if (e.target.checked) {
-                list.classList.remove('hide-deletions');
-            } else {
-                list.classList.add('hide-deletions');
-            }
+        document.getElementById('btn-sr-select-all').addEventListener('click', () => {
+            this.sentenceList.forEach((item, idx) => {
+                if (item.status === 'done') {
+                    item.useRewritten = true;
+                    this.updateRowUI(item, idx);
+                }
+            });
+            this.updateProgressUI();
+        });
+
+        document.getElementById('btn-sr-deselect-all').addEventListener('click', () => {
+            this.sentenceList.forEach((item, idx) => {
+                if (item.status === 'done') {
+                    item.useRewritten = false;
+                    this.updateRowUI(item, idx);
+                }
+            });
+            this.updateProgressUI();
         });
     }
 
@@ -238,15 +250,6 @@ export class RewriterManager {
         this.renderStagedModal();
         document.getElementById('staged-rewrite-modal').classList.remove('hidden');
 
-        // Sync checkbox state for deletions
-        const showDeletions = document.getElementById('sr-show-deletions').checked;
-        const list = document.getElementById('sr-sentence-list');
-        if (showDeletions) {
-            list.classList.remove('hide-deletions');
-        } else {
-            list.classList.add('hide-deletions');
-        }
-
         // Start sequential queue processing
         this.startQueue();
     }
@@ -283,7 +286,7 @@ export class RewriterManager {
                 core,
                 suffix,
                 rewritten: isWhitespaceOnly ? item.segment : '',
-                useRewritten: !isWhitespaceOnly,
+                useRewritten: false, // Opt-in default
                 status: isWhitespaceOnly ? 'skipped' : 'pending'
             };
         });
@@ -353,6 +356,12 @@ export class RewriterManager {
                 summary.textContent = 'Ready';
             }
         }
+
+        const selectedCount = this.sentenceList.filter(s => s.status === 'done' && s.useRewritten).length;
+        const applyBtn = document.getElementById('btn-sr-apply');
+        if (applyBtn) {
+            applyBtn.textContent = `Apply (${selectedCount} Changes)`;
+        }
     }
 
     async startQueue() {
@@ -381,10 +390,10 @@ export class RewriterManager {
                 
                 if (trimmedOutput === item.core) {
                     item.status = 'identical';
-                    item.useRewritten = false; // Same either way, safe fallback
+                    item.useRewritten = false;
                 } else {
                     item.status = 'done';
-                    item.useRewritten = true;
+                    item.useRewritten = false; // Opt-in
                 }
             } catch (err) {
                 console.error(`Error rewriting sentence #${i + 1}:`, err);
@@ -422,6 +431,7 @@ export class RewriterManager {
 
         item.useRewritten = !item.useRewritten;
         this.updateRowUI(item, index);
+        this.updateProgressUI();
     }
 
     updateRowUI(item, index) {
@@ -448,17 +458,21 @@ export class RewriterManager {
         } else if (item.status === 'identical') {
             badge.textContent = 'Identical';
             badge.className = 'sr-badge sr-badge-identical';
+            card.className = 'sr-card identical';
             content.textContent = item.original;
         } else if (item.status === 'done') {
+            const diff = diffWords(item.original, item.rewritten);
+            // Fallback to newHtml if browser service worker aggressively cached the old diff.js
+            content.innerHTML = diff.unifiedHtml !== undefined ? diff.unifiedHtml : diff.newHtml;
+            
             if (item.useRewritten) {
                 badge.textContent = 'Rewritten';
                 badge.className = 'sr-badge sr-badge-rewritten';
-                const diff = diffWords(item.original, item.rewritten);
-                content.innerHTML = diff.newHtml;
+                card.className = 'sr-card selected';
             } else {
                 badge.textContent = 'Original';
                 badge.className = 'sr-badge sr-badge-original';
-                content.textContent = item.original;
+                card.className = 'sr-card unselected';
             }
         }
     }
@@ -505,3 +519,4 @@ export class RewriterManager {
         this.app.autoSave();
     }
 }
+// END FILE: js/ui/RewriterManager.js

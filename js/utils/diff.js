@@ -39,18 +39,20 @@ function computeDiff(oldArr, newArr, joiner = '') {
 
     // Optional formatting block for HTML word diffs specifically
     if (joiner === '') {
-        let oldHtml = '', newHtml = '';
+        let oldHtml = '', newHtml = '', unifiedHtml = '';
         diff.forEach(part => {
             const safeVal = part.value.replace(/</g, '&lt;').replace(/>/g, '&gt;');
             if (part.type === 'equal') {
-                oldHtml += safeVal; newHtml += safeVal;
+                oldHtml += safeVal; newHtml += safeVal; unifiedHtml += safeVal;
             } else if (part.type === 'delete') {
                 oldHtml += `<del>${safeVal}</del>`;
+                unifiedHtml += `<del>${safeVal}</del>`;
             } else if (part.type === 'insert') {
                 newHtml += `<ins>${safeVal}</ins>`;
+                unifiedHtml += `<ins>${safeVal}</ins>`;
             }
         });
-        return { oldHtml, newHtml };
+        return { oldHtml, newHtml, unifiedHtml };
     }
 
     return diff;
