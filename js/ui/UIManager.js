@@ -1075,6 +1075,19 @@ export class UIManager {
                 });
                 iconsDiv.appendChild(btnEdit);
 
+                // --- STAGED DESLOP REWRITE BUTTON (ASSISTANT ONLY) ---
+                if (role === 'assistant') {
+                    const btnDeslop = document.createElement('span');
+                    btnDeslop.textContent = '🧹';
+                    btnDeslop.title = "Sentence-by-Sentence Rewrite (Deslop)";
+                    btnDeslop.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.rewriterManager.openStagedRewriteModal(index);
+                    });
+                    iconsDiv.appendChild(btnDeslop);
+                }
+                // --- END STAGED DESLOP REWRITE BUTTON ---
+
                 const btnInject = document.createElement('span');
                 btnInject.textContent = '💉';
                 btnInject.title = "Inject Turn Below";
