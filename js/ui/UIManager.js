@@ -24,6 +24,7 @@ import { EditLogManager } from './EditLogManager.js';
 import { TimelineManager } from './TimelineManager.js';
 import { TimelineGeneratorManager } from './TimelineGeneratorManager.js';
 import { DirectorManager } from './DirectorManager.js';
+import { ScrollNavigator } from './ScrollNavigator.js';
 
 import { CloudSyncUI } from './CloudSyncUI.js';
 import { SlotManager } from './SlotManager.js';
@@ -84,6 +85,7 @@ export class UIManager {
         this.timelineManager = new TimelineManager(this);
         this.timelineGeneratorManager = new TimelineGeneratorManager(this);
         this.directorManager = new DirectorManager(this);
+        this.scrollNavigator = new ScrollNavigator(this);
 
         this.bindEvents();
         this.initApp();
@@ -609,14 +611,6 @@ export class UIManager {
         bubble.className = 'turn-bubble';
         if (this.directorManager && this.directorManager.isActive && msg._isTargetTurn) {
             bubble.classList.add('director-target-bubble');
-        }
-        
-        if (role === 'assistant') {
-            bubble.style.cursor = 'pointer';
-            bubble.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SPAN' && e.target.classList.contains('action-icons')) return;
-                this.draftSwitcher.renderSwitcher(index);
-            });
         }
 
         // --- ADD MARKER PILLS RENDERER HERE ---

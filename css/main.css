@@ -666,3 +666,36 @@ del { background: var(--diff-del-bg); color: var(--diff-del-txt); text-decoratio
     word-break: break-word;
 }
 
+.floating-nav { 
+    position: fixed; 
+    right: 25px; 
+    top: 80px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 8px; 
+    z-index: 50; 
+}
+.floating-nav button { 
+    border-radius: 50%; 
+    width: 36px; 
+    height: 36px; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    background: var(--bg-panel); 
+    border: 1px solid var(--border); 
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
+    font-size: 16px; 
+    color: var(--text-main);
+    opacity: 0.5; 
+    transition: opacity 0.2s, background 0.2s; 
+    padding: 0; 
+    cursor: pointer;
+}
+.floating-nav button:hover { 
+    opacity: 1; 
+    background: var(--border); 
+}
+@media (max-width: 768px) { 
+    .floating-nav { top: 60px; right: 10px; } 
+}

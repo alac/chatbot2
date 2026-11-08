@@ -1,3 +1,4 @@
+// BEGIN FILE: js/ui/DraftSwitcher.js
 import { settings } from '../state/AppSettings.js';
 import { TextRenderer } from './TextRenderer.js';
 
@@ -116,22 +117,6 @@ export class DraftSwitcher {
         btnAdd.title = 'Generate additional drafts';
         btnAdd.onclick = () => this.openAddDraftsModal(index);
 
-        // -- Navigation Controls --
-        const btnTop = document.createElement('button');
-        btnTop.innerHTML = '⤒';
-        btnTop.title = 'Jump to top of this message';
-        btnTop.onclick = () => this.scrollToTop(index);
-
-        const btnPrevMsg = document.createElement('button');
-        btnPrevMsg.innerHTML = '⬆️';
-        btnPrevMsg.title = 'Previous Assistant Message';
-        btnPrevMsg.onclick = () => this.navigateMsg(index, -1);
-
-        const btnNextMsg = document.createElement('button');
-        btnNextMsg.innerHTML = '⬇️';
-        btnNextMsg.title = 'Next Assistant Message';
-        btnNextMsg.onclick = () => this.navigateMsg(index, 1);
-
         // Merge Tool
         const btnMerge = document.createElement('button');
         btnMerge.innerHTML = '🔀';
@@ -142,9 +127,6 @@ export class DraftSwitcher {
         controlsRow.appendChild(select);
         controlsRow.appendChild(btnNextDraft);
         controlsRow.appendChild(btnAdd);
-        controlsRow.appendChild(btnTop);
-        controlsRow.appendChild(btnPrevMsg);
-        controlsRow.appendChild(btnNextMsg);
         controlsRow.appendChild(btnMerge);
 
         // 2. Status Row
@@ -183,34 +165,6 @@ export class DraftSwitcher {
         draftSwitcherContent.appendChild(controlsRow);
         draftSwitcherContent.appendChild(statusRow);
         toolbar.appendChild(draftSwitcherContent);
-    }
-
-    scrollToTop(msgIndex) {
-        const turnWrapper = document.getElementById(`turn-wrapper-${msgIndex}`);
-        const container = document.getElementById('output-container');
-        if (turnWrapper && container) {
-            container.scrollTop = turnWrapper.offsetTop - 10;
-        }
-    }
-
-    navigateMsg(currentIndex, direction) {
-        let targetIndex = -1;
-        const history = this.app.state.history;
-        
-        if (direction === -1) {
-            for (let i = currentIndex - 1; i >= 0; i--) {
-                if (history[i].role === 'assistant' && !history[i].isHidden) { targetIndex = i; break; }
-            }
-        } else {
-            for (let i = currentIndex + 1; i < history.length; i++) {
-                if (history[i].role === 'assistant' && !history[i].isHidden) { targetIndex = i; break; }
-            }
-        }
-
-        if (targetIndex !== -1) {
-            this.renderSwitcher(targetIndex);
-            this.scrollToTop(targetIndex);
-        }
     }
 
     switchDraft(msgIndex, dir) {
@@ -296,7 +250,6 @@ export class DraftSwitcher {
     openAddDraftsModal(msgIndex) {
         this.currentAddDraftsMsgIndex = msgIndex;
         
-        // Populate dropdown options cleanly from the existing AppSettings main dropdown
         const mainDropdown = document.getElementById('select-model');
         for (let i = 0; i < 3; i++) {
             const sel = document.getElementById(`add-drafts-model-${i}`);
@@ -324,7 +277,6 @@ export class DraftSwitcher {
             const btn = document.createElement('button');
             btn.className = 'recent-config-btn';
             
-            // Format labels cleanly without the provider prefix
             const label = config.map(m => m.includes('/') ? m.split('/').pop() : m).join(', ');
             btn.textContent = label;
             
@@ -349,7 +301,6 @@ export class DraftSwitcher {
             models.push(document.getElementById(`add-drafts-model-${i}`).value);
         }
         
-        // Save to recents (ensure uniqueness)
         const configStr = JSON.stringify(models);
         settings.recentAdditionalDrafts = settings.recentAdditionalDrafts.filter(c => JSON.stringify(c) !== configStr);
         settings.recentAdditionalDrafts.unshift(models);
@@ -361,3 +312,4 @@ export class DraftSwitcher {
         this.currentAddDraftsMsgIndex = -1;
     }
 }
+// END FILE: js/ui/DraftSwitcher.js
