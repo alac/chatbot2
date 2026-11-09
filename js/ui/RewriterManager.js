@@ -462,17 +462,24 @@ export class RewriterManager {
             content.textContent = item.original;
         } else if (item.status === 'done') {
             const diff = diffWords(item.original, item.rewritten);
-            // Fallback to newHtml if browser service worker aggressively cached the old diff.js
-            content.innerHTML = diff.unifiedHtml !== undefined ? diff.unifiedHtml : diff.newHtml;
             
             if (item.useRewritten) {
+                // Rewritten (Accepted): clean rewritten version with additions highlighted
                 badge.textContent = 'Rewritten';
                 badge.className = 'sr-badge sr-badge-rewritten';
                 card.className = 'sr-card selected';
+                content.innerHTML = diff.newHtml;
             } else {
+                // Original (Unselected): two stacked lines
+                // Top line: Original sentence with removed text in red (<del>)
+                // Bottom line: Proposed rewrite with added text in green (<ins>)
                 badge.textContent = 'Original';
                 badge.className = 'sr-badge sr-badge-original';
                 card.className = 'sr-card unselected';
+                content.innerHTML = `
+                    <div style="opacity: 0.85; margin-bottom: 4px;">${diff.oldHtml}</div>
+                    <div style="border-top: 1px dashed var(--border); padding-top: 4px;">${diff.newHtml}</div>
+                `;
             }
         }
     }
