@@ -102,7 +102,6 @@ export class StoryState {
             this.notes = [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
             this.pinnedAvatarId = null;
         }
-        this.emitChange();
     }
 
     // --- NOTES KANBAN BOARD METHODS ---
@@ -714,6 +713,5 @@ export class StoryState {
                 }
             }
         });
-        this.emitChange();
     }
 }
