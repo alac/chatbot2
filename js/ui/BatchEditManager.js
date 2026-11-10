@@ -115,10 +115,6 @@ export class BatchEditManager {
         }
 
         if (affected > 0) {
-            this.app.state.buildPromptPayload();
-            this.app.renderAll();
-            this.app.autoSave();
-            this.app.summaryManager.updateSummaryMeter();
             document.getElementById('tools-modal').classList.add('hidden');
         } else {
             alert("No messages matched the criteria in that range.");

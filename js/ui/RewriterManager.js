@@ -213,14 +213,12 @@ export class RewriterManager {
     applyRewrite(msgIndex, replaceStart, replaceEnd, originalText, newText) {
         const fullText = this.app.state.getContent(msgIndex);
         const updatedFullText = fullText.slice(0, replaceStart) + newText + fullText.slice(replaceEnd);
-        
-        this.app.state.recordEdit(originalText, newText, 'local_rewriter');
-        this.app.state.editTurn(msgIndex, updatedFullText);
-        
+
         this.isModalOpen = false;
         document.getElementById('rewrite-modal').classList.add('hidden');
-        this.app.renderAll();
-        this.app.autoSave();
+
+        this.app.state.recordEdit(originalText, newText, 'local_rewriter');
+        this.app.state.editTurn(msgIndex, updatedFullText);
     }
 
     // -------------------------------------------------------------------------
@@ -521,9 +519,6 @@ export class RewriterManager {
         document.getElementById('staged-rewrite-modal').classList.add('hidden');
         this.sentenceList = [];
         this.stagedMsgIndex = null;
-
-        this.app.renderAll();
-        this.app.autoSave();
     }
 }
 // END FILE: js/ui/RewriterManager.js

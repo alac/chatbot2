@@ -190,7 +190,9 @@ export class ImageGenManager {
         sysPrompt = sysPrompt.replaceAll('{{context}}', contextStr);
 
         const msgIndex = this.app.state.history.length;
-        this.app.state.history.push({
+        const abortController = new AbortController();
+        this.abortControllers.set(msgIndex, abortController);
+        this.app.state.addSpecialTurn({
             role: 'gallery',
             isHidden: false,
             galleryData: {
@@ -205,12 +207,8 @@ export class ImageGenManager {
                 startTime: Date.now()
             },
             drafts: []
-        });
+        }); 
 
-        const abortController = new AbortController();
-        this.abortControllers.set(msgIndex, abortController);
-        this.app.renderAll();
-        
         this._runGeneration(msgIndex, abortController.signal);
     }
 

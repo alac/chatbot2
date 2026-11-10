@@ -471,8 +471,6 @@ export class DraftMergeManager {
         this.app.state.setActiveDraft(this.targetMessageIndex, msg.drafts.length - 1);
         
         this.close();
-        this.app.renderAll();
-        this.app.autoSave();
     }
 
     close() {

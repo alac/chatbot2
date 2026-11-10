@@ -120,9 +120,6 @@ export class TrashExplorerManager {
         
         const restoredIdx = this.app.state.restoreFromTrash(this.currentIndex);
         if (restoredIdx !== -1) {
-            this.app.state.buildPromptPayload();
-            this.app.renderAll();
-            this.app.autoSave();
             this.close();
         }
     }

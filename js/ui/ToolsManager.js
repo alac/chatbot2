@@ -119,8 +119,6 @@ export class ToolsManager {
             
             this.app.state.addTurn('system', result.message);
             document.getElementById('tools-modal').classList.add('hidden');
-            this.app.renderAll();
-            this.app.autoSave();
         } catch (err) {
             alert(err.message);
         }
@@ -141,8 +139,6 @@ export class ToolsManager {
 
             this.app.state.addTurn('system', outputText);
             document.getElementById('tools-modal').classList.add('hidden');
-            this.app.renderAll();
-            this.app.autoSave();
         } catch (err) {
             alert(err.message);
         }

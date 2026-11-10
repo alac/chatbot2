@@ -487,9 +487,6 @@ export class ApplyEditsManager {
                 settings.save();
 
                 // 4. Update UI
-                this.app.state.buildPromptPayload(); 
-                this.app.renderAll();
-                this.app.autoSave();
                 this.evaluateEditsStatus();
                 this.renderApplyEditsList();
             });
