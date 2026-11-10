@@ -38,7 +38,8 @@ import { RequestTracker } from './RequestTracker.js';
 
 export class UIManager {
     constructor() {
-        this.state = new StoryState();
+        this.events = new EventTarget();
+        this.state = new StoryState(this.events);
         this.requestTracker = new RequestTracker(this);
         this.storage = new StorageManager();
         
@@ -204,6 +205,41 @@ export class UIManager {
         document.getElementById('btn-inject-apply').addEventListener('click', () => this.handleInjectSave());
         document.getElementById('btn-inject-prev-toggle').addEventListener('click', () => document.getElementById('inject-prev-context').classList.toggle('hidden'));
         document.getElementById('btn-inject-next-toggle').addEventListener('click', () => document.getElementById('inject-next-context').classList.toggle('hidden'));
+
+        this.setupStateListeners();
+    }
+
+    setupStateListeners() {
+        // 1. UI RENDER DEBOUNCER (Using requestAnimationFrame)
+        let isRenderPending = false;
+        
+        this.events.addEventListener('state:change', () => {
+            if (isRenderPending) return; // If already queued, ignore
+            
+            isRenderPending = true;
+            
+            // requestAnimationFrame waits until the JS thread is done, 
+            // then runs exactly ONCE right before the screen repaints (max ~16ms).
+            requestAnimationFrame(() => {
+                isRenderPending = false;
+                
+                this.turnRenderer.renderAll();
+                this.summaryManager.updateSummaryMeter();
+            });
+        });
+
+        // 2. STORAGE DEBOUNCER (Using setTimeout)
+        let saveTimeout = null;
+        
+        this.events.addEventListener('state:change', () => {
+            // Clear the previous timer if another change happens quickly
+            if (saveTimeout) clearTimeout(saveTimeout);
+            
+            // Wait 500ms after the LAST state change before writing to disk
+            saveTimeout = setTimeout(() => {
+                this.autoSave();
+            }, 500); 
+        });
     }
 
     openInjectModal(index) {
