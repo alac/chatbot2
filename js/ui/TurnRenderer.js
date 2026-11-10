@@ -615,9 +615,9 @@ export class TurnRenderer {
                         const action = prompt("This message has story markers.\nType 'prev' to shift them up,\n'next' to shift them down,\n'drop' to delete them entirely.", "drop");
                         if (action === null) return;
                         if (action.trim().toLowerCase() === 'prev' && index > 0) {
-                            this.app.state.history[index - 1].markers.push(...msg.markers);
+                            this.app.state.moveMarkers(index, index - 1);
                         } else if (action.trim().toLowerCase() === 'next' && index < this.app.state.history.length - 1) {
-                            this.app.state.history[index + 1].markers.push(...msg.markers);
+                            this.app.state.moveMarkers(index, index + 1);
                         }
                     }
 

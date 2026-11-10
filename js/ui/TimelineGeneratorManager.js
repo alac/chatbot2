@@ -510,27 +510,8 @@ export class TimelineGeneratorManager {
 
     applySelectedMarkers() {
         const toApply = this.parsedMarkers.filter(m => m.selected);
-        let appliedCount = 0;
-
-        toApply.forEach(mk => {
-            const arrIndex = mk.msgNum - 1;
-            if (arrIndex >= 0 && arrIndex < this.app.state.history.length) {
-                const msg = this.app.state.history[arrIndex];
-                if (!msg.markers) msg.markers = [];
-                
-                msg.markers.push({
-                    id: Math.random().toString(36).substr(2, 9),
-                    type: mk.type,
-                    name: mk.name,
-                    tags: mk.tags,
-                    intervalId: mk.intervalId
-                });
-                appliedCount++;
-            }
-        });
-
-        this.app.renderAll();
-        this.app.autoSave();
+        
+        const appliedCount = this.app.state.applyTimelineGeneratorMarkers(toApply);
         
         alert(`Successfully applied ${appliedCount} timeline markers.`);
         this.closeRunModal();

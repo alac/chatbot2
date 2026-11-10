@@ -595,6 +595,118 @@ export class StoryState {
         return { messages, includedIndices };
     }
 
+
+    // --- TIMELINE MARKER METHODS ---
+    
+    addMarker(msgIndex, markerData) {
+        if (msgIndex < 0 || msgIndex >= this.history.length) return;
+        const msg = this.history[msgIndex];
+        if (!msg.markers) msg.markers = [];
+        msg.markers.push(markerData);
+        this.emitChange();
+    }
+
+    updateMarker(msgIndex, markerId, newData) {
+        if (msgIndex < 0 || msgIndex >= this.history.length) return;
+        const msg = this.history[msgIndex];
+        if (!msg.markers) return;
+        
+        const marker = msg.markers.find(m => m.id === markerId);
+        if (!marker) return;
+
+        // Partner sync logic (if name or tags changed on an interval)
+        if (marker.intervalId && marker.intervalId !== 'manual' && (newData.name !== undefined || newData.tags !== undefined)) {
+            this.history.forEach(otherMsg => {
+                if (!otherMsg.markers) return;
+                otherMsg.markers.forEach(partner => {
+                    if (partner.intervalId === marker.intervalId && partner.id !== marker.id) {
+                        if (newData.name !== undefined) partner.name = newData.name;
+                        if (newData.tags !== undefined) partner.tags = [...newData.tags];
+                    }
+                });
+            });
+        }
+
+        Object.assign(marker, newData);
+        this.emitChange();
+    }
+
+    deleteMarker(msgIndex, markerId, deletePartner = false) {
+        if (msgIndex < 0 || msgIndex >= this.history.length) return;
+        const msg = this.history[msgIndex];
+        if (!msg.markers) return;
+
+        const targetIdx = msg.markers.findIndex(m => m.id === markerId);
+        if (targetIdx === -1) return;
+
+        const marker = msg.markers[targetIdx];
+        
+        if (deletePartner && marker.intervalId && marker.intervalId !== 'manual') {
+            this.history.forEach(otherMsg => {
+                if (!otherMsg.markers) return;
+                const pIdx = otherMsg.markers.findIndex(m => m.intervalId === marker.intervalId && m.id !== marker.id);
+                if (pIdx !== -1) {
+                    otherMsg.markers.splice(pIdx, 1);
+                }
+            });
+        }
+
+        msg.markers.splice(targetIdx, 1);
+        this.emitChange();
+    }
+
+    convertMarkerToPoint(msgIndex, markerId) {
+        if (msgIndex < 0 || msgIndex >= this.history.length) return;
+        const msg = this.history[msgIndex];
+        if (!msg.markers) return;
+        
+        const marker = msg.markers.find(m => m.id === markerId);
+        if (marker) {
+            marker.type = 'point';
+            delete marker.intervalId;
+            this.emitChange();
+        }
+    }
+
+    applyTimelineGeneratorMarkers(markersToApply) {
+        let appliedCount = 0;
+        markersToApply.forEach(mk => {
+            const arrIndex = mk.msgNum - 1;
+            if (arrIndex >= 0 && arrIndex < this.history.length) {
+                const msg = this.history[arrIndex];
+                if (!msg.markers) msg.markers = [];
+                
+                msg.markers.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    type: mk.type,
+                    name: mk.name,
+                    tags: mk.tags,
+                    intervalId: mk.intervalId
+                });
+                appliedCount++;
+            }
+        });
+        if (appliedCount > 0) this.emitChange();
+        return appliedCount;
+    }
+
+    moveMarkers(fromIndex, toIndex) {
+        if (fromIndex < 0 || fromIndex >= this.history.length) return;
+        if (toIndex < 0 || toIndex >= this.history.length) return;
+        
+        const fromMsg = this.history[fromIndex];
+        const toMsg = this.history[toIndex];
+        
+        if (fromMsg.markers && fromMsg.markers.length > 0) {
+            if (!toMsg.markers) toMsg.markers = [];
+            toMsg.markers.push(...fromMsg.markers);
+            fromMsg.markers = [];
+            this.emitChange();
+        }
+    }
+
+    // --- END TIMELINE MARKER METHODS ---
+
     loadFromData(data) {
         this.history = data.history || [];
         this.history.forEach(m => { 

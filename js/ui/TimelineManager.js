@@ -239,7 +239,6 @@ export class TimelineManager {
         if (targetInput) {
             // We append selected tags, keeping any custom tags the user manually typed that aren't in the pool
             const manualVals = targetInput.value.split(',').map(t => t.trim()).filter(t => t);
-            const selectedLower = selected.map(s => s.toLowerCase());
             
             // Keep manually typed tags that were NOT selected from the pool (prevents destruction of new tags)
             const poolTagsLower = Array.from(document.querySelectorAll('.tag-picker-chip')).map(c => c.dataset.val.toLowerCase());
@@ -281,7 +280,7 @@ export class TimelineManager {
             return;
         }
 
-        msg.markers.forEach((mk, i) => {
+        msg.markers.forEach(mk => {
             const card = document.createElement('div');
             card.className = 'marker-modal-card';
             card.id = `marker-card-${mk.id}`;
@@ -314,9 +313,7 @@ export class TimelineManager {
             btnDel.textContent = '🗑️';
             btnDel.style.padding = '4px 8px';
             btnDel.onclick = () => {
-                msg.markers.splice(i, 1);
-                this.app.renderAll();
-                this.app.autoSave();
+                this.app.state.deleteMarker(this.activeMsgIndex, mk.id);
                 this.renderExistingMarkers();
             };
 
@@ -368,25 +365,13 @@ export class TimelineManager {
 
                 if (!newName) return alert("Name is required.");
 
-                mk.name = newName;
-                mk.tags = newTags;
                 this.lastInteractedMarkerId = mk.id;
 
-                // Partner Sync Logic
-                if (mk.intervalId && mk.intervalId !== 'manual') {
-                    this.app.state.history.forEach(historyMsg => {
-                        if (!historyMsg.markers) return;
-                        historyMsg.markers.forEach(partner => {
-                            if (partner.intervalId === mk.intervalId && partner.id !== mk.id) {
-                                partner.name = newName;
-                                partner.tags = [...newTags];
-                            }
-                        });
-                    });
-                }
+                this.app.state.updateMarker(this.activeMsgIndex, mk.id, {
+                    name: newName,
+                    tags: newTags
+                });
 
-                this.app.renderAll();
-                this.app.autoSave();
                 this.renderExistingMarkers();
             };
 
@@ -419,12 +404,7 @@ export class TimelineManager {
 
         this.lastInteractedMarkerId = marker.id;
 
-        const msg = this.app.state.history[this.activeMsgIndex];
-        if (!msg.markers) msg.markers = [];
-        msg.markers.push(marker);
-
-        this.app.renderAll();
-        this.app.autoSave();
+        this.app.state.addMarker(this.activeMsgIndex, marker);
         
         document.getElementById('marker-create-form').classList.add('hidden');
         document.getElementById('marker-actions-row').classList.remove('hidden');
@@ -469,7 +449,6 @@ export class TimelineManager {
             btn.innerHTML = `<span>▶ ${st.name}</span> <span style="opacity:0.6; font-size:0.85em;">(Started ${dist} msgs ago)</span>`;
             
             btn.onclick = () => {
-                const msg = this.app.state.history[this.activeMsgIndex];
                 const newMarker = {
                     id: Math.random().toString(36).substring(2, 9),
                     type: 'interval_end',
@@ -477,11 +456,9 @@ export class TimelineManager {
                     intervalId: st.intervalId,
                     tags: [...(st.tags || [])]
                 };
-                msg.markers.push(newMarker);
-                this.lastInteractedMarkerId = newMarker.id;
                 
-                this.app.renderAll();
-                this.app.autoSave();
+                this.lastInteractedMarkerId = newMarker.id;
+                this.app.state.addMarker(this.activeMsgIndex, newMarker);
                 
                 document.getElementById('marker-close-interval-form').classList.add('hidden');
                 document.getElementById('marker-actions-row').classList.remove('hidden');
@@ -704,29 +681,31 @@ export class TimelineManager {
             }
         }
 
+        let deletePartner = false;
         if (partnerInfo) {
             const partnerRole = partnerInfo.marker.type === 'interval_start' ? 'Start' : 'End';
             const partnerMsgNum = partnerInfo.msgIndex + 1;
             if (confirm(`This is part of an interval. Delete the matching ${partnerRole} marker at Turn #${partnerMsgNum} as well?`)) {
-                const partnerMsg = this.app.state.history[partnerInfo.msgIndex];
-                if (partnerMsg && partnerMsg.markers) {
-                    partnerMsg.markers.splice(partnerInfo.markerIndex, 1);
-                }
+                deletePartner = true;
             }
         }
 
-        // Remove the target marker
-        const targetIdx = msg.markers.findIndex(m => m.id === mk.id);
-        if (targetIdx !== -1) {
-            msg.markers.splice(targetIdx, 1);
-        }
-
-        this.app.renderAll();
-        this.app.autoSave();
+        this.app.state.deleteMarker(msgIdx, mk.id, deletePartner);
         this.renderDrawer();
     }
 
     openLinksModal(targetMsgIdx, targetMarker) {
+        // Find the fresh reference to this marker from state just in case it was mutated
+        const freshMsg = this.app.state.history[targetMsgIdx];
+        const freshTargetMarker = freshMsg?.markers?.find(m => m.id === targetMarker.id);
+        
+        if (!freshTargetMarker) {
+            // Target was deleted; bail out
+            document.getElementById('timeline-links-modal').classList.add('hidden');
+            return;
+        }
+        targetMarker = freshTargetMarker;
+
         const modal = document.getElementById('timeline-links-modal');
         const targetCard = document.getElementById('tl-links-target-card');
         const partnersList = document.getElementById('tl-links-partners-list');
@@ -751,10 +730,7 @@ export class TimelineManager {
         } else {
             btnConvert.classList.remove('hidden');
             btnConvert.onclick = () => {
-                targetMarker.type = 'point';
-                delete targetMarker.intervalId;
-                this.app.renderAll();
-                this.app.autoSave();
+                this.app.state.convertMarkerToPoint(targetMsgIdx, targetMarker.id);
                 this.renderDrawer();
                 this.openLinksModal(targetMsgIdx, targetMarker);
             };
@@ -801,9 +777,7 @@ export class TimelineManager {
                 `;
                 card.querySelector('.btn-del-partner').onclick = () => {
                     if (confirm(`Delete marker "${p.marker.name}" at Turn #${p.msgIndex + 1}?`)) {
-                        this.app.state.history[p.msgIndex].markers.splice(p.markerIndex, 1);
-                        this.app.renderAll();
-                        this.app.autoSave();
+                        this.app.state.deleteMarker(p.msgIndex, p.marker.id);
                         this.renderDrawer();
                         this.openLinksModal(targetMsgIdx, targetMarker);
                     }
@@ -834,22 +808,19 @@ export class TimelineManager {
                 `;
 
                 card.querySelector('.btn-pair-candidate').onclick = () => {
-                    // Generate shared ID if target didn't have one
-                    if (!targetMarker.intervalId || targetMarker.intervalId === 'manual') {
-                        targetMarker.intervalId = Math.random().toString(36).substr(2, 9);
+                    let newIntervalId = targetMarker.intervalId;
+                    if (!newIntervalId || newIntervalId === 'manual') {
+                        newIntervalId = Math.random().toString(36).substr(2, 9);
+                        this.app.state.updateMarker(targetMsgIdx, targetMarker.id, { intervalId: newIntervalId });
                     }
-                    c.marker.intervalId = targetMarker.intervalId;
-                    this.app.renderAll();
-                    this.app.autoSave();
+                    this.app.state.updateMarker(c.msgIndex, c.marker.id, { intervalId: newIntervalId });
                     this.renderDrawer();
                     this.openLinksModal(targetMsgIdx, targetMarker);
                 };
 
                 card.querySelector('.btn-del-candidate').onclick = () => {
                     if (confirm(`Delete marker "${c.marker.name}" at Turn #${c.msgIndex + 1}?`)) {
-                        this.app.state.history[c.msgIndex].markers.splice(c.markerIndex, 1);
-                        this.app.renderAll();
-                        this.app.autoSave();
+                        this.app.state.deleteMarker(c.msgIndex, c.marker.id);
                         this.renderDrawer();
                         this.openLinksModal(targetMsgIdx, targetMarker);
                     }
