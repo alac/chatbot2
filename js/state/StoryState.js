@@ -1,7 +1,8 @@
 import { settings } from './AppSettings.js';
 
 export class StoryState {
-    constructor() {
+    constructor(eventBus) {
+        this.eventBus = eventBus;
         this.history = []; 
         this.redoStack = []; 
         this.lastRawPayload = null; 
@@ -42,6 +43,13 @@ export class StoryState {
 
         this.trash = [];
         this.editLog = [];
+    }
+
+    emitChange() {
+        this.updateContextBoundary();
+        if (this.eventBus) {
+            this.eventBus.dispatchEvent(new CustomEvent('state:change'));
+        }
     }
 
     recordEdit(oldText, newText, source = 'manual') {
@@ -382,6 +390,8 @@ export class StoryState {
         if (index >= 0 && index < this.history.length) {
             this.pushToTrash(this.history[index]);
             this.history.splice(index, 1);
+
+            this.emitChange();
         }
     }
 
@@ -390,7 +400,9 @@ export class StoryState {
             const msg = this.history[index];
             msg.drafts[msg.activeDraftIndex].content = newContent;
             // Purposely NOT setting msg.isBatch = false so parallel drafts remain accessible
-            this.flushRedoToTrash(); 
+            this.flushRedoToTrash();
+
+            this.emitChange();
         }
     }
 
@@ -409,8 +421,7 @@ export class StoryState {
         }
     }
 
-    buildPromptPayload(isSummarizing = false, summarizePromptText = "") {
-        const messages = [];
+    _calculateContextInclusion(isSummarizing = false, summarizePromptText = "") {
         const charsRatio = parseFloat(settings.charsPerToken) || 4.0;
         
         let sysAnoteString = "";
@@ -436,9 +447,9 @@ export class StoryState {
         let unchangingTokens = Math.ceil(sysAnoteString.length / charsRatio) + parseInt(settings.maxTokens) + sumLength + summarizerPromptTokens;
         let budget = parseInt(settings.contextLength) - unchangingTokens;
 
-        this.contextBoundaryIndex = -1;
         let includedHistoryMsgs = [];
         let includedIndices = [];
+        let boundaryIndex = -1;
 
         let skipIndices = new Set();
         for (let i = 0; i < this.history.length; i++) {
@@ -448,7 +459,9 @@ export class StoryState {
         }
 
         for (let i = this.history.length - 1; i >= 0; i--) {
-            if (this.history[i].role === 'choices' || this.history[i].role === 'gallery' || skipIndices.has(i) || this.history[i].isHidden) continue;
+            if (this.history[i].role === 'choices' || this.history[i].role === 'gallery' || skipIndices.has(i) || this.history[i].isHidden) {
+                continue;
+            }
 
             let msgContent = this.getContent(i);
             msgContent = settings.applyRegexes(msgContent, 'outgoing');
@@ -458,17 +471,33 @@ export class StoryState {
                 budget -= T;
                 
                 let outputRole = this.history[i].role;
-                if (outputRole === 'aggregation') outputRole = 'user';
-                else if (outputRole === 'system') outputRole = 'user'; 
+                if (outputRole === 'aggregation' || outputRole === 'system') {
+                    outputRole = 'user'; 
+                }
                 
                 includedHistoryMsgs.unshift({ role: outputRole, content: msgContent });
                 includedIndices.unshift(i);
             } else {
-                this.contextBoundaryIndex = i; 
-                break;
+                boundaryIndex = i; // This is where the context gets chopped off
+                break; // Stop looking further back
             }
         }
 
+        return { includedHistoryMsgs, includedIndices, boundaryIndex };
+    }
+
+    updateContextBoundary() {
+        // Just run the math and grab the boundary index
+        const { boundaryIndex } = this._calculateContextInclusion();
+        this.contextBoundaryIndex = boundaryIndex;
+    }
+
+    buildPromptPayload(isSummarizing = false, summarizePromptText = "") {
+        // 1. Get the included messages using the shared logic
+        const { includedHistoryMsgs, includedIndices } = this._calculateContextInclusion(isSummarizing, summarizePromptText);
+        const messages = [];
+
+        // 2. Prepend System Prompt & Summary
         if (!this.disableMemory && this.systemPrompt.trim() !== "") {
             messages.push({ role: "system", content: this.systemPrompt.trim() });
         }
@@ -477,7 +506,7 @@ export class StoryState {
             messages.push({ role: "system", content: `<summary>\n${this.summary.trim()}\n</summary>` });
         }
 
-        // Merge consecutive turns with the same role before pushing to LLM messages array
+        // 3. Merge consecutive turns with the same role
         let mergedHistory = [];
         for (let i = 0; i < includedHistoryMsgs.length; i++) {
             const m = includedHistoryMsgs[i];
@@ -490,6 +519,7 @@ export class StoryState {
 
         mergedHistory.forEach(m => messages.push(m));
 
+        // 4. Inject Author's Note
         if (!this.disableMemory && !isSummarizing) {
             const anote = this.anoteContent.trim();
             if (anote !== "") {
@@ -518,6 +548,7 @@ export class StoryState {
             }
         }
 
+        // 5. Append trailing instructions/formatting
         if (isSummarizing) {
             messages.push({ role: "user", content: summarizePromptText });
         } else {
