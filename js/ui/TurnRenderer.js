@@ -54,7 +54,8 @@ export class TurnRenderer {
         }
 
         if (lastAsstIndex !== -1) {
-            this.app.draftSwitcher.renderSwitcher(lastAsstIndex, false);
+            const isStreaming = !!this.app.activeBatch; 
+            this.app.draftSwitcher.renderSwitcher(lastAsstIndex, isStreaming);
         } else {
             this.app.draftSwitcher.hide();
         }

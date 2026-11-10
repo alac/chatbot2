@@ -398,7 +398,6 @@ export class StoryState {
     updateBatchDraft(msgIndex, draftIndex, data) {
         if (this.history[msgIndex] && this.history[msgIndex].drafts[draftIndex]) {
             Object.assign(this.history[msgIndex].drafts[draftIndex], data);
-            this.emitChange();
         }
     }
 
