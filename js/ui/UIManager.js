@@ -159,10 +159,10 @@ export class UIManager {
         });
 
         document.getElementById('btn-undo').addEventListener('click', () => {
-            if (this.state.undo()) { this.renderAll(); this.autoSave(); }
+            this.state.undo()
         });
         document.getElementById('btn-redo').addEventListener('click', () => {
-            if (this.state.redo()) { this.renderAll(); this.autoSave(); }
+            this.state.redo()
         });
 
         document.getElementById('btn-edit-cancel').addEventListener('click', () => document.getElementById('edit-modal').classList.add('hidden'));
@@ -183,6 +183,10 @@ export class UIManager {
                     msg.drafts[0].content = msg.drafts[0].content.replaceAll(oldInstructions, newContent);
                 }
                 this.state.redoStack = [];
+
+                // Manual rerender/save since we're not using a storyState helper
+                this.renderAll();
+                this.autoSave();
             } else {
                 const currentContent = this.state.getContent(idx);
                 if (newContent === currentContent) {
@@ -193,8 +197,6 @@ export class UIManager {
             }
             
             document.getElementById('edit-modal').classList.add('hidden');
-            this.renderAll();
-            this.autoSave();
         });
         document.getElementById('btn-close-prompt').addEventListener('click', () => document.getElementById('prompt-modal').classList.add('hidden'));
         document.getElementById('btn-close-usage').addEventListener('click', () => document.getElementById('usage-modal').classList.add('hidden'));
@@ -282,9 +284,6 @@ export class UIManager {
         this.state.injectTurn(this.activeInjectIndex, role, content);
         
         document.getElementById('inject-modal').classList.add('hidden');
-        this.state.buildPromptPayload();
-        this.renderAll();
-        this.autoSave();
     }
 
     getBaseTitle() {
