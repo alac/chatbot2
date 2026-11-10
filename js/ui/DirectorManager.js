@@ -119,8 +119,9 @@ export class DirectorManager {
                 }
 
                 this.applyChannelSettingsToSandbox(this.app.state);
-                this.app.state.buildPromptPayload();
-                this.app.renderAll();
+
+                // Explicit re-render since we've reached into history
+                this.app.state.emitChange();
             }
 
             this.settings.priorContextCount = newPrior;
@@ -149,8 +150,8 @@ export class DirectorManager {
 
             if (this.isActive) {
                 this.applyChannelSettingsToSandbox(this.app.state);
-                this.app.state.buildPromptPayload();
-                this.app.renderAll();
+                // Explicit re-render since we've changed context len
+                this.app.state.emitChange();
             }
 
             this.closeChannelModal();
@@ -292,7 +293,7 @@ export class DirectorManager {
         });
 
         // Initialize Sandbox State
-        const sandboxState = new StoryState();
+        const sandboxState = new StoryState(this.app.events);
         sandboxState.loadFromData(this.mainStoryState.exportData());
         sandboxState.history = clonedSlice;
         
@@ -301,6 +302,9 @@ export class DirectorManager {
         // Perform the Swap
         this.app.state = sandboxState;
         this.isActive = true;
+
+        // Render with swapped StoryState
+        this.app.state.emitChange();
         
         // Swap Header UI
         document.getElementById('avatar-container').classList.add('hidden');
@@ -311,10 +315,6 @@ export class DirectorManager {
         const dirGroup = document.getElementById('director-nav-group');
         document.getElementById('director-badge').textContent = `🎬 Turn #${targetIndex + 1}`;
         dirGroup.classList.remove('hidden');
-
-        // Render
-        this.app.state.buildPromptPayload();
-        this.app.renderAll();
 
         // Scroll directly to target turn
         const localTargetIndex = targetIndex - startIdx;
@@ -467,6 +467,9 @@ export class DirectorManager {
         this._pendingModifications = [];
         this._pendingNewTurns = [];
 
+        // render the old storyState
+        this.app.state.emitChange();
+
         // Restore Header UI
         document.getElementById('director-nav-group').classList.add('hidden');
         document.getElementById('avatar-container').classList.remove('hidden');
@@ -476,9 +479,6 @@ export class DirectorManager {
         if (settings.trackSummary) {
             document.getElementById('summary-meter-container').classList.remove('hidden');
         }
-
-        this.app.state.buildPromptPayload();
-        this.app.renderAll();
 
         // Restore Viewport anchoring to target passage
         if (savedTargetIndex !== -1) {
