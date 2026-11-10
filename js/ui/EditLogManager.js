@@ -55,7 +55,6 @@ export class EditLogManager {
         if (!confirm("Are you sure you want to clear the entire edit log? This cannot be undone.")) return;
         this.app.state.clearEditLog();
         this.updateTextarea();
-        this.app.autoSave();
     }
 
     exportJsonl() {

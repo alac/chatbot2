@@ -42,7 +42,6 @@ export class NotesManager {
                     const parsed = JSON.parse(ev.target.result);
                     if (Array.isArray(parsed)) {
                         this.app.state.importNotesBoard(parsed);
-                        this.app.autoSave();
                         this.renderBoard();
                     } else {
                         alert("Invalid notes format. Expected an array of columns.");
@@ -160,7 +159,6 @@ export class NotesManager {
             const titleInput = colEl.querySelector('.col-title-input');
             titleInput.addEventListener('change', (e) => {
                 this.app.state.updateNoteColumnTitle(colId, e.target.value);
-                this.app.autoSave();
             });
             
             const addBtn = colEl.querySelector('.col-add-btn');
@@ -170,7 +168,6 @@ export class NotesManager {
             delBtn.addEventListener('click', () => {
                 if (confirm("Delete this entire column and all its notes?")) {
                     this.app.state.deleteNoteColumn(colId);
-                    this.app.autoSave();
                     this.renderBoard();
                 }
             });
@@ -183,7 +180,6 @@ export class NotesManager {
         
         this.boardEl.querySelector('.btn-add-col').addEventListener('click', () => {
             this.app.state.addNoteColumn('New Column');
-            this.app.autoSave();
             this.renderBoard();
             setTimeout(() => this.boardEl.scrollLeft = this.boardEl.scrollWidth, 50);
         });
@@ -278,7 +274,6 @@ export class NotesManager {
         if (!this.editingIds) return;
         const { colId, cardId } = this.editingIds;
         this.app.state.updateNoteCard(colId, cardId, this.editTextarea.value);
-        this.app.autoSave();
         
         this.handleDeletionIfEmpty();
         this.editingIds = null;
@@ -294,7 +289,6 @@ export class NotesManager {
         const currentVal = this.editTextarea.value.trim();
         if (currentVal === '') {
             this.app.state.deleteNoteCard(colId, cardId);
-            this.app.autoSave();
         }
     }
     
@@ -344,7 +338,6 @@ export class NotesManager {
         
         // Move it
         this.app.state.moveNoteCard(cardId, oldColId, newColId);
-        this.app.autoSave();
         
         this.closeMoveModal();
         this.closeEditModal(); // This clears editingIds and re-renders the board

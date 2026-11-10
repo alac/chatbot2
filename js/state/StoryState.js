@@ -109,16 +109,19 @@ export class StoryState {
     addNoteColumn(title = 'New Column') {
         const id = Math.random().toString(36).substr(2, 9);
         this.notes.push({ id, title, cards: [] });
+        this.emitChange();
         return id;
     }
 
     updateNoteColumnTitle(colId, newTitle) {
         const col = this.notes.find(c => c.id === colId);
         if (col) col.title = newTitle;
+        this.emitChange();
     }
 
     deleteNoteColumn(colId) {
         this.notes = this.notes.filter(c => c.id !== colId);
+        this.emitChange();
     }
 
     addNoteCard(colId, content = '') {
@@ -126,6 +129,7 @@ export class StoryState {
         if (col) {
             const newCard = { id: Math.random().toString(36).substr(2, 9), content };
             col.cards.push(newCard);
+            this.emitChange();
             return newCard.id;
         }
         return null;
@@ -135,7 +139,10 @@ export class StoryState {
         const col = this.notes.find(c => c.id === colId);
         if (col) {
             const card = col.cards.find(c => c.id === cardId);
-            if (card) card.content = content;
+            if (card) {
+                card.content = content;
+                this.emitChange();
+            }
         }
     }
 
@@ -143,6 +150,7 @@ export class StoryState {
         const col = this.notes.find(c => c.id === colId);
         if (col) {
             col.cards = col.cards.filter(c => c.id !== cardId);
+            this.emitChange();
         }
     }
 
@@ -154,6 +162,7 @@ export class StoryState {
             if (cardIndex !== -1) {
                 const [card] = oldCol.cards.splice(cardIndex, 1);
                 newCol.cards.push(card);
+                this.emitChange();
             }
         }
     }
@@ -161,6 +170,7 @@ export class StoryState {
     importNotesBoard(notesArray) {
         if (Array.isArray(notesArray)) {
             this.notes = notesArray;
+            this.emitChange();
         }
     }
 

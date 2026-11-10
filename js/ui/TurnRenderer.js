@@ -221,8 +221,6 @@ export class TurnRenderer {
                 if (confirm("Delete this gallery?")) {
                     this.app.state.deleteTurn(index);
                     if (this.app.avatarManager) this.app.avatarManager.updateAvatarDisplay();
-                    this.renderAll();
-                    this.app.autoSave();
                 }
             });
             iconsDiv.appendChild(btnDelete);
@@ -420,8 +418,6 @@ export class TurnRenderer {
                 btnDel.textContent = '🗑️ Delete';
                 btnDel.addEventListener('click', () => {
                     this.app.state.deleteTurn(index);
-                    this.renderAll();
-                    this.app.autoSave();
                 });
 
                 footerGrid.appendChild(btnReroll);

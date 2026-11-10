@@ -86,8 +86,6 @@ export class SurgicalEditManager {
         if (finalContent !== currentContent) {
             this.uiManager.state.recordEdit(activeOriginal, newActiveText, 'surgical');
             this.uiManager.state.editTurn(msgIndex, finalContent);
-            this.uiManager.renderAll();
-            this.uiManager.autoSave();
         }
         
         document.getElementById('surgical-edit-modal').classList.add('hidden');
