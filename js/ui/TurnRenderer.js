@@ -156,9 +156,6 @@ export class TurnRenderer {
                 e.stopPropagation();
                 if (confirm("Delete this message?")) {
                     this.app.state.deleteTurn(index);
-                    this.app.state.buildPromptPayload(); 
-                    this.renderAll();
-                    this.app.autoSave();
                 }
             });
             iconsDiv.appendChild(btnDelete);
@@ -629,9 +626,6 @@ export class TurnRenderer {
 
                     if (confirm("Delete this message?")) {
                         this.app.state.deleteTurn(index);
-                        this.app.state.buildPromptPayload(); 
-                        this.renderAll();
-                        this.app.autoSave();
                     }
                 });
                 iconsDiv.appendChild(btnDelete);
