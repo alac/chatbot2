@@ -59,10 +59,12 @@ export class StoryState {
         if (oldT === newT) return;
         
         this.editLog.push({ old: oldText, new: newText, source, timestamp: Date.now() });
+        this.emitChange();
     }
 
     clearEditLog() {
         this.editLog = [];
+        this.emitChange();
     }
 
     getEditLogAsJsonl() {
@@ -100,6 +102,7 @@ export class StoryState {
             this.notes = [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
             this.pinnedAvatarId = null;
         }
+        this.emitChange();
     }
 
     // --- NOTES KANBAN BOARD METHODS ---
@@ -184,6 +187,7 @@ export class StoryState {
             });
         }
         this.trash = this.trash.slice(0, 20); // Keep max 20 flat drafts
+        this.emitChange();
     }
 
     flushRedoToTrash() {
@@ -195,6 +199,7 @@ export class StoryState {
         this.redoStack = [];
         this.undoSnapshot = null;
         this.isSnapshotActive = false;
+        this.emitChange();
     }
 
     restoreFromTrash(trashIndex) {
@@ -225,6 +230,7 @@ export class StoryState {
         });
         
         this.trimOldDrafts();
+        this.emitChange();
         return this.history.length - 1;
     }
 
@@ -246,6 +252,7 @@ export class StoryState {
         // Insert right after the specified index
         this.history.splice(insertIndex + 1, 0, newTurn);
         this.flushRedoToTrash();
+        this.emitChange();
     }
 
     addTurn(role, content, reasoning = '', meta = {}) {
@@ -262,6 +269,7 @@ export class StoryState {
         });
         this.flushRedoToTrash();
         this.trimOldDrafts();
+        this.emitChange();
     }
 
     addBatchTurn(count, roleOverride = 'assistant') {
@@ -282,11 +290,20 @@ export class StoryState {
         });
         this.flushRedoToTrash();
         this.trimOldDrafts();
+        this.emitChange();
+    }
+
+    addSpecialTurn(turn_dict) {
+        this.history.push(turn_dict);
+        this.flushRedoToTrash();
+        this.trimOldDrafts();
+        this.emitChange();
     }
 
     markDraftsAsStale(msgIndex) {
         if (this.history[msgIndex] && this.history[msgIndex].drafts) {
             this.history[msgIndex].drafts.forEach(d => d.isStale = true);
+            this.emitChange();
         }
     }
 
@@ -296,6 +313,7 @@ export class StoryState {
             for(let i=0; i<count; i++) {
                 this.history[msgIndex].drafts.push({ model: '', content: '', reasoning: '', status: 'streaming', duration: 0, markdownOverride: null, usage: null, isStale: false });
             }
+            this.emitChange();
         }
     }
 
@@ -305,10 +323,12 @@ export class StoryState {
             this.history = this.undoSnapshot;
             this.undoSnapshot = null;
             this.isSnapshotActive = false;
+            this.emitChange();
             return true;
         }
         if (this.history.length > 0) {
             this.redoStack.push(this.history.pop());
+            this.emitChange();
             return true;
         }
         return false;
@@ -321,9 +341,11 @@ export class StoryState {
                 this.undoSnapshot = structuredClone(this.history);
                 this.isSnapshotActive = true;
                 this.history = item.data;
+                this.emitChange();
                 return true;
             }
             this.history.push(item);
+            this.emitChange();
             return true;
         }
         return false;
@@ -342,6 +364,7 @@ export class StoryState {
                 count++;
             }
         }
+        this.emitChange();
         return count;
     }
 
@@ -359,18 +382,21 @@ export class StoryState {
         }
         
         this.history = this.history.filter((_, i) => !toDelete.has(i));
+        this.emitChange();
         return toDelete.size;
     }
 
     updateBatchDraft(msgIndex, draftIndex, data) {
         if (this.history[msgIndex] && this.history[msgIndex].drafts[draftIndex]) {
             Object.assign(this.history[msgIndex].drafts[draftIndex], data);
+            this.emitChange();
         }
     }
 
     setActiveDraft(msgIndex, draftIndex) {
         if (this.history[msgIndex] && this.history[msgIndex].isBatch) {
             this.history[msgIndex].activeDraftIndex = draftIndex;
+            this.emitChange();
         }
     }
 
@@ -416,7 +442,8 @@ export class StoryState {
                 const activeDraft = msg.drafts[msg.activeDraftIndex];
                 msg.isBatch = false;
                 msg.activeDraftIndex = 0;
-                msg.drafts = [activeDraft]; 
+                msg.drafts = [activeDraft];
+                this.emitChange();
             }
         }
     }
@@ -600,6 +627,8 @@ export class StoryState {
         this.disableMemory = data.disableMemory || false;
         this.disableSummary = data.disableSummary || false;
         this.pinnedAvatarId = data.pinnedAvatarId || null;
+
+        this.emitChange();
     }
 
     exportData(forSync = false) {
@@ -685,5 +714,6 @@ export class StoryState {
                 }
             }
         });
+        this.emitChange();
     }
 }
