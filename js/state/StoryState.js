@@ -628,7 +628,7 @@ export class StoryState {
         this.disableSummary = data.disableSummary || false;
         this.pinnedAvatarId = data.pinnedAvatarId || null;
 
-        this.emitChange();
+        // Do not emitChange here since the storyState may not be ready
     }
 
     exportData(forSync = false) {

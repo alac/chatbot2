@@ -1,6 +1,6 @@
 console.log("Service worker is active - should enable PWA functionality");
 
-const cacheName = 'chtbt2-f8d7140e'; // Updated hash to force the new SW to install
+const cacheName = 'chtbt2-f3e0d0f1'; // Updated hash to force the new SW to install
 
 // Files to cache for offline use
 const filesToCache = [
