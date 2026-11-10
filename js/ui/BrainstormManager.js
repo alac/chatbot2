@@ -152,7 +152,7 @@ export class BrainstormManager {
         
         const newIdx = this.app.state.history.length;
         this.app.state.addBatchTurn(count, 'choices');
-        this.app.appendTurnToDOM('choices', newIdx);
+        this.app.turnRenderer.appendTurnToDOM('choices', newIdx);
 
         if (this.app.batchTimerInterval) clearInterval(this.app.batchTimerInterval);
         this.app.batchStartTime = Date.now();
@@ -212,7 +212,7 @@ export class BrainstormManager {
             const oldWrapper = document.getElementById(`turn-wrapper-${newIdx}`);
             if (oldWrapper) oldWrapper.remove();
             
-            this.app.appendTurnToDOM('choices', newIdx);
+            this.app.turnRenderer.appendTurnToDOM('choices', newIdx);
             if (!this.app.isUserScrolledUp) this.app.scrollToBottom();
             this.app.autoSave();
         }
