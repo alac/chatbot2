@@ -22,9 +22,8 @@
             </div>
         </div>
 
-        <div id="avatar-container" class="avatar-container" title="Hold for Avatar Menu">
-            <div id="avatar-placeholder">AI</div>
-            <img id="avatar-main-img" class="hidden" src="" alt="Avatar">
+        <div id="avatar-container" class="avatar-container" title="Tap to toggle Avatar • Hold to update from story">
+            <div id="avatar-header-stage"></div>
         </div>
         <div id="nanogpt-meter" class="nanogpt-meter-group hidden" title="NanoGPT Usage">
             <div class="nanogpt-bar" title="Token Usage">
@@ -50,13 +49,15 @@
         </div>
     </header>
 
-    <div id="sticky-draft-toolbar" class="hidden"></div>
+    <div id="workspace-layout">
+        <div id="chat-pane">
+            <div id="sticky-draft-toolbar" class="hidden"></div>
 
-    <main id="output-container"></main>
+            <main id="output-container"></main>
 
-    <button id="btn-jump-bottom" class="fab hidden">⬇️</button>
+            <button id="btn-jump-bottom" class="fab hidden">⬇️</button>
 
-    <footer id="input-area">
+            <footer id="input-area">
         <div id="quick-menu" class="hidden">
             <div class="btn-group">
                 <button id="btn-undo" class="quick-btn" title="Undo">
@@ -103,7 +104,41 @@
                 <button id="btn-more-menu">☰ More</button>
             </div>
         </div>
-    </footer>
+            </footer>
+        </div>
+
+        <div id="avatar-resizer" class="hidden" title="Drag to resize"></div>
+
+        <aside id="avatar-panel" class="hidden">
+            <div class="avatar-panel-header">
+                <span id="avatar-panel-title">Avatar</span>
+                <div class="avatar-panel-actions">
+                    <select id="avatar-panel-crop" title="View Crop" style="padding: 4px 6px; font-size: 0.8em;">
+                        <option value="full">Full</option>
+                        <option value="waist">Waist</option>
+                        <option value="bust" selected>Bust</option>
+                        <option value="face">Face</option>
+                    </select>
+                    <button id="btn-avatar-update" class="secondary" title="Update from Story">🪄</button>
+                    <button id="btn-avatar-settings" class="secondary" title="Avatar Settings">⚙️</button>
+                    <button id="btn-avatar-close" class="close-btn" title="Close">&times;</button>
+                </div>
+            </div>
+            <div id="avatar-panel-stage"></div>
+            <div class="avatar-panel-footer">
+                <div class="avatar-quick-row">
+                    <label>Expr</label>
+                    <select id="avatar-quick-expression"></select>
+                </div>
+                <div class="avatar-quick-row">
+                    <label>Outfit</label>
+                    <select id="avatar-quick-outfit"></select>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <div id="avatar-backdrop" class="hidden"></div>
 
     <!-- Tools Modal -->
     <div id="tools-modal" class="modal hidden">
@@ -508,17 +543,109 @@
         <img id="lightbox-img" src="" style="max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
     </div>
 
-    <!-- Avatar Selector Modal -->
-    <div id="avatar-selector-modal" class="modal hidden" style="z-index: 105;">
-        <div class="modal-content" style="max-height: 80vh; width: 600px;">
+    <!-- Paperdoll Update / Diff Modal -->
+    <div id="paperdoll-update-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="max-height: 92vh; width: 760px; max-width: 96vw;">
             <div class="modal-header">
-                <h2>Select Avatar</h2>
-                <button id="btn-close-avatar-sel" class="close-btn">&times;</button>
+                <h2>Update Avatar from Story</h2>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <select id="pd-update-crop" style="padding: 4px 8px; font-size: 0.85em;">
+                        <option value="full" selected>Full</option>
+                        <option value="waist">Waist</option>
+                        <option value="bust">Bust</option>
+                        <option value="face">Face</option>
+                    </select>
+                    <button id="btn-close-pd-update" class="close-btn">&times;</button>
+                </div>
             </div>
-            <div class="modal-body" style="padding: 16px;">
-                <p style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px;">Pin an image to the top bar. Unpinning will default to showing the latest generated image.</p>
-                <div id="avatar-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px;">
-                    <!-- Filled by JS -->
+            <div class="modal-body" style="display:flex; flex-direction:column; gap:12px; padding:16px; overflow-y:auto;">
+                <div class="pd-compare-grid">
+                    <div class="pd-compare-col">
+                        <div class="pd-compare-label">Existing Avatar</div>
+                        <div id="pd-compare-left" class="pd-compare-stage"></div>
+                    </div>
+                    <div class="pd-compare-col">
+                        <div class="pd-compare-label">Proposed Update</div>
+                        <div id="pd-compare-right" class="pd-compare-stage"></div>
+                    </div>
+                </div>
+                <div id="pd-update-status" class="pd-update-status"></div>
+                <div id="pd-update-warnings" class="pd-update-warnings hidden"></div>
+            </div>
+            <div style="padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <button id="btn-pd-update-abort" class="danger hidden">⏹ Stop</button>
+                <div style="display:flex; gap:8px; margin-left:auto;">
+                    <button id="btn-pd-update-retry" class="secondary hidden">🔄 Retry</button>
+                    <button id="btn-pd-update-discard" class="danger">Discard</button>
+                    <button id="btn-pd-update-accept" class="primary" disabled>Accept &amp; Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paperdoll Settings Modal -->
+    <div id="paperdoll-settings-modal" class="modal hidden" style="z-index: 105;">
+        <div class="modal-content" style="max-height: 92vh; width: 860px; max-width: 96vw;">
+            <div class="modal-header">
+                <h2>Avatar Settings</h2>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button id="btn-pd-edit-prompt" class="secondary" style="font-size:0.85em;">📝 Edit Update Prompt</button>
+                    <button id="btn-close-pd-settings" class="close-btn">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body pd-settings-layout">
+                <div class="pd-settings-preview-col">
+                    <div class="pd-settings-crop-bar">
+                        <select id="pd-set-preview-crop" style="width:100%; padding:4px 8px; font-size:0.85em;">
+                            <option value="full" selected>Full Body</option>
+                            <option value="waist">Waist Up</option>
+                            <option value="bust">Bust Up</option>
+                            <option value="face">Face</option>
+                        </select>
+                    </div>
+                    <div id="pd-settings-preview-stage" class="pd-settings-preview-stage"></div>
+                </div>
+                <div id="pd-settings-controls" class="pd-settings-controls-col">
+                    <!-- Populated dynamically by AvatarManager.js -->
+                </div>
+            </div>
+            <div style="padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:space-between; gap:8px;">
+                <button id="btn-pd-settings-reset" class="danger">Reset Defaults</button>
+                <div style="display:flex; gap:8px;">
+                    <button id="btn-pd-settings-cancel" class="secondary">Cancel</button>
+                    <button id="btn-pd-settings-save" class="primary">Save Avatar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paperdoll Prompt Editor Modal -->
+    <div id="paperdoll-prompt-modal" class="modal hidden" style="z-index: 112;">
+        <div class="modal-content" style="max-height: 90vh; width: 700px; max-width: 95vw;">
+            <div class="modal-header">
+                <h2>Edit Avatar Update Prompt</h2>
+                <button id="btn-close-pd-prompt" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap:12px; padding:16px;">
+                <div class="setting-row">
+                    <span class="label-text">Recent Messages to Include</span>
+                    <input type="number" id="pd-prompt-turns" min="1" max="20" value="4" style="width:80px;">
+                </div>
+                <div style="font-size: 0.85em; color: var(--text-muted); line-height: 1.5;">
+                    Click a placeholder to insert it at the cursor:
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;">
+                        <button type="button" class="secondary pd-placeholder-chip" data-token="{{promptGuide}}">{{promptGuide}}</button>
+                        <button type="button" class="secondary pd-placeholder-chip" data-token="{{context}}">{{context}}</button>
+                        <button type="button" class="secondary pd-placeholder-chip" data-token="{{currentSpec}}">{{currentSpec}}</button>
+                    </div>
+                </div>
+                <textarea id="pd-prompt-textarea" style="flex:1; min-height:260px; font-family:monospace; resize:none; padding:10px;"></textarea>
+            </div>
+            <div style="padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:space-between; gap:8px;">
+                <button id="btn-pd-prompt-default" class="secondary">Reset Default</button>
+                <div style="display:flex; gap:8px;">
+                    <button id="btn-pd-prompt-cancel" class="danger">Cancel</button>
+                    <button id="btn-pd-prompt-save" class="primary">Save Prompt</button>
                 </div>
             </div>
         </div>

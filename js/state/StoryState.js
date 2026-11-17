@@ -36,6 +36,7 @@ export class StoryState {
         this.notes = [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
 
         this.pinnedAvatarId = null;
+        this.paperdoll_avatar = null;
         
         // Undo Snapshots for Batch Operations
         this.undoSnapshot = null;
@@ -101,6 +102,7 @@ export class StoryState {
             this.aggregationHistory = [];
             this.notes = [{ id: Math.random().toString(36).substr(2, 9), title: 'General Notes', cards: [] }];
             this.pinnedAvatarId = null;
+            this.paperdoll_avatar = null;
         }
     }
 
@@ -747,6 +749,7 @@ export class StoryState {
         this.disableMemory = data.disableMemory || false;
         this.disableSummary = data.disableSummary || false;
         this.pinnedAvatarId = data.pinnedAvatarId || null;
+        this.paperdoll_avatar = data.paperdoll_avatar !== undefined ? data.paperdoll_avatar : null;
 
         // Do not emitChange here since the storyState may not be ready
     }
@@ -787,7 +790,8 @@ export class StoryState {
             notes: this.notes,
             disableMemory: this.disableMemory,
             disableSummary: this.disableSummary,
-            pinnedAvatarId: this.pinnedAvatarId
+            pinnedAvatarId: this.pinnedAvatarId,
+            paperdoll_avatar: this.paperdoll_avatar
         };
     }
 

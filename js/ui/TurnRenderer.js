@@ -286,10 +286,6 @@ export class TurnRenderer {
 
                     const actionsRow = document.createElement('div');
                     actionsRow.className = 'gallery-actions';
-                    
-                    const btnPin = document.createElement('button');
-                    btnPin.textContent = '📌 Set Avatar';
-                    btnPin.onclick = () => this.app.avatarManager.pinAvatar(imgObj.id);
 
                     const btnPrompt = document.createElement('button');
                     btnPrompt.textContent = '📝 View Prompt';
@@ -310,7 +306,6 @@ export class TurnRenderer {
                     promptCode.textContent = msg.galleryData.imagePrompt || '';
                     btnPrompt.onclick = () => promptCode.classList.toggle('hidden');
 
-                    actionsRow.appendChild(btnPin);
                     actionsRow.appendChild(btnPrompt);
                     actionsRow.appendChild(btnDownload);
 

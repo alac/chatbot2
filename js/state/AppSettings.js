@@ -1,5 +1,17 @@
+export const DEFAULT_PAPERDOLL_PROMPT = `Read the recent story messages and update the character's visual appearance, outfit, and expression as a single JSON object.
+
+{{promptGuide}}
+
+Current character JSON (preserve existing details unless the recent story changes them):
+{{currentSpec}}
+
+Recent story messages:
+{{context}}
+
+Answer with the JSON object only.`;
+
 export class AppSettings {
-    constructor() {
+        constructor() {
         this.apiUrl = 'https://api.openai.com/v1';
         this.useChatCompletions = true;
         this.apiKey = '';
@@ -82,6 +94,12 @@ export class AppSettings {
         this.imgMaxDimension = 512;
         this.imgQuality = 0.8;
 
+        // Paperdoll Avatar Settings
+        this.paperdollUpdatePrompt = DEFAULT_PAPERDOLL_PROMPT;
+        this.paperdollContextTurns = 4;
+        this.paperdollSidebarWidth = 320;
+        this.paperdollFinish = 1;
+
         // GitHub Sync State
         this.githubPAT = '';
         this.encryptionKey = '';
@@ -141,6 +159,11 @@ export class AppSettings {
             if (!this.imgPrompts) this.imgPrompts = "::variables\n{{appearance}}=A detailed character.\n{{style}}=Digital art, highly detailed.\n\n::Protagonist\nDescribe the protagonist's current appearance and emotion based on the text context.\nBase Appearance: {{appearance}}\nContext: {{context}}\n\nOutput JSON format: {\"prompts\": [\"visual description for image generator\"]}";
             if (!this.imgMaxDimension) this.imgMaxDimension = 512;
             if (!this.imgQuality) this.imgQuality = 0.8;
+
+            if (!this.paperdollUpdatePrompt) this.paperdollUpdatePrompt = DEFAULT_PAPERDOLL_PROMPT;
+            if (!this.paperdollContextTurns) this.paperdollContextTurns = 4;
+            if (!this.paperdollSidebarWidth) this.paperdollSidebarWidth = 320;
+            if (this.paperdollFinish === undefined) this.paperdollFinish = 1;
 
             if (!this.gistMapping) this.gistMapping = {};
             

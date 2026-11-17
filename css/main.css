@@ -32,7 +32,7 @@ body { font-family: system-ui, sans-serif; background: var(--bg-main); color: va
 header { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: var(--bg-panel); border-bottom: 1px solid var(--border); gap: 12px; }
 .nav-controls { display: flex; gap: 8px; flex-wrap: nowrap; }
 
-/* Avatar Container Replacing Logo */
+/* Avatar Header Button (Paperdoll Portrait) */
 .avatar-container {
     width: 34px;
     height: 34px;
@@ -45,22 +45,323 @@ header { display: flex; justify-content: space-between; align-items: center; pad
     cursor: pointer;
     overflow: hidden;
     flex-shrink: 0;
-    transition: opacity 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    transition: opacity 0.2s, border-color 0.2s;
 }
-.avatar-container:hover { opacity: 0.8; }
-#avatar-placeholder { font-weight: bold; font-size: 0.8em; color: var(--text-muted); }
-#avatar-main-img { width: 100%; height: 100%; object-fit: cover; }
-.avatar-grid-item {
+.avatar-container:hover { opacity: 0.85; border-color: var(--accent); }
+#avatar-header-stage {
     width: 100%;
-    aspect-ratio: 1;
-    object-fit: cover;
-    border-radius: 6px;
-    border: 2px solid transparent;
-    cursor: pointer;
-    transition: transform 0.2s;
+    height: 100%;
+    pointer-events: none;
 }
-.avatar-grid-item:hover { transform: scale(1.05); }
-.avatar-grid-item.pinned { border-color: var(--accent); box-shadow: 0 0 10px rgba(59,130,246,0.5); }
+
+/* Workspace Layout & Resizable Avatar Panel */
+#workspace-layout {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    overflow: hidden;
+}
+#chat-pane {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+
+#avatar-resizer {
+    width: 6px;
+    background: var(--border);
+    cursor: ew-resize;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+#avatar-resizer:hover,
+#avatar-resizer.dragging {
+    background: var(--accent);
+}
+
+#avatar-panel {
+    width: var(--avatar-panel-width, 320px);
+    min-width: 220px;
+    max-width: 55vw;
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 30;
+}
+@media (min-width: 769px) {
+    #avatar-panel:not(.hidden) {
+        animation: avatarSlideIn 0.18s ease-out;
+    }
+    body.avatar-sidebar-open .floating-nav {
+        right: calc(var(--avatar-panel-width, 320px) + 25px);
+    }
+}
+@keyframes avatarSlideIn {
+    from { opacity: 0; transform: translateX(24px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.avatar-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+    gap: 8px;
+}
+#avatar-panel-title {
+    font-weight: bold;
+    font-size: 0.95em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.avatar-panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.avatar-panel-actions button {
+    padding: 4px 8px;
+    font-size: 0.9em;
+}
+#avatar-panel-stage {
+    flex: 1;
+    min-height: 0;
+    padding: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 65%, rgba(255,255,255,0.04), transparent 70%);
+}
+.avatar-panel-footer {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--bg-panel);
+}
+.avatar-quick-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85em;
+}
+.avatar-quick-row label {
+    width: 48px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+.avatar-quick-row select {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
+    font-size: 0.95em;
+}
+
+#avatar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 80;
+}
+
+@media (max-width: 768px) {
+    #avatar-resizer { display: none !important; }
+    #avatar-panel {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 88vw;
+        max-width: 380px;
+        min-width: 0;
+        height: 74vh;
+        max-height: 620px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+        z-index: 85;
+    }
+}
+
+/* Paperdoll Update Diff Modal */
+.pd-compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.pd-compare-col {
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.pd-compare-label {
+    text-align: center;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+.pd-compare-stage {
+    height: 300px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+.pd-update-status {
+    font-size: 0.9em;
+    color: var(--text-main);
+    text-align: center;
+}
+.pd-update-warnings {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    max-height: 110px;
+    overflow-y: auto;
+}
+@media (max-width: 600px) {
+    .pd-compare-stage { height: 210px; }
+}
+
+/* Paperdoll Settings Modal */
+.pd-settings-layout {
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    overflow: hidden;
+    padding: 16px;
+}
+.pd-settings-preview-col {
+    width: 240px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+}
+.pd-settings-preview-stage {
+    flex: 1;
+    min-height: 240px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    overflow: hidden;
+}
+.pd-settings-controls-col {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-right: 4px;
+}
+.pd-section {
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.pd-section-title {
+    font-size: 0.9em;
+    font-weight: bold;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+}
+.pd-slider-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.pd-slider-row .label-text {
+    width: 85px;
+    text-transform: capitalize;
+}
+.pd-slider-row select {
+    width: 115px;
+    padding: 4px 6px;
+    font-size: 0.85em;
+}
+.pd-slider-row input[type="range"] {
+    flex: 1;
+    min-width: 100px;
+    padding: 0;
+}
+.pd-slider-val {
+    width: 40px;
+    text-align: right;
+    font-family: monospace;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+.pd-color-pair {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.pd-color-pair input[type="color"] {
+    width: 38px;
+    height: 32px;
+    padding: 2px;
+    cursor: pointer;
+}
+.pd-outfit-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.pd-placeholder-chip {
+    font-family: monospace;
+    font-size: 0.8em;
+    padding: 3px 8px;
+}
+@media (max-width: 768px) {
+    .pd-settings-layout { flex-direction: column; padding: 10px; }
+    .pd-settings-preview-col { width: 100%; height: 220px; }
+    .pd-settings-preview-stage { min-height: 0; }
+}
 
 /* NanoGPT Usage Meter (Dual Bar) */
 .nanogpt-meter-group {
@@ -121,7 +422,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .btn-group button:not(:last-child) { border-right: 1px solid var(--border); }
 .btn-group button:hover { background: var(--border); }
 
-.fab { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); border-radius: 50%; width: 40px; height: 40px; font-size: 20px; background: var(--bg-panel); border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 50; transition: opacity 0.3s; display: flex; justify-content: center; align-items: center; padding: 0; cursor: pointer;}
+.fab { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); border-radius: 50%; width: 40px; height: 40px; font-size: 20px; background: var(--bg-panel); border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 50; transition: opacity 0.3s; display: flex; justify-content: center; align-items: center; padding: 0; cursor: pointer;}
 .fab:hover { background: var(--border); }
 .fab.hidden { opacity: 0; pointer-events: none; }
 
