@@ -192,9 +192,29 @@ export class AvatarManager {
             if (this.updateAbortController) this.updateAbortController.abort();
         });
         document.getElementById('btn-pd-update-retry').addEventListener('click', () => this.runUpdateLLM());
-        document.getElementById('btn-pd-update-accept').addEventListener('click', () => {
+        document.getElementById('btn-pd-update-accept-all').addEventListener('click', () => {
             if (this.pendingSpec) {
                 this.saveSpecToState(this.pendingSpec);
+            }
+            this.closeUpdateModal();
+        });
+        document.getElementById('btn-pd-update-accept-clothing').addEventListener('click', () => {
+            if (this.pendingSpec) {
+                const current = this.getActiveSpec();
+                const merged = {
+                    ...this.pendingSpec,
+                    name: current.name || this.pendingSpec.name,
+                    body: structuredClone(current.body),
+                    face: structuredClone(current.face),
+                    hair: structuredClone(current.hair),
+                    outfits: {
+                        ...(structuredClone(current.outfits) || {}),
+                        ...(structuredClone(this.pendingSpec.outfits) || {})
+                    },
+                    outfit: this.pendingSpec.outfit,
+                    expression: this.pendingSpec.expression
+                };
+                this.saveSpecToState(merged);
             }
             this.closeUpdateModal();
         });
@@ -441,7 +461,10 @@ export class AvatarManager {
         const rightStage = document.getElementById('pd-compare-right');
         const statusEl = document.getElementById('pd-update-status');
         const warningsEl = document.getElementById('pd-update-warnings');
-        const btnAccept = document.getElementById('btn-pd-update-accept');
+        const rawDetails = document.getElementById('pd-update-raw-details');
+        const rawTextEl = document.getElementById('pd-update-raw-text');
+        const btnAcceptAll = document.getElementById('btn-pd-update-accept-all');
+        const btnAcceptClothing = document.getElementById('btn-pd-update-accept-clothing');
         const btnRetry = document.getElementById('btn-pd-update-retry');
         const btnAbort = document.getElementById('btn-pd-update-abort');
 
@@ -449,18 +472,58 @@ export class AvatarManager {
             this.compareRightAvatar.destroy();
             this.compareRightAvatar = null;
         }
-        rightStage.innerHTML = `<div class="gallery-status"><span class="streaming-indicator"></span> Generating with ${settings.model || 'LLM'}...</div>`;
+
+        const streamPre = document.createElement('pre');
+        streamPre.className = 'pd-stream-box';
+        streamPre.textContent = `Connecting to ${settings.model || 'LLM'}...\n`;
+        rightStage.innerHTML = '';
+        rightStage.appendChild(streamPre);
+
         statusEl.textContent = `Sending last ${turnCount} messages to LLM...`;
         warningsEl.classList.add('hidden');
         warningsEl.innerHTML = '';
-        btnAccept.disabled = true;
+        rawDetails.classList.add('hidden');
+        rawDetails.open = false;
+        rawTextEl.textContent = '';
+
+        btnAcceptAll.disabled = true;
+        btnAcceptClothing.disabled = true;
         btnRetry.classList.add('hidden');
         btnAbort.classList.remove('hidden');
         this.pendingSpec = null;
 
+        const startTime = Date.now();
+        let liveCharCount = 0;
+        const tickInterval = setInterval(() => {
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            statusEl.textContent = `Streaming from ${settings.model || 'LLM'} (${elapsed}s • ${liveCharCount} chars)...`;
+        }, 250);
+
+        const formatCombinedStream = (reasoning, content) => {
+            if (reasoning && content) return `[Thinking]\n${reasoning}\n\n[Output]\n${content}`;
+            if (reasoning) return `[Thinking]\n${reasoning}`;
+            return content;
+        };
+
         try {
-            const rawReply = await this.callLLM(promptText, this.updateAbortController.signal);
-            const cleaned = rawReply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            const { reasoning, content } = await this.callLLMStream(
+                promptText,
+                this.updateAbortController.signal,
+                (r, c) => {
+                    const combined = formatCombinedStream(r, c);
+                    liveCharCount = combined.length;
+                    streamPre.textContent = combined;
+                    streamPre.scrollTop = streamPre.scrollHeight;
+                }
+            );
+
+            const fullRaw = formatCombinedStream(reasoning, content);
+            if (fullRaw) {
+                rawTextEl.textContent = fullRaw;
+                rawDetails.classList.remove('hidden');
+            }
+
+            const cleaned = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
             const firstBrace = cleaned.indexOf('{');
             const lastBrace = cleaned.lastIndexOf('}');
             if (firstBrace === -1 || lastBrace <= firstBrace) {
@@ -488,11 +551,11 @@ export class AvatarManager {
                 warningsEl.classList.remove('hidden');
             }
 
-            btnAccept.disabled = false;
+            btnAcceptAll.disabled = false;
+            btnAcceptClothing.disabled = false;
             btnRetry.classList.remove('hidden');
         } catch (err) {
             if (err.name === 'AbortError') {
-                rightStage.innerHTML = `<span style="color:var(--text-muted);">Cancelled</span>`;
                 statusEl.textContent = 'Generation stopped.';
             } else {
                 rightStage.innerHTML = `<span style="color:var(--danger); text-align:center; font-size:0.9em; padding:8px;">${this.escapeHtml(err.message)}</span>`;
@@ -500,12 +563,13 @@ export class AvatarManager {
             }
             btnRetry.classList.remove('hidden');
         } finally {
+            clearInterval(tickInterval);
             btnAbort.classList.add('hidden');
             this.updateAbortController = null;
         }
     }
 
-    async callLLM(promptText, signal) {
+    async callLLMStream(promptText, signal, onProgress) {
         const baseUrl = (settings.apiUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
         const headers = { 'Content-Type': 'application/json' };
         if (settings.apiKey) headers['Authorization'] = `Bearer ${settings.apiKey}`;
@@ -516,8 +580,8 @@ export class AvatarManager {
         const temp = Math.min(parseFloat(settings.temperature) || 0.7, 1.0);
 
         const body = useChat
-            ? { model: settings.model, messages: [{ role: 'user', content: promptText }], temperature: temp, max_tokens: maxTok, stream: false }
-            : { model: settings.model, prompt: promptText, temperature: temp, max_tokens: maxTok, stream: false };
+            ? { model: settings.model, messages: [{ role: 'user', content: promptText }], temperature: temp, max_tokens: maxTok, stream: true }
+            : { model: settings.model, prompt: promptText, temperature: temp, max_tokens: maxTok, stream: true };
 
         const res = await fetch(endpoint, {
             method: 'POST',
@@ -531,10 +595,58 @@ export class AvatarManager {
             throw new Error(`HTTP ${res.status}: ${errTxt}`);
         }
 
-        const data = await res.json();
-        return useChat
-            ? (data.choices?.[0]?.message?.content || '')
-            : (data.choices?.[0]?.text || '');
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json') || !res.body) {
+            const data = await res.json();
+            const msg = data.choices?.[0]?.message;
+            const reasoning = msg?.reasoning_content || msg?.reasoning || '';
+            const content = useChat ? (msg?.content || '') : (data.choices?.[0]?.text || '');
+            if (onProgress) onProgress(reasoning, content);
+            return { reasoning, content };
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let reasoning = '';
+        let content = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const rawLine of lines) {
+                const line = rawLine.trim();
+                if (!line || !line.startsWith('data:')) continue;
+                const payload = line.slice(5).trim();
+                if (payload === '[DONE]') continue;
+
+                try {
+                    const chunk = JSON.parse(payload);
+                    const choice = chunk.choices?.[0];
+                    if (!choice) continue;
+
+                    if (useChat) {
+                        const delta = choice.delta || {};
+                        if (delta.reasoning_content) reasoning += delta.reasoning_content;
+                        else if (delta.reasoning) reasoning += delta.reasoning;
+                        if (delta.content) content += delta.content;
+                    } else if (choice.text) {
+                        content += choice.text;
+                    }
+
+                    if (onProgress) onProgress(reasoning, content);
+                } catch {
+                    // Ignore incomplete/malformed SSE chunk
+                }
+            }
+        }
+
+        return { reasoning, content };
     }
 
     closeUpdateModal() {

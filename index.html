@@ -571,13 +571,18 @@
                 </div>
                 <div id="pd-update-status" class="pd-update-status"></div>
                 <div id="pd-update-warnings" class="pd-update-warnings hidden"></div>
+                <details id="pd-update-raw-details" class="pd-update-warnings hidden">
+                    <summary style="cursor:pointer; font-weight:bold;">View LLM Thinking / Raw Output</summary>
+                    <pre id="pd-update-raw-text" style="margin-top:6px; white-space:pre-wrap; word-break:break-word; font-family:monospace;"></pre>
+                </details>
             </div>
-            <div style="padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px;">
                 <button id="btn-pd-update-abort" class="danger hidden">⏹ Stop</button>
-                <div style="display:flex; gap:8px; margin-left:auto;">
+                <div style="display:flex; flex-wrap:wrap; gap:8px; margin-left:auto;">
                     <button id="btn-pd-update-retry" class="secondary hidden">🔄 Retry</button>
                     <button id="btn-pd-update-discard" class="danger">Discard</button>
-                    <button id="btn-pd-update-accept" class="primary" disabled>Accept &amp; Apply</button>
+                    <button id="btn-pd-update-accept-clothing" class="secondary" disabled title="Apply outfits &amp; expression only; keep body, skin, eyes, and hair">Accept Clothing</button>
+                    <button id="btn-pd-update-accept-all" class="primary" disabled title="Apply all changes including body, skin, eyes, hair, and clothing">Accept All</button>
                 </div>
             </div>
         </div>

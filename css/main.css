@@ -232,6 +232,21 @@ header { display: flex; justify-content: space-between; align-items: center; pad
     align-items: center;
     overflow: hidden;
 }
+.pd-stream-box {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 8px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 0.78em;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+}
 .pd-update-status {
     font-size: 0.9em;
     color: var(--text-main);
