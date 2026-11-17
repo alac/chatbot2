@@ -1,6 +1,6 @@
 console.log("Service worker is active - should enable PWA functionality");
 
-const cacheName = 'chtbt2-d5fed730'; // Updated hash to force the new SW to install
+const cacheName = 'chtbt2-5e240bd6'; // Updated hash to force the new SW to install
 
 // Files to cache for offline use
 const filesToCache = [
@@ -13,6 +13,38 @@ const filesToCache = [
     './js/api/LocalRewriterEngine.js',
     './js/api/OpenAIClient.js',
     './js/data/names.js',
+    './js/paperdoll/INTEGRATION.md',
+    './js/paperdoll/src/body.js',
+    './js/paperdoll/src/color.js',
+    './js/paperdoll/src/compose.js',
+    './js/paperdoll/src/element.js',
+    './js/paperdoll/src/face.js',
+    './js/paperdoll/src/geom.js',
+    './js/paperdoll/src/index.js',
+    './js/paperdoll/src/layers.js',
+    './js/paperdoll/src/normalize.js',
+    './js/paperdoll/src/registry.js',
+    './js/paperdoll/src/render.js',
+    './js/paperdoll/src/rig.js',
+    './js/paperdoll/src/schema.js',
+    './js/paperdoll/src/template.js',
+    './js/paperdoll/src/assets/apron.js',
+    './js/paperdoll/src/assets/dress.js',
+    './js/paperdoll/src/assets/eyewear.js',
+    './js/paperdoll/src/assets/hair.js',
+    './js/paperdoll/src/assets/hairwear.js',
+    './js/paperdoll/src/assets/hats.js',
+    './js/paperdoll/src/assets/index.js',
+    './js/paperdoll/src/assets/legwear.js',
+    './js/paperdoll/src/assets/maid.js',
+    './js/paperdoll/src/assets/neckwear.js',
+    './js/paperdoll/src/assets/outer.js',
+    './js/paperdoll/src/assets/pants.js',
+    './js/paperdoll/src/assets/shoes.js',
+    './js/paperdoll/src/assets/skirt.js',
+    './js/paperdoll/src/assets/swimwear.js',
+    './js/paperdoll/src/assets/top.js',
+    './js/paperdoll/src/assets/washitsu.js',
     './js/services/GenerationCoordinator.js',
     './js/state/AppSettings.js',
     './js/state/StoryState.js',
